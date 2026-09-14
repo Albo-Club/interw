@@ -29,5 +29,25 @@
     "description": "Les 5 éléments les plus récents de cette organisation",
     "viewAll": "Tout voir",
     "empty": "Aucun élément pour l'instant. <link>Créez-en un</link>."
+  },
+  "interw": {
+    "subtitle": "Ce qui vous attend, et ce qui avance.",
+    "awaitingReview": "En attente de votre avis",
+    "awaitingReviewHint": "Terminés, analysés, sans décision",
+    "activeRoles": "Postes ouverts",
+    "draftRoles": "{{count}} brouillon",
+    "draftRoles_other": "{{count}} brouillons",
+    "invited": "Invités",
+    "invitedHint": "{{count}} derniers jours",
+    "completed": "Terminés",
+    "completionRate": "{{percent}} % de complétion",
+    "inFlight": "En cours",
+    "inFlightHint": "{{pending}} pas commencés · {{inProgress}} en cours",
+    "recent": "Terminés récemment",
+    "recentEmpty": "Aucun entretien terminé pour le moment.",
+    "decisions": "Décisions prises",
+    "noDecisions": "Aucune décision enregistrée.",
+    "viewAll": "Voir tous les postes",
+    "newRole": "Nouveau poste"
   }
 }

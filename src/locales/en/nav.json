@@ -7,7 +7,9 @@
       "settings": "Settings",
       "members": "Members",
       "invitations": "Invitations",
-      "general": "General"
+      "general": "General",
+      "projects": "Roles",
+      "candidates": "Candidates"
     }
   },
   "groups": {

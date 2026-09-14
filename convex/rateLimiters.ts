@@ -30,6 +30,9 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   },
   // Chat messages: per user. AI calls are expensive.
   chatSend: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 10 },
+  // Job-ad import: per user. Each call is an outbound fetch plus a model
+  // call, so it is both costly and an SSRF-adjacent surface.
+  jobImport: { kind: 'token bucket', rate: 20, period: HOUR, capacity: 5 },
 })
 
 type LimitName =
@@ -38,6 +41,7 @@ type LimitName =
   | 'verificationSend'
   | 'passwordResetSend'
   | 'chatSend'
+  | 'jobImport'
 
 /**
  * Throws a friendly ConvexError when a limit is hit. The data payload includes

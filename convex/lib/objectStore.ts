@@ -112,6 +112,7 @@ async function sign(
   expiresIn: number,
   options: {
     contentType?: string
+    contentLength?: number
     responseContentDisposition?: string
   } = {},
 ): Promise<string> {
@@ -126,9 +127,12 @@ async function sign(
     secretAccessKey: config.secretAccessKey,
     expiresIn,
     date: new Date(),
-    extraSignedHeaders: options.contentType
-      ? { 'content-type': options.contentType }
-      : undefined,
+    extraSignedHeaders: {
+      ...(options.contentType ? { 'content-type': options.contentType } : {}),
+      ...(options.contentLength !== undefined
+        ? { 'content-length': String(options.contentLength) }
+        : {}),
+    },
     extraQuery: options.responseContentDisposition
       ? { 'response-content-disposition': options.responseContentDisposition }
       : undefined,
@@ -137,16 +141,22 @@ async function sign(
 
 /**
  * A URL the browser may PUT one object to, once, within `expiresIn` seconds.
- * `contentType` is part of the signature: the client must send exactly this
- * header, so an upload slot handed out for a video cannot be used to park
- * HTML in the bucket.
+ *
+ * Three things are signed and so cannot be renegotiated by the client:
+ *   - the key, so a slot cannot be used to overwrite another object;
+ *   - `content-type`, so a slot issued for a video cannot park HTML on the
+ *     bucket's own origin;
+ *   - `content-length` when given, so a 4 MB promise cannot become a 40 GB
+ *     upload. `fetch` sets that header itself from the Blob, so passing
+ *     `blob.size` here is all the client has to do.
  */
 export function presignPut(
   key: string,
   contentType: string,
   expiresIn: number = WRITE_URL_TTL_SECONDS,
+  contentLength?: number,
 ): Promise<string> {
-  return sign('PUT', key, expiresIn, { contentType })
+  return sign('PUT', key, expiresIn, { contentType, contentLength })
 }
 
 /**

@@ -205,11 +205,17 @@ export async function complete<T>(
           model,
           messages: options.messages,
           temperature: options.temperature ?? 0.2,
+          // `strict: false` on purpose. Strict decoding is implemented
+          // differently by every model behind OpenRouter, and several reject
+          // perfectly valid JSON Schema keywords outright — which would turn
+          // a provider quirk into a failed evaluation. The schema is still
+          // sent, so models that honour it do; the guarantee comes from the
+          // Zod parse on the way back, which no provider can talk its way past.
           response_format: {
             type: 'json_schema',
             json_schema: {
               name: options.schemaName,
-              strict: true,
+              strict: false,
               schema: jsonSchema,
             },
           },

@@ -10,15 +10,19 @@
 import { ConvexError, v } from 'convex/values'
 import { paginationOptsValidator } from 'convex/server'
 
-import { mutation, query } from './_generated/server'
+import { action, internalQuery, mutation, query } from './_generated/server'
+import { internal } from './_generated/api'
 import { requireOrgMember } from './lib/auth'
 import { requireProjectAccess } from './lib/projectAccess'
 import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
+import { deleteObjects } from './lib/objectStore'
+import { hashEmail } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
 import { candidateInvitationEmail } from './emailTemplates'
-import type { Doc, Id } from './_generated/dataModel'
+import type { GenericMutationCtx } from 'convex/server'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const NAME_MAX = 120
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -158,7 +162,7 @@ export const invite = mutation({
 })
 
 async function sendInvitation(
-  ctx: Parameters<typeof resend.sendEmail>[0],
+  ctx: GenericMutationCtx<DataModel>,
   {
     session,
     project,
@@ -173,12 +177,23 @@ async function sendInvitation(
     startUrl: invitationUrl(session.accessToken),
     durationMinutes: project.maxDurationMinutes,
   })
-  await resend.sendEmail(ctx, {
+  const providerId = await resend.sendEmail(ctx, {
     from: RESEND_FROM,
     to: session.candidateEmail,
     subject,
     html,
     text,
+  })
+  // Logged with the provider id so a bounce can be told apart from a
+  // candidate who simply has not opened it yet.
+  await ctx.db.insert('emailLog', {
+    orgId: session.orgId,
+    template: 'candidate-invitation',
+    recipient: session.candidateEmail,
+    status: 'sent',
+    providerId,
+    sessionId: session._id,
+    createdAt: Date.now(),
   })
 }
 
@@ -254,5 +269,40 @@ export const countsForOrg = query({
       inProgress: recent.filter((s) => s.status === 'in_progress').length,
       pending: recent.filter((s) => s.status === 'pending').length,
     }
+  },
+})
+
+/**
+ * Delete everything about one candidate, at the recruiter's request.
+ *
+ * Same machinery as the candidate's own erasure — one implementation, so the
+ * two cannot drift into deleting different things.
+ */
+export const deleteCandidateData = action({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }): Promise<{ deleted: true }> => {
+    await ctx.runQuery(internal.sessions.assertCanDelete, { sessionId })
+    const objects = await ctx.runQuery(internal.purge.collectSessionObjects, {
+      sessionId,
+    })
+    if (!objects) return { deleted: true }
+    await deleteObjects(objects.keys)
+    await ctx.runMutation(internal.purge.deleteSessionRecords, {
+      sessionId,
+      reason: 'recruiter_delete',
+      candidateEmailHash: await hashEmail(objects.candidateEmail),
+      objectsDeleted: objects.keys.length,
+    })
+    return { deleted: true }
+  },
+})
+
+export const assertCanDelete = internalQuery({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) throw new ConvexError('not_found')
+    await requireProjectAccess(ctx, session.projectId)
+    return null
   },
 })

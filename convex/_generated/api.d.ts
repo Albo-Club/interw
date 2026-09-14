@@ -15,7 +15,9 @@ import type * as auth from "../auth.js";
 import type * as candidate from "../candidate.js";
 import type * as chat from "../chat.js";
 import type * as criteria from "../criteria.js";
+import type * as crons from "../crons.js";
 import type * as email from "../email.js";
+import type * as emailEvents from "../emailEvents.js";
 import type * as emailTemplates from "../emailTemplates.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
@@ -55,7 +57,9 @@ import type * as purge from "../purge.js";
 import type * as questions from "../questions.js";
 import type * as rateLimiters from "../rateLimiters.js";
 import type * as reports from "../reports.js";
+import type * as retention from "../retention.js";
 import type * as sessions from "../sessions.js";
+import type * as shares from "../shares.js";
 import type * as users from "../users.js";
 
 import type {
@@ -72,7 +76,9 @@ declare const fullApi: ApiFromModules<{
   candidate: typeof candidate;
   chat: typeof chat;
   criteria: typeof criteria;
+  crons: typeof crons;
   email: typeof email;
+  emailEvents: typeof emailEvents;
   emailTemplates: typeof emailTemplates;
   files: typeof files;
   http: typeof http;
@@ -112,7 +118,9 @@ declare const fullApi: ApiFromModules<{
   questions: typeof questions;
   rateLimiters: typeof rateLimiters;
   reports: typeof reports;
+  retention: typeof retention;
   sessions: typeof sessions;
+  shares: typeof shares;
   users: typeof users;
 }>;
 

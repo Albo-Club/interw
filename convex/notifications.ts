@@ -107,18 +107,21 @@ export const sendReportReady = internalMutation({
         recommendation: report.recommendation,
         reportUrl,
       })
-      await resend.sendEmail(ctx, {
+      const providerId = await resend.sendEmail(ctx, {
         from: RESEND_FROM,
         to: user.email,
         subject,
         html,
         text,
       })
+      // The provider id is what the delivery webhook matches on later, so the
+      // row has to carry it from the moment it is written.
       await ctx.db.insert('emailLog', {
         orgId: session.orgId,
         template: 'report-ready',
         recipient: user.email,
         status: 'sent',
+        providerId,
         sessionId,
         createdAt: Date.now(),
       })

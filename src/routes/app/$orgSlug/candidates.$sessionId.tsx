@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   useConvexAction,
   useConvexMutation,
   useConvexQuery,
 } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, FileText, Play } from 'lucide-react'
+import { ArrowLeft, FileText, Play, Share2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
@@ -19,8 +19,19 @@ import { Textarea } from '~/components/ui/textarea'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Progress } from '~/components/ui/progress'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
+import { ShareReportDialog } from '~/components/report/ShareReportDialog'
 import {
   AnswerPlayer,
   formatTimecode,
@@ -54,6 +65,8 @@ function CandidateReportPage() {
   const mediaUrls = useConvexAction(api.reports.sessionMediaUrls)
   const setDecision = useConvexMutation(api.reports.setDecision)
   const setNote = useConvexMutation(api.reports.setNote)
+  const deleteCandidate = useConvexAction(api.sessions.deleteCandidateData)
+  const navigate = useNavigate()
 
   const [media, setMedia] = useState<{
     segments: Array<{ segmentId: string; url: string; kind: string }>
@@ -64,6 +77,8 @@ function CandidateReportPage() {
   const [activeSegment, setActiveSegment] = useState<string | null>(null)
   const [note, setNoteValue] = useState('')
   const [noteLoaded, setNoteLoaded] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     if (!data) return
@@ -148,6 +163,23 @@ function CandidateReportPage() {
           <p className="text-muted-foreground text-sm">
             {session.candidateEmail}
           </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {report && (
+            <Button variant="outline" onClick={() => setSharing(true)}>
+              <Share2 className="size-4" />
+              {t('report:share.title')}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            className="text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="size-4" />
+            {t('candidates:actions.delete')}
+          </Button>
         </div>
       </div>
 
@@ -573,6 +605,50 @@ function CandidateReportPage() {
           </Card>
         </aside>
       </div>
+
+      <ShareReportDialog
+        sessionId={sessionId as never}
+        open={sharing}
+        onOpenChange={setSharing}
+      />
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('candidates:deleteConfirm.title')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('candidates:deleteConfirm.body', {
+                name: session.candidateName,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                void deleteCandidate({ sessionId: sessionId as never })
+                  .then(() =>
+                    navigate({
+                      to: '/app/$orgSlug/projects/$projectSlug',
+                      params: { orgSlug, projectSlug: project.slug },
+                    }),
+                  )
+                  .catch((error: unknown) => {
+                    const { key, fallbackKey } = errorMessageKey(
+                      error,
+                      'candidates',
+                    )
+                    toast.error(t(key, { defaultValue: t(fallbackKey) }))
+                  })
+              }}
+            >
+              {t('candidates:deleteConfirm.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   )
 }

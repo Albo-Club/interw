@@ -131,7 +131,8 @@
     "crash": {
       "title": "Something went wrong on this page",
       "body": "Your saved answers are safe. Reload to pick up at question {{index}}.",
-      "reload": "Reload and continue"
+      "reload": "Reload and continue",
+      "restart": "Go back to the start"
     }
   },
   "done": {

@@ -12,6 +12,7 @@ import { CircleAlert, Play, Square, WifiOff } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import type { UploadProgress } from '~/lib/media/upload'
+import type { Recording } from '~/lib/media/recorder'
 import { fireAndForget } from '~/lib/fire-and-forget'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
@@ -71,6 +72,11 @@ function InterviewRunner() {
   const promptVideoRef = useRef<HTMLVideoElement | null>(null)
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const failedSegmentRef = useRef<Id<'segments'> | null>(null)
+  // The finished recording, held until it is confirmed uploaded. This is what
+  // makes "Try again" mean something: by the time the failure is on screen the
+  // recorder is stopped and cleared, so the retry has to re-send these bytes,
+  // not re-stop a recorder that is no longer running.
+  const pendingRecordingRef = useRef<Recording | null>(null)
 
   const questions = data?.questions ?? []
   const current = index !== null ? questions[index] : undefined
@@ -167,17 +173,14 @@ function InterviewRunner() {
     }
   }, [data, index, start, promptMedia, ensureStream, token, t])
 
-  const stopRecording = useCallback(async () => {
-    const recorder = recorderRef.current
-    if (!recorder || !recorder.isRecording || current === undefined) return
-    if (autoStopRef.current) clearTimeout(autoStopRef.current)
+  /** Send (or re-send) the recording currently held, and advance on success. */
+  const uploadPending = useCallback(async () => {
+    const recording = pendingRecordingRef.current
+    if (!recording || current === undefined) return
     setPhase('uploading')
     setError(null)
 
     try {
-      const recording = await recorder.stop()
-      recorderRef.current = null
-
       const slot = await requestUpload({
         token,
         questionIndex: current.orderIndex,
@@ -193,8 +196,8 @@ function InterviewRunner() {
               }
             : undefined,
       })
-
       failedSegmentRef.current = slot.segmentId
+
       // Audio first: it is what gets transcribed, so if only one of the two
       // makes it through a bad connection, it must be that one.
       await uploadToSignedUrl({
@@ -217,6 +220,7 @@ function InterviewRunner() {
         segmentId: slot.segmentId,
         durationSeconds: recording.durationSeconds,
       })
+      pendingRecordingRef.current = null
       failedSegmentRef.current = null
       setUpload(null)
       setPhase('prompt')
@@ -230,19 +234,43 @@ function InterviewRunner() {
       // answer was attempted and did not arrive — rather than assume the
       // candidate skipped it.
       if (failedSegmentRef.current) {
-        fireAndForget(markFailed({
-          token,
-          segmentId: failedSegmentRef.current,
-          detail: cause instanceof Error ? cause.message : 'unknown',
-        }), 'segment failure report')
+        fireAndForget(
+          markFailed({
+            token,
+            segmentId: failedSegmentRef.current,
+            detail: cause instanceof Error ? cause.message : 'unknown',
+          }),
+          'segment failure report',
+        )
       }
-      fireAndForget(logEvent({
-        token,
-        kind: 'upload_failed',
-        detail: cause instanceof Error ? cause.message : 'unknown',
-      }), 'candidate event log')
+      fireAndForget(
+        logEvent({
+          token,
+          kind: 'upload_failed',
+          detail: cause instanceof Error ? cause.message : 'unknown',
+        }),
+        'candidate event log',
+      )
     }
   }, [current, requestUpload, markUploaded, markFailed, logEvent, token, t])
+
+  const stopRecording = useCallback(async () => {
+    const recorder = recorderRef.current
+    if (!recorder || !recorder.isRecording) return
+    if (autoStopRef.current) clearTimeout(autoStopRef.current)
+    setPhase('uploading')
+
+    try {
+      pendingRecordingRef.current = await recorder.stop()
+      recorderRef.current = null
+    } catch (cause) {
+      setPhase('failed')
+      const { key, fallbackKey } = errorMessageKey(cause, 'interview')
+      setError(t(key, { defaultValue: t(fallbackKey) }))
+      return
+    }
+    await uploadPending()
+  }, [uploadPending, t])
 
   const beginRecording = useCallback(async () => {
     if (current === undefined) return
@@ -428,13 +456,15 @@ function InterviewRunner() {
                   <AlertDescription className="space-y-3">
                     <p>{t('interview:run.sendFailed.body')}</p>
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" onClick={() => void stopRecording()}>
+                      <Button size="sm" onClick={() => void uploadPending()}>
                         {t('interview:run.sendFailed.retry')}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
+                          pendingRecordingRef.current = null
+                          failedSegmentRef.current = null
                           setError(null)
                           setPhase('prompt')
                           setIndex((value) =>

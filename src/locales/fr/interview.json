@@ -131,7 +131,8 @@
     "crash": {
       "title": "Un problème est survenu sur cette page",
       "body": "Vos réponses enregistrées sont intactes. Rechargez pour reprendre à la question {{index}}.",
-      "reload": "Recharger et continuer"
+      "reload": "Recharger et continuer",
+      "restart": "Revenir au début"
     }
   },
   "done": {

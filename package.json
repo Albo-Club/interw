@@ -27,6 +27,8 @@
     "init": "node scripts/init.mjs",
     "upgrade-template": "node scripts/upgrade-template.mjs",
     "release": "node scripts/release.mjs",
+    "codegen:api": "node scripts/codegen-api-types.mjs",
+    "codegen:api:check": "node scripts/codegen-api-types.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "node scripts/e2e-smoke.mjs",

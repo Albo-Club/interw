@@ -21,6 +21,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Catches a Convex module added without its codegen committed — CI has
+      # no deployment, so `npx convex dev` cannot do it here.
+      - run: pnpm codegen:api:check
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build

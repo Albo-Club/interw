@@ -242,10 +242,20 @@ export default defineSchema({
     createdBy: v.id('users'),
     createdAt: v.number(),
     archivedAt: v.optional(v.number()),
+    /** True once `projectShares` rows exist for this project. Denormalised so
+     *  listing projects does not need one "is this restricted?" query per row. */
+    restricted: v.boolean(),
+    /** Denormalised counters, maintained in the same mutation as every session
+     *  insert and status change. Convex has no count operator, and
+     *  `.collect().length` over a project's sessions does not scale. */
+    sessionCount: v.number(),
+    completedSessionCount: v.number(),
   })
     .index('by_org', ['orgId'])
     .index('by_org_and_status', ['orgId', 'status'])
-    .index('by_slug', ['slug']),
+    // Slugs are unique per organisation, not globally: two customers may both
+    // be hiring a "senior-backend-engineer".
+    .index('by_org_and_slug', ['orgId', 'slug']),
 
   questions: defineTable({
     orgId: v.id('organizations'),

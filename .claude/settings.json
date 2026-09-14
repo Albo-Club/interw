@@ -1,0 +1,19 @@
+{
+  "enabledPlugins": {
+    "resend@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pnpm run sync:skills:check",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

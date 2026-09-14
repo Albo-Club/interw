@@ -1,0 +1,49 @@
+{
+  "title": "AI assistant",
+  "new": "New chat",
+  "close": "Close",
+  "stop": "Stop",
+  "send": "Send",
+  "copy": "Copy",
+  "thinking": "Thinking…",
+  "scrollToBottom": "Scroll to bottom",
+  "emptyState": "Ask anything. The assistant can act on this organization (with your approval).",
+  "inputPlaceholder": "Ask the assistant…",
+  "suggestions": {
+    "listItems": "List my items",
+    "createItem": "Create an item called \"Roadmap\""
+  },
+  "approval": {
+    "pending": "This action needs your approval.",
+    "approve": "Confirm",
+    "deny": "Reject",
+    "accepted": "Action confirmed",
+    "denied": "Action rejected"
+  },
+  "tool": {
+    "statePending": "Preparing…",
+    "stateRunning": "Running…",
+    "stateApprovalRequested": "Confirmation required",
+    "stateApprovalResponded": "Responded",
+    "stateCompleted": "Done",
+    "stateDenied": "Rejected",
+    "stateError": "Error",
+    "parameters": "Parameters",
+    "result": "Result",
+    "error": "Error"
+  },
+  "threads": {
+    "history": "Conversation history",
+    "empty": "No conversations yet",
+    "untitled": "Untitled",
+    "actions": "Conversation actions",
+    "rename": "Rename",
+    "renameTitle": "Rename conversation",
+    "deleteConfirmTitle": "Delete this conversation?",
+    "deleteConfirmBody": "This conversation and its messages will be permanently deleted."
+  },
+  "errors": {
+    "rate_limited": "Slow down — too many messages",
+    "default": "Could not send message"
+  }
+}

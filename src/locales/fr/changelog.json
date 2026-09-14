@@ -1,0 +1,45 @@
+{
+  "metaTitle": "Nouveautés — interw",
+  "button": "Nouveautés",
+  "title": "Nouveautés",
+  "subtitle": "Les dernières améliorations de l'application.",
+  "seeAll": "Voir toutes les nouveautés",
+  "entries": {
+    "signin-hardening": {
+      "title": "Une connexion plus sûre",
+      "body": "Nous avons mis à jour le composant qui gère la connexion et renforcé la façon dont les liens de connexion sont rattachés à votre compte. Rien à faire de votre côté : votre compte et vos sessions en cours ne changent pas."
+    },
+    "security-hardening": {
+      "title": "Sécurité renforcée",
+      "body": "Nous avons renforcé le traitement des redirections de connexion et des e-mails que nous vous envoyons. Rien à faire de votre côté : au quotidien, vous ne devriez voir aucune différence."
+    },
+    "changelog-page": {
+      "title": "Une page Nouveautés dédiée",
+      "body": "Les dernières améliorations ont désormais leur propre page. Ouvrez le dialogue Nouveautés puis suivez « Voir toutes les nouveautés » pour parcourir tout l'historique."
+    },
+    "invite-no-verification": {
+      "title": "Rejoindre via une invitation est plus rapide",
+      "body": "Lorsque vous créez votre compte depuis un lien d'invitation, plus besoin de confirmer un e-mail : votre invitation prouve déjà votre adresse, vous entrez directement dans l'espace de travail."
+    },
+    "ai-panel": {
+      "title": "Un panneau IA enrichi",
+      "body": "L'assistant dispose désormais de son propre panneau (raccourci ⌘J), diffuse des réponses bien mises en forme, et vous demande de Confirmer ou Refuser avant toute création ou modification."
+    },
+    "whats-new-panel": {
+      "title": "Suivez les nouveautés",
+      "body": "Ce panneau liste les dernières améliorations. Une pastille sur le bouton vous signale quand quelque chose de nouveau est arrivé."
+    },
+    "ai-formatting": {
+      "title": "Réponses de l'assistant plus lisibles",
+      "body": "L'assistant met désormais en forme ses réponses : listes, gras et titres au lieu de blocs de texte bruts."
+    },
+    "loading-skeletons": {
+      "title": "Chargements plus fluides",
+      "body": "Des aperçus animés s'affichent pendant le chargement du tableau de bord et des listes."
+    },
+    "friendly-errors": {
+      "title": "Écrans d'erreur plus clairs",
+      "body": "En cas d'imprévu ou de page introuvable, un écran clair vous propose de réessayer ou de revenir à l'accueil."
+    }
+  }
+}

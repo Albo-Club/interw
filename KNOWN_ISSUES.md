@@ -1,0 +1,1354 @@
+# Known issues
+
+Pinned versions, workarounds, and rough edges. Update this file as upstream
+fixes land so renovate (which respects `pnpm.overrides`) can be unblocked.
+
+## Account linking & verified email (anti-doublon)
+
+### What went wrong (the trap)
+
+Initial config in `convex/auth.ts` had:
+- `emailAndPassword.requireEmailVerification: false` — password sign-up
+  produced an **untrusted** BA account (BA can't confirm the user owns
+  the mailbox).
+- `magicLink` plugin — produced a **trusted** account on first click.
+- **No `account.accountLinking`** — BA's default is `enabled: false`.
+
+When a single human signed up via `/register` (password) then later
+clicked a magic link with the same email, BA created **two distinct BA
+users** (different `betterAuthId`). Our `provisionAppUser` then inserted
+**two `users` rows** into Convex with the same email, because it
+dedup'd only by `betterAuthId`.
+
+Result : prod had two duplicate `users` rows for one human.
+
+### The rule (preventing recurrence)
+
+**Before adding or modifying any auth method in `convex/auth.ts`**, check
+all three :
+
+1. **All enabled methods must be trusted.** A method is trusted when BA
+   marks `emailVerified: true` after the first sign-in. Sources of
+   trust : magic link, OAuth (Google/GitHub/…), or email/password with
+   `requireEmailVerification: true`. **Never enable email/password with
+   verification off if any other method is enabled.**
+2. **`account.accountLinking.enabled: true` in `createAuth(...)`.**
+   Without it, two trusted methods with the same email still produce
+   two BA users. With it, BA auto-links on the second sign-in.
+3. **Convex-side dedup**: `provisionAppUser` in `convex/lib/auth.ts`
+   already falls back from `betterAuthId` lookup to email lookup, and
+   re-points the existing row's `betterAuthId` instead of inserting.
+   If you ever write a new "create app user" code path, copy that
+   pattern — don't dedup on `betterAuthId` alone.
+4. **Magic link must not auto-sign-up**:
+   `magicLink({ disableSignUp: true })` is mandatory. Our only legit
+   entry point is `/register` (password + verification). Without it,
+   any random email gets a verified BA account on first link click,
+   bypassing the `/register` flow and leaving password-less accounts
+   that later 500 on `signIn.email`.
+
+### Security coupling
+
+Conditions (1) and (2) are coupled. If you enable account linking but
+let one method stay untrusted, an attacker can register
+`victim@example.com` with their own password (no verification needed),
+wait for the victim to OAuth/magic-link with the same email, and BA
+will silently link the attacker's password account to the victim's
+session → account takeover.
+
+Verified email closes the hole : the attacker's password account stays
+unverified, so BA refuses to link it.
+
+### Legacy users
+
+Prod accounts created before this fix have `emailVerified: false` on the BA
+side. On the next `signIn.email`, they will be blocked — the `/login` screen
+detects `EMAIL_NOT_VERIFIED` and offers "Resend verification email" to
+unblock. No automatic migration.
+
+For duplicate `users` rows already created in prod, `provisionAppUser` will
+converge them to a single row on the user's next login, but the second BA
+user remains in the database. Manual cleanup via the Convex dashboard.
+
+## Invitation signup — token-gated email pre-verification
+
+### The problem
+
+`emailAndPassword.requireEmailVerification: true` sends every signup through
+a verification email. For an **invited** user that round-trip is both
+redundant and broken: the accept logic lives in a `useEffect` on
+`/accept-invite/$token`, so after clicking the verification link the invitee
+is signed in but lands wherever the callback points — not necessarily back on
+the accept page — and the invitation is never accepted.
+
+### The fix (and why token-gated, NOT email-gated)
+
+`convex/auth.ts` adds `databaseHooks.user.create.before`. It reads
+`inviteToken` from the signup body (`context.body`) and, **only** when that
+token resolves to a still-pending, unexpired invitation **for the same
+email** (via the `internal.invitations.validateInviteForSignup` query →
+`isInviteValidForSignup` in `convex/lib/invitations.ts`), returns
+`{ data: { ...user, emailVerified: true } }`. Otherwise it touches nothing
+and the normal verification flow applies. The front then signs the invitee in
+immediately (`signUp` → `signIn` on `/accept-invite`, and `callbackURL` +
+`inviteToken` forwarded from `/register`).
+
+**A matching email is never sufficient on its own.** Email-gating (pre-verify
+any signup whose address equals some pending invite) was rejected: it would
+let an attacker register `victim@example.com` with their own password and get
+it marked verified, then — with `accountLinking.enabled: true` — have BA link
+that account when the victim later signs in (the takeover hole described in
+"Account linking & verified email"). Token-gating closes this: the 32-byte
+token is delivered **only** to the invitee's mailbox, so possessing it already
+proves mailbox control. Keep the token + email-match check; never relax it to
+email alone.
+
+### Gotchas for the next dev
+
+- **`inviteToken` is not in the Better Auth client type.** It's a custom field
+  the server forwards via `context.body`, not a declared `user.additionalField`
+  (we don't store it). The `/accept-invite` call casts the literal
+  (`as Parameters<typeof authClient.signUp.email>[0]`); `/register` sends it
+  through a conditional spread that needs no cast. If you add it to
+  `additionalFields` it would create a column — don't.
+- **Reading the body needs a run context.** The hook uses
+  `requireRunMutationCtx(ctx).runQuery(...)` (same pattern as the email
+  senders) — `create.before` runs inside the signup mutation, so `runQuery`
+  is available. Do **not** annotate the hook's `context` param; let it infer,
+  or the heavy `databaseHooks` type can trip the TS inference cycle CLAUDE.md
+  flags.
+- **`useRedirectWhenAuthenticated` always SPA-navigates to `/app`** (ignores
+  `redirect`). Both invite entry points work around this without touching the
+  shared guard: `/accept-invite` accepts inline (signUp → signIn → auto-accept
+  effect, no navigation), and `/register` in an invite flow does signUp →
+  signIn → `window.location.assign('/accept-invite/<token>')` — a **full**
+  navigation that wins the race against the guard's SPA `navigate`, handing
+  off to the accept page so the invitee is attached to the org instead of
+  landing on `/app`. If the token is stale the signIn fails and we fall back
+  to the verification screen (`callbackURL` returns to the invite).
+
+## Google OAuth (template — opt-in)
+
+Google social login is wired but **off by default** so the repo stays a clean
+template. It activates only when **both** `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` are set in the Convex env. The `socialProviders` block in
+`convex/auth.ts` is spread conditionally on that, and the frontend hides the
+button via `api.publicConfig.enabledSocialProviders` (a boolean query — env
+presence, never the secret). Pattern: a missing provider must render *nothing*,
+not a dead/broken button.
+
+### Enabling it
+1. Create an OAuth client in Google Cloud Console → Credentials.
+2. **Authorized redirect URI** = `${SITE_URL}/api/auth/callback/google` (the BA
+   default; the request flows through the TanStack proxy `src/routes/api/auth/$.ts`
+   → Convex handler). Register both the dev (`http://localhost:3000/...`) and the
+   prod URL.
+3. `pnpm exec convex env set GOOGLE_CLIENT_ID …` / `… GOOGLE_CLIENT_SECRET …`
+   (or answer the optional prompt in `pnpm run setup`).
+4. **Prod**: `pnpm run setup:prod` mirrors the dev `GOOGLE_*` creds to the prod
+   deployment automatically (same OAuth client). The prod redirect URI is *not*
+   set for you — add `https://<prod-domain>/api/auth/callback/google` to the same
+   Google client by hand (step 2), or sign-in fails with `redirect_uri_mismatch`.
+
+### Why it's safe vs the account-linking trap
+Google returns a **verified** email on first sign-in, so it satisfies rule (1)
+of "Account linking & verified email" above (all enabled methods trusted). With
+`accountLinking.enabled: true` (already set) plus `provisionAppUser`'s email
+fallback, a Google sign-in whose email matches an existing password user **links**
+to the same Convex `users` row instead of creating a duplicate. No new
+provisioning code — the existing `/app` route trigger
+(`src/routes/app/route.tsx`) handles it. If you add GitHub/Apple later, the same
+trusted-email reasoning applies; flip the scaffold in `linked-accounts.tsx`.
+
+## Auth hardening (Phase 0)
+
+### `sendChangeEmailConfirmation`, not `sendChangeEmailVerification`
+
+The handler that fires on **email-change** lives under
+`user.changeEmail.sendChangeEmailConfirmation` in Better Auth (verified
+in `node_modules/better-auth/dist/api/routes/update-user.mjs:427`). An
+earlier revision used `sendChangeEmailVerification`, which **does not
+exist** — BA silently swallowed the callback and only sent the
+verification email to the *new* address. A hijacked session could
+change the email to attacker@evil.com without the legitimate owner of
+the current inbox ever being notified.
+
+Rule: if you rename or relocate the change-email handler, grep BA
+source for the exact key BA reads (`ctx.context.options.user.changeEmail.<…>`)
+and match it byte-for-byte. The TypeScript types here are permissive
+(extra keys are accepted), so a typo compiles but ships broken.
+
+### Anti-enumeration on `/register`
+
+When a signup hits `USER_ALREADY_EXISTS`, the UI renders the *exact
+same* "Check your inbox" screen as a successful new signup
+(`src/routes/register.tsx`). No verification email is actually sent in
+the duplicate case — BA aborts at 422. An attacker can no longer
+enumerate registered emails by watching the signup response.
+
+Trade-off : a legit user who signs up twice (e.g. forgot they already
+have an account) gets the success screen but no email, then bounces.
+The "try a different email" link on that screen and the
+`/forgot-password` flow are the recovery paths. Accepted cost for
+closing the enumeration leak — same pattern shipped by Linear and
+Stripe.
+
+### Cookie attributes are explicit, secure flag is APP_ENV-gated
+
+`convex/auth.ts` pins:
+
+```
+advanced: {
+  useSecureCookies: APP_ENV === 'production',
+  cookiePrefix: 'interw',
+  defaultCookieAttributes: { sameSite: 'lax', secure: APP_ENV === 'production', httpOnly: true },
+}
+```
+
+`secure: true` is required in prod but breaks local dev over plain
+`http://localhost` (the cookie is set but the browser refuses to send
+it back). The `APP_ENV === 'production'` check keeps localhost working
+in dev while forcing the flag everywhere else. If you ever spin up a
+staging deploy, set `APP_ENV=production` so the cookie hardening
+applies — same trap as the `SITE_URL` guard below.
+
+### Per-endpoint rate-limit storage
+
+BA's built-in `rateLimit` block with `storage: 'database'` is wired
+into the Convex adapter — no separate component to install. BA writes
+to an auto-created `rateLimit` table on the BA-side schema. We rely
+on it for `/sign-in/email`, `/sign-up/email`, `/forgot-password`,
+`/reset-password`, `/sign-in/magic-link`, `/email-verification/send`,
+`/change-email`, `/change-password`, `/delete-user`.
+
+`convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
+*separate* — it covers application-level limits (invitations, chat,
+email-send wrappers). Do not confuse the two : BA's limiter is on the
+auth HTTP edge, ours is on Convex mutations/actions.
+
+### Password policy (Phase 1)
+
+- BA: `minPasswordLength: 12`, `maxPasswordLength: 128`.
+- Zod schemas in `/register`, `/reset-password`, `/me` mirror the
+  minimum. Both layers must agree — if you tighten the Convex side,
+  bump the Zod min in the same commit or signup passes client
+  validation and 400s on submit.
+- HIBP k-anonymity check on every new-password field (`onBlurAsync`
+  validator). `src/lib/hibp.ts` soft-fails on network errors so an
+  outage at api.pwnedpasswords.com doesn't block signups; the
+  server-side minimum still applies.
+- zxcvbn-ts strength meter is indicative, not blocking. The wordlist
+  is ~1.2 MB but lazy-loaded only when a password field mounts.
+
+### eslint must be a direct devDependency
+
+`eslint.config.mjs` does `import { defineConfig } from 'eslint/config'`,
+which requires `eslint` to be resolvable from the project root. pnpm
+10's strict isolation does not hoist transitive devDeps, so without
+`"eslint": "^10"` in `devDependencies` the lint script fails with
+`Cannot find package 'eslint'`.
+
+This was silently broken before Phase 1 (the `| tail -40` wrapper in
+the lint script swallowed the failing exit code). Adding `eslint` to
+`devDependencies` fixes the run; it also surfaces ~240 pre-existing
+lint errors (`sort-imports`, `import/order`, `@typescript-eslint/array-type`)
+across non-auth routes that pre-date Phase 0/1 and want a separate
+cleanup PR. The new Phase 1 files (`hibp.ts`, `auth-errors.ts`,
+`password-input.tsx`, `password-strength.tsx`) lint clean.
+
+## A return-URL search param needs the URL parser, not a regex
+
+`/login` takes `?redirect=` and, after a successful `signIn.email`, calls
+`window.location.replace(redirect)`. The param was typed `z.string().optional()`,
+so `/login?redirect=https://evil.com` was an **open redirect**: the victim signs
+in on our real domain with real credentials and gets handed to the attacker at
+the exact moment they have proven they trust the page. Better Auth was no help
+here — `signIn.email` never receives a `callbackURL`, so BA's `trustedOrigins`
+check (`convex/auth.ts`) never runs. Only the redirects *we* navigate to
+ourselves are exposed.
+
+Fixed by `src/lib/safe-redirect.ts`, applied in `/login` and `/register`.
+
+**The trap, and why the obvious fix is wrong.** The tempting predicate is
+"starts with `/` but not `//`":
+
+```ts
+const isInternalPath = (v: string) => /^\/(?![/\\])/.test(v)   // ← BYPASSABLE
+```
+
+It passes `/\t/evil.com` (slash, TAB, slash). Per the WHATWG URL spec browsers
+**strip** ASCII tab, LF and CR while parsing, so that string becomes
+`//evil.com` — protocol-relative, off-site — after passing a check that read the
+raw bytes. Demonstrated:
+
+```
+new URL('/\t/evil.com', 'https://ourapp.com').origin   // → 'https://evil.com'
+```
+
+So validate by resolving against a throwaway origin and requiring the result to
+stay on it. That delegates normalisation to the same parser the navigation will
+use, instead of trying to out-guess it:
+
+```ts
+new URL(value, PROBE_ORIGIN).origin === PROBE_ORIGIN && value.startsWith('/')
+```
+
+`startsWith('/')` is still needed — a bare `app` resolves onto the probe origin
+but is not a rooted path. An encoded slash (`/%2f%2fevil.com`) is *kept* and is
+safe: browsers resolve it as a path on the current origin, never as a new host.
+
+Two design notes:
+
+- The Zod field ends in `.catch(undefined)`, so a hostile value collapses to
+  "no redirect" and the page renders normally. Throwing would surface an error
+  screen that advertises the attempt.
+- **Nothing in this app produces `?redirect=`.** Every navigation to `/login`
+  and `/register` is bare, and the invitation email links straight to
+  `${siteUrl}/accept-invite/${token}`. The param is externally supplied and only
+  ever *propagated* between the login↔register cross-links. So the guard cannot
+  regress a legitimate flow — but it also means the return-URL is not preserved
+  when the `/app` guard bounces you to `/login` (a UX gap, not a security one).
+
+## Production deploy is wired into the Vercel build
+
+`vercel.json` runs `npx convex deploy --cmd 'pnpm build'`, so every
+`main` push that lands on Vercel **also** deploys Convex functions and
+schema in lockstep. You should never run `pnpm exec convex deploy --prod`
+by hand for a normal release — the Vercel deployment is the source of
+truth.
+
+**Required Vercel env vars** (set in Project Settings → Environment
+Variables, scoped to **Production** only) :
+
+- `CONVEX_DEPLOY_KEY` — generated from the Convex dashboard
+  (Project → Settings → URL & Deploy Key → "Generate Production Deploy
+  Key"). Vercel forwards it to the build step ; the Convex CLI uses it
+  to push functions/schema to the prod deployment.
+
+The shell guard in `package.json` → `build:vercel` requires **both**
+`VERCEL=1` (auto-set by Vercel) and `CONVEX_DEPLOY_KEY` before running
+`convex deploy`. Falls back to plain `pnpm build` otherwise. Effects :
+
+- Preview deployments without a Convex preview key → frontend builds
+  but runs against the current prod Convex backend. Fine for read-only
+  UI changes ; **never ship preview deploys that depend on
+  un-deployed schema/function changes**. If you need preview-isolated
+  Convex, generate a Preview Deploy Key in the Convex dashboard and
+  add `CONVEX_DEPLOY_KEY` scoped to Preview in Vercel.
+- Local `pnpm build:vercel` → `$VERCEL` is empty, so the script
+  always skips `convex deploy` even if a dev happens to have a deploy
+  key in their shell env. Safe to run locally for build smoke-tests.
+
+**When you DO need the manual command** :
+- Local dev (`pnpm exec convex dev` — different command, runs the dev
+  deployment with hot reload).
+- Emergency hotfix where Vercel is broken : `pnpm exec convex deploy
+  --prod` works but is a footgun (frontend still pointing at old
+  code). Prefer reverting the bad commit and letting Vercel redeploy.
+
+## pnpm.overrides
+
+These live in the `pnpm.overrides` field of `package.json`, and **must stay
+there** — see "pnpm 11 silently drops them" below. Renovate is configured to
+leave all four alone (`renovate.json`, rule "Pinned overrides"), so they only
+ever move by hand.
+
+### `@tanstack/react-router: 1.170.11` + `@tanstack/router-core: 1.171.9`
+
+Two router-core versions coexisting (one pulled by `react-router`, one by
+`start-client-core`) prevented `server.handlers` from being type-augmented
+on `createFileRoute`. Pinning both to compatible versions resolves it.
+
+**Unblock when**: TanStack publishes a release where `react-router` and
+`react-start` agree on a single `router-core` version.
+
+### `@tanstack/react-start: 1.168.20`
+
+Pinned in lockstep with the router pin above.
+
+### `better-call: 1.3.4` — LIFTED 2026-08-24, kept as the cautionary tale
+
+`better-call@1.3.5` originally shipped without `openapi.mjs` and
+`validator.mjs`, breaking Better Auth's runtime imports, so it was pinned to
+the last working release. Upstream fixed that in the 1.3.5 tarball, and the
+pin was **removed on 2026-08-24**. `better-call` now resolves to whatever
+Better Auth asks for (1.4.0 today) — there is no override left to maintain.
+
+Why it is still written down: this pin outlived its reason by four days of
+documented "unblock condition met, lift it deliberately", and in the meantime
+the Better Auth bump to 1.6.30 quietly widened it from one patch back to two
+minors back. **A pin with an expired unblock condition is not neutral — it
+drifts from a small lie into a big one while nobody is looking.** When you add
+an override, write its exit condition next to it, and re-read that condition
+every time you touch the package it constrains.
+
+Removal was verified, not assumed: cold `pnpm install` resolves a single
+`better-call@1.4.0`, then `pnpm lint`, `pnpm build` and `pnpm test:smoke`
+(21/21) all pass, and a live `POST /api/auth/sign-in/magic-link` reaches
+`sendMagicLink` through it.
+
+## pnpm 11 silently drops `pnpm.overrides` and `onlyBuiltDependencies`
+
+**The pin in `package.json` (`packageManager: pnpm@10.34.5+sha512...`) is load
+bearing. Do not remove it, and do not "modernise" it to pnpm 11 casually.**
+
+pnpm 11 made two breaking config moves. Both fail *silently* or with an error
+that names the wrong culprit:
+
+1. **`pnpm.overrides` in `package.json` is no longer read.** pnpm 11 emits a
+   single `[WARN]` line and carries on. Observed effect: `better-call` drifted
+   1.3.4 → 1.3.5 and the `@tanstack/router-core` override was replaced by the
+   loose peer range `>=1.114.7` — i.e. every pin documented above quietly
+   stopped applying, while `renovate.json` still believed it was guarding them.
+2. **`onlyBuiltDependencies` was removed** in favour of `allowBuilds` (a
+   name → boolean map). pnpm 11 writes a placeholder into `pnpm-workspace.yaml`
+   (`esbuild: set this to true or false`), which is not a boolean, so builds
+   stay unapproved — and pnpm 11 **exits 1** where pnpm 10 only warned. Since
+   pnpm runs a dependency check before every script, `pnpm typecheck`,
+   `pnpm lint`, `pnpm build` and `pnpm dev` all die with
+   `ERR_PNPM_IGNORED_BUILDS` before running a single byte of project code.
+
+Third-order effect: a pnpm 11 install rewrites `pnpm-lock.yaml` (~428 lines,
+`overrides:` block dropped). Commit that and CI fails with
+`ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`; regenerate it under pnpm 10 and the next
+local install rewrites it again. Permanent ping-pong, and the diff is large
+enough to hide a real change.
+
+**Why we stay on pnpm 10 rather than migrating.** Migrating is technically
+clean — moving `overrides` into `pnpm-workspace.yaml` and using `allowBuilds`
+produces a byte-identical lockfile, verified. We don't, because of the
+deployment target:
+
+- **Vercel supports pnpm 6–10, not 11** (`vercel.com/docs/package-managers`).
+  pnpm 11 would only run there via Corepack, which Vercel gates behind the
+  experimental `ENABLE_EXPERIMENTAL_COREPACK=1` project env var — a per-project
+  manual step that every project forked from this template would have to
+  repeat, or silently regress.
+- **`overrides` must stay in `package.json`.** Settings in
+  `pnpm-workspace.yaml` are a pnpm 10+ feature. Vercel maps our
+  `lockfileVersion: 9.0` to "pnpm 9 or 10", so if it lands on 9, overrides
+  declared in the workspace file are ignored **in production only**. Keeping
+  them in `package.json` is understood by 9, 10 and (with the pin) is never
+  reached by 11.
+
+**How the pin is enforced**, three layers deep:
+
+- `packageManager` + the sha512 integrity hash — Corepack downloads exactly
+  this build. Written with `corepack use pnpm@<version>`, never by hand.
+- `engines.pnpm: "10.x"` — catches anyone running pnpm with Corepack disabled.
+- CI passes no `version:` to `pnpm/action-setup@v4`, so it reads
+  `packageManager` too. **Never re-pin a version there** — that is what let
+  local and CI diverge in the first place.
+
+Belt and braces confirmed: invoking pnpm 11 anyway now hard-fails with
+`This project is configured to use 10.34.5 of pnpm. Your current pnpm is
+v11.22.0` instead of quietly mangling the lockfile.
+
+**Unblock when**: Vercel lists pnpm 11 in its supported versions table. Then,
+in one deliberate PR: bump `packageManager`, move `pnpm.overrides` →
+`overrides:` in `pnpm-workspace.yaml`, replace `onlyBuiltDependencies` with
+`allowBuilds: {esbuild: true, unrs-resolver: true}`, and confirm
+`pnpm install --frozen-lockfile` leaves the lockfile untouched.
+
+## `node_modules` is not as big as `du` says
+
+`du -sh node_modules` reports ~617 MB. Deleting it frees **~25 MB**, and
+reinstalling costs ~25 MB and 3 seconds. Both directions measured with `df`.
+
+pnpm's default `package-import-method=auto` uses APFS `clonefile()`, so every
+file is a copy-on-write clone of the shared store (`~/Library/pnpm/store/v11`,
+~922 MB, paid once per machine). `du` walks each file and adds up allocated
+blocks with no idea they are shared, so it counts the same physical extents
+once per worktree. Verified at the block level: the same file in two Conductor
+worktrees reports an identical `F_LOG2PHYS` device offset with `nlink=1` —
+distinct inodes, one set of blocks. 99.9 % of sampled bytes are shared.
+
+Consequence: 11 worktrees cost ~275 MB, not ~6.8 GB. **Do not** "optimise"
+this by setting `node-linker=hoisted`, pointing `package-import-method` at
+`copy`, or hand-rolling a shared `node_modules` — each of those turns clones
+back into real bytes. The one thing that would break it is moving the pnpm
+store off the workspace volume: `clonefile()` cannot cross volumes, and the
+275 MB would become 6.8 GB overnight.
+
+## Convex skills were pruned — do not re-vendor them
+
+We vendored 6 Convex skills. **5 were removed; only `convex-create-component`
+remains.** If a future agent notices "there's no Convex auth skill" and tries
+to add one back, read this first.
+
+### What happened upstream
+
+`get-convex/agent-skills` stopped being a hand-maintained library and became a
+**generated export surface** of a private hub (`get-convex/convex-agents`).
+Their own PR says it plainly:
+
+> Makes this repo a **generated surface** of the convex-agents hub: 35
+> SKILL.md files (one per public capability), **replacing the hand-maintained
+> 6-skill subset**. This is the surface to hand Vercel for v0 / skills.sh.
+
+And the acceptance test for that rewrite was **activation**, not content:
+
+> Activation among v0-style distractor skills (vercel-deploy, shadcn-ui,
+> stripe, playwright, tailwind, seo): 13/13 […] Routing to the correct
+> bundled skill: 12/12.
+
+Once the metric is "does my skill win the routing coin-flip against `stripe`
+in v0", the `description` becomes a sales pitch (the follow-up PR is literally
+titled *"Main skill: sell Convex to agents"*) and the body stops mattering.
+Three of our six were then deleted outright as "non-production".
+
+### Why we did not follow
+
+Measured, not assumed — vendored bytes vs everything upstream offers today
+(new `SKILL.md` + its served catalog doc combined):
+
+| capability | vendored (pinned `ec1e6ba`) | upstream today | |
+| ---------- | --------------------------- | -------------- | --- |
+| auth       | 36 567 B across 7 files     | 3 920 B        | −89 % |
+| migrate    | 18 147 B across 5 files     | 1 812 B        | −90 % |
+| optimize   | 41 947 B across 7 files     | 3 229 B        | −92 % |
+
+The content did **not** move server-side — that was worth checking, and it is
+false. The served docs (`https://basic-anteater-667.convex.site/capability/
+<id>.md`) are *smaller* than the stubs. It was deleted.
+
+Two further disqualifiers for this repo specifically:
+
+- The new `convex-auth` documents **`@convex-dev/auth` with passkeys**. We use
+  **Better Auth** (`@convex-dev/better-auth`). The part of the old skill that
+  was useful here — the provider comparison (Clerk, Auth0, WorkOS, Convex
+  Auth) — is exactly the part that was cut.
+- The new main skill instructs the agent to **fetch and follow remote
+  procedure docs at runtime**, "prefer the served copy: it is newer", and
+  mentions `tier>0` capabilities that **spend money**. That structurally
+  defeats `pinnedRef` + `computedHash` + `--verify`: the hash covers the
+  pointer, never what it fetches.
+
+### Why we deleted rather than froze
+
+Freezing at `ec1e6ba` would have kept the depth, but frozen docs rot, and the
+rot would be invisible. Deleting is safe because **the vendored skills were
+never the freshness channel** — see `CLAUDE.md`, "Convex knowledge comes from
+three self-refreshing channels". `guidelines.md` is regenerated by
+`convex dev` and outranks skills by our own rule; the Convex MCP reads the
+live deployment and cannot go stale.
+
+And each deleted skill was already dead weight here:
+
+- `convex` — a router whose only job was pointing at the five below. Broken by
+  construction once they go.
+- `convex-quickstart` — bootstraps a new Convex app. This app exists. A
+  genuinely new project would use `npm create convex@latest` +
+  `npx convex ai-files install`, or fork this template via `pnpm run init`.
+- `convex-setup-auth` — see above, wrong auth product.
+- `convex-migration-helper`, `convex-performance-audit` — the only real loss.
+  Both answer questions the **MCP answers better**, by reading your actual
+  tables and logs instead of describing the general case.
+
+`convex-create-component` survives because upstream explicitly **exempted it
+from the generator** ("no generated counterpart […] kept untouched"). It is
+the last hand-written one, so it is the last deep one.
+
+### If you genuinely need migration or perf depth again
+
+Do not re-vendor from `get-convex/agent-skills` — it will hand you a 1 KB
+stub. Either use the Convex MCP against the live deployment, or write the
+procedure into this repo as **our own** content that we own and update.
+
+## Better Auth is boxed into `>=1.6.22 <1.7.0`
+
+Two lines in `package.json` look over-specified and are not. Don't "tidy"
+either operator:
+
+```json
+"@convex-dev/better-auth": "0.12.2",   // exact — NOT a range
+"better-auth": "~1.6.30",              // tilde — NOT a caret
+```
+
+### The floor: GHSA-qq9h-g4jm-xgf3
+
+High severity, *"Account takeover via pre-account hijacking on magic-link and
+email-OTP sign-in"*. Vulnerable `>= 1.1.3, < 1.6.22`; fixed in **1.6.22**.
+`convex/auth.ts` loads `magicLink()`, so this repo sits squarely in the blast
+radius — and because it is a template, every project forked from it is born
+with whatever the lockfile carries. That is why this floor is a lockfile
+concern, not just a range concern: check `pnpm-lock.yaml`, not only
+`package.json`. (The advisory lists a second range, `>=1.7.0-beta.0
+<1.7.0-beta.10`; irrelevant here, the ceiling below excludes all of 1.7.)
+
+### The ceiling: the adapter's peer, plus a dropped export
+
+Every published adapter version — 0.12.2 through 0.12.5 — declares
+`better-auth: ">=1.6.9 <1.7.0"` (0.12.3+ raise the floor to 1.6.11, never the
+ceiling). **No adapter release supports better-auth 1.7 yet.** Hence `~1.6.30`
+— patches inside 1.6.x, never 1.7.x. `^1.6.30` would resolve straight to
+1.7.1, the current `latest` on npm.
+
+The ceiling is not merely a declared peer, it bites. Measured on 2026-08-24
+with 1.7.1 + adapter 0.12.2: **`tsc` passes clean, then `vite build` dies**
+
+```
+"./plugins/oidc-provider" is not exported ... from better-auth
+```
+
+The import is the **adapter's**, not ours — grepping this repo for it finds
+nothing, and there is no local workaround. Note which gate caught it: type
+checking was green on a build that cannot run. When you next evaluate a bump
+here, `tsc` alone is not evidence.
+
+### Why the adapter is pinned exact, and `~` wouldn't help
+
+**On a `0.x`, `^0.12.2` and `~0.12.2` mean the same thing** — both read
+`>=0.12.2 <0.13.0`, so neither blocks 0.12.3+. Only the bare `0.12.2` holds.
+
+It has to hold, because the adapter breaks against newer Better Auth. From
+better-auth **1.6.18**, `useSession().data` collapses to `never` and you get a
+**TS2322 on the `authClient` prop of `ConvexBetterAuthProvider`**. Upstream
+cause: 1.6.18+ gives its return types a *name* (`ReactAuthClient`) where they
+used to be anonymous structural types, and the adapter's `AuthClient` — built
+on `Omit<BetterAuthClientPlugin, …>` — no longer unifies with it.
+
+### The bisect (adapter × better-auth)
+
+| adapter    | better-auth | result                                                                                                             |
+| ---------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| 0.12.2     | 1.6.16      | tsc OK, tests OK                                                                                                     |
+| **0.12.2** | **1.6.30**  | **tsc OK, tests OK — the way out, and what we ship**                                                                 |
+| 0.12.3     | 1.6.30      | tsc OK, but slows `convex-test` down: 2–4 tests out of 120 blow the 5 s timeout, a different set each run. Rejected. |
+| 0.12.4     | 1.6.30      | TS2322                                                                                                               |
+| 0.12.5     | 1.6.30      | TS2322                                                                                                               |
+
+The `tests OK` / `convex-test` column comes from **interw-os**, a downstream
+project that has a `convex-test` suite. This template ships none — don't go
+looking for those 120 tests here. Locally the gates are `pnpm lint`,
+`pnpm build` and `pnpm test:smoke`.
+
+### `better-call` is no longer overridden
+
+Better Auth pins `better-call` *exactly* (1.4.0 for 1.6.30), and this repo used
+to force it back to 1.3.4. That override was **removed on 2026-08-24** — see
+§ "pnpm.overrides" for why it existed and what it taught. `better-call` now
+follows Better Auth with nothing in between, which is one less thing to reason
+about when a bump goes wrong.
+
+### Renovate guards the window, asymmetrically
+
+In `renovate.json`: `@convex-dev/better-auth` is disabled outright (any bump
+breaks it), whereas `better-auth` blocks only `minor`/`major` — **1.6.x patches
+stay enabled on purpose**. That channel is how the next security fix arrives,
+and closing it is exactly how this repo ended up shipping a vulnerable 1.6.14.
+Don't "simplify" the two rules into one disabled rule.
+
+### Unblock condition
+
+**[get-convex/better-auth#420](https://github.com/get-convex/better-auth/issues/420)**
+(open). When it lands, adapter 0.12.4+ should type-check against better-auth
+1.6.18+. Only then relax the exact pin — and re-run the bisect above rather
+than trusting the table, since the `convex-test` slowdown on 0.12.3 was a
+separate defect from the TS2322.
+
+## Zod v4 required for Better Auth 1.6.10
+
+Better Auth's `better-call` subdependency uses `.meta()` on Zod schemas,
+which is **v4-only**. The install warning is the only signal — runtime
+errors otherwise look like opaque schema failures.
+
+We ship `zod ^4.4.3`. Downgrading `better-auth` to a zod-v3-era release is
+**not** an option any more: GHSA-qq9h-g4jm-xgf3 puts a hard floor at 1.6.22 —
+see § "Better Auth is boxed into `>=1.6.22 <1.7.0`".
+
+## Resend test-mode trap
+
+`new Resend(component, { testMode: <bool> })` defaults to `true`. We pass
+`testMode: process.env.RESEND_TEST_MODE !== 'false'` so production emails
+actually fly. Symptom of the wrong setting: "Test mode is enabled, but
+email address is not a valid resend test address".
+
+## Resend: two integrations (runtime Convex vs Claude Code plugin)
+
+There are **two unrelated Resend setups** in this repo and they read the
+same env var name from **different places** — don't conflate them.
+
+1. **Runtime email** (`@convex-dev/resend`, `convex/email.ts`). Sends the
+   app's transactional mail (auth, invitations, notifications). Its
+   `RESEND_API_KEY` and `RESEND_FROM` live in the **Convex deployment env**
+   (`pnpm exec convex env set …`, or via `pnpm run setup`). Nothing here
+   touches your shell.
+
+2. **Dev tooling** (the `resend@claude-plugins-official` Claude Code plugin,
+   enabled in `.claude/settings.json`). Its bundled MCP server runs
+   `npx -y resend-mcp` and reads `RESEND_API_KEY` from the environment Claude
+   Code passes it — **not** the Convex env, not `.env.local`. Put it in the
+   **gitignored `.claude/settings.local.json`** `env` block (repo-scoped,
+   never committed); **restart Claude Code** to apply. A shell-profile
+   `export RESEND_API_KEY=re_…` also works.
+
+A missing or wrong key produces different symptoms depending on which side:
+app emails failing → check the **Convex** env; the Claude Code Resend tools
+failing → check `.claude/settings.local.json` (or your shell) and restart.
+
+**Why the plugin's skills aren't in `skills-lock.json`.** The plugin
+delivers its skills *and* MCP as one marketplace bundle that auto-updates
+at Claude Code startup. The `sync:skills` pipeline (`skills-lock.json`,
+weekly Action) is only for library skills that upstream does **not** ship
+as a Claude Code plugin (Convex, Better Auth, TanStack). Vendoring Resend
+there too would duplicate the skills (plugin cache *and* `.agents/skills/`)
+and double the update machinery — so we deliberately don't. Let the
+marketplace own Resend.
+
+## macOS Finder duplicates
+
+Any `* 2.ts` / `* 2.tsx` file (created by Finder copy/paste or "Save as"
+sidebars) will be picked up by Convex AND Vite and break the build with
+ambiguous module errors. After heavy file-move ops, run:
+
+```
+find . \( -path ./node_modules -o -path ./.output \) -prune -o \
+  -type f \( -name '* 2.ts' -o -name '* 2.tsx' \) -print
+```
+
+## Anthropic model id
+
+`convex/agent.ts` defaults to `claude-haiku-4-5`. Override via the
+`ANTHROPIC_MODEL` Convex env var to pick a different model. Anthropic
+sometimes ships dated aliases (`claude-haiku-4-5-20251001`) for stability.
+
+## SITE_URL drift in prod = broken email links
+
+`SITE_URL` is the Convex env var that builds every email URL (magic link,
+invitation accept, change-email verification, delete-account confirm) and
+feeds Better Auth's `baseURL`. If you forget to set it on the prod Convex
+deployment, emails ship with `http://localhost:3000/...` links — silent
+data loss until a user complains.
+
+`convex/auth.ts` throws at boot if `APP_ENV=production` AND `SITE_URL`
+matches `localhost` / `127.0.0.1`. So:
+
+- Set `APP_ENV=development` on dev deployments (no guard, localhost is fine).
+- Set `APP_ENV=production` AND a real `SITE_URL` on prod. A `convex deploy`
+  with the wrong combo will fail loudly.
+
+```bash
+pnpm exec convex env set --prod APP_ENV production
+pnpm exec convex env set --prod SITE_URL "https://your-domain"
+```
+
+## `vercel link` wipes `CONVEX_DEPLOYMENT` from `.env.local`
+
+The first `pnpm dlx vercel@latest link` follows up with an interactive
+"Would you like to pull environment variables now?" prompt. Saying **yes**
+makes Vercel overwrite `.env.local` with **only the vars defined on
+Vercel** — and since `CONVEX_DEPLOYMENT` is per-developer (never set on
+Vercel), it gets stripped. Next `pnpm run setup:prod` / `convex env list`
+then fails with `No CONVEX_DEPLOYMENT set`.
+
+**Two fixes**:
+
+- When linking the first time, answer **no** to the env pull prompt.
+- If it already happened, re-run `pnpm exec convex dev` once — it
+  re-binds your local repo to the existing dev deployment and rewrites
+  `CONVEX_DEPLOYMENT=dev:…` into `.env.local`. **Pick the existing
+  deployment**, do not let it create a new one.
+
+Never put `CONVEX_DEPLOYMENT` on Vercel: it's a per-developer dev
+binding, not a deploy target.
+
+## Vite / Convex dev fails after partial install state
+
+If `pnpm dev` errors with one of:
+- `_gensync(...) is not a function`
+- `Cannot destructure property 'isCompatTag' of 'react'`
+- `esbuild failed: import_esbuild2.default.build is not a function`
+
+…the node_modules tree is in an inconsistent state (typically after a
+mid-session `pnpm dedupe` or after pnpm skipped postinstall scripts on
+`esbuild`).
+
+**Fix**:
+```bash
+rm -rf node_modules
+pnpm install
+pnpm rebuild esbuild   # ensures esbuild's native binary is fetched
+```
+
+`pnpm rebuild esbuild` is required because pnpm 10 skips lifecycle scripts
+by default, so esbuild's `install.js` doesn't download the platform binary.
+
+## Vercel framework preset traps TanStack Start
+
+Vercel's auto-detection lands on **Vite** the moment it sees `vite.config.ts`,
+and the Vite preset serves `dist/` as static files. TanStack Start + Nitro
+emit the Build Output API layout in `.vercel/output/` instead — so the
+preset and the actual output never meet, and every route returns 404.
+
+Two things must both be true:
+
+1. `vite.config.ts` loads `nitro()` from `nitro/vite` *after* `tanstackStart()`.
+   Without Nitro, `pnpm build` only produces `.output/server/index.mjs`
+   (generic Node server) which Vercel cannot serve.
+2. `vercel.json` overrides the preset:
+   ```json
+   { "framework": null, "buildCommand": "pnpm build", "installCommand": "pnpm install --frozen-lockfile=false" }
+   ```
+   Editing the preset in the dashboard works too, but the file is the
+   durable answer — survives team handoffs and project re-imports.
+
+**Symptom**: `curl -I https://<your-domain>/` returns `HTTP/2 404` with
+`server: Vercel` and a static-looking `cache-control: public, max-age=...`.
+
+**About that `--frozen-lockfile=false`** — it is a known weakness, kept
+deliberately, not an oversight. CI installs frozen; Vercel does not, so a
+drifted lockfile fails loudly in CI but installs silently in production.
+Flipping it to `--frozen-lockfile` is the correct end state, but it is only
+safe once Vercel's pnpm version is deterministic: Vercel maps our
+`lockfileVersion: 9.0` to "pnpm 9 **or** 10" and ignores `packageManager`
+unless Corepack is enabled. Frozen + an unpredictable pnpm major = red deploys
+on a green commit.
+
+**To close it** (needs dashboard access, cannot be done from the repo alone):
+set `ENABLE_EXPERIMENTAL_COREPACK=1` in the Vercel project's environment
+variables, redeploy, confirm in the build log that pnpm matches
+`packageManager` — then change `installCommand` to
+`pnpm install --frozen-lockfile` in the same PR. Do not do the second half
+without the first.
+
+## Trade-offs vs PROJECT_BRIEF.md
+
+Choices that diverge from the brief, with rationale. See
+`/Users/benjaminbouquet/.claude/plans/glistening-puzzling-kay.md` for the full
+audit.
+
+- **Better Auth `organization()` plugin not loaded** — its tables are not Convex
+  first-class (no `withIndex` joins). We mirror orgs/members/invitations in our
+  own schema. Loss: `leaveOrganization`, session-level active-org, explicit
+  reject/cancel invitation states.
+- **AI front uses `useUIMessages` from `@convex-dev/agent/react`** instead of
+  `@assistant-ui/react`. No Convex adapter exists for assistant-ui; the brief's
+  pick would require ~200 lines of glue. Loss: markdown rendering, attachments,
+  tool-call UI, edit/regenerate. Migrate later if polish is needed.
+- **Anthropic model default `claude-haiku-4-5`** — chosen for its cost/latency
+  ratio in an in-app assistant. Override via `ANTHROPIC_MODEL` env var
+  (e.g. `claude-sonnet-4-6` for heavier tasks).
+- **Rate-limit thresholds** chosen for usable defaults (e.g. invitations 20/h
+  burst 5) rather than the brief's tight 3/min example.
+- **Super-admin lacks impersonate** — out of scope for MVP, needs a careful
+  session-signing flow.
+- **Sentry only on the front-end** — Convex Dashboard logs cover errors;
+  Sentry-on-Convex would need a fetch-to-envelope helper.
+
+## Color theme picker SSR flash
+
+The 4-theme picker (`ThemePicker.tsx`) reads `localStorage` in a `useEffect`
+and applies `data-theme` to `<html>` after mount. Until then, the page
+renders with the default neutral theme, which means a brief flash of color
+on first paint when the user has a non-default theme saved.
+
+`next-themes` already prevents the dark/light flash via its own pre-mount
+script. The color theme is on a separate channel (data-theme attr vs class)
+and doesn't get that treatment — acceptable for v1 since only the `--primary`
+hue changes, not background colors.
+
+**Fix later**: inject a synchronous `<script>` in `__root.tsx` that reads
+the `app-color-theme` localStorage key and sets `data-theme` before React
+hydrates. Or migrate to a cookie-based scheme so SSR can render the right
+theme directly.
+
+## i18n (react-i18next) SSR — no-flash, per-request instance
+
+The app is bilingual (FR/EN). Three non-obvious decisions keep SSR correct:
+
+1. **One i18next instance per server request, never a shared singleton.**
+   `getI18n()` in `src/lib/i18n.ts` caches one read-only instance *per locale*
+   on the server and a single mutable instance on the client. A single shared
+   server instance whose `lng` we mutate with `changeLanguage` would leak one
+   request's locale into another concurrent request (the Node server is
+   long-running). The per-locale server cache is safe only because we never
+   call `changeLanguage` on the server.
+
+2. **Resources are imported statically (bundled), so init is synchronous.**
+   No `i18next-http-backend`, no lazy namespace loading. That means the very
+   first render already has the right strings — no Suspense boundary, no flash
+   of keys or of the wrong language. The cost is all locales ship in the
+   bundle; fine for two languages, revisit if the count grows.
+
+3. **The locale cookie is written on the server during SSR.**
+   `getLocale()` (`src/lib/locale.ts`) is a `createIsomorphicFn`: on the server
+   it reads the `lang` cookie, else parses `Accept-Language`, then **writes the
+   resolved value back into the `lang` cookie**. The client branch reads the
+   same cookie (else `navigator.language`). Writing the cookie server-side is
+   what guarantees the client reads the *exact* value the server rendered with —
+   without it, `Accept-Language` (server) vs `navigator.language` (client) can
+   disagree and cause a hydration mismatch. This is the cookie-based approach
+   the "Color theme picker SSR flash" section suggests as the future fix —
+   applied here from the start. English is the default; French wins only when a
+   French variant is the highest-priority language the client asked for.
+
+**Page `<title>` in `head()`**: `head()` runs outside React, so it can't use
+the `useTranslation` hook. Routes resolve titles via
+`getI18n(getLocale()).getFixedT(null, '<ns>')('key')` instead. A live language
+switch updates the body immediately but the `<title>` only refreshes on the
+next navigation — acceptable, titles are low-traffic.
+
+**Cross-device preference**: `users.preferredLanguage` (Convex) is written by
+the switcher and drives transactional email locale. We do **not** currently
+restore it into the cookie on login, so switching language on device A does not
+auto-apply the UI language on device B until the user switches there too (the
+cookie is per-browser). The email locale is always correct regardless. Restore
+on login is a deliberate follow-up, not a bug.
+
+**zxcvbn feedback strings** (password strength warnings) come from the zxcvbn
+English wordlist and are not translated — only our own labels around the meter
+are. Translating zxcvbn output would require loading its locale packs.
+
+## Browser-only libs (anything `window`-touching) need client-only mount
+
+Libraries that reference `window` at module load time (Leaflet, Chart.js,
+Mermaid, Three.js, …) crash SSR on TanStack Start with
+`ReferenceError: window is not defined` if imported at the top of a route
+file — routes render on the server by default.
+
+**Pattern**: keep only `import type` at module level, load the real modules
+in a `useEffect` via dynamic `import()` (including any side-effect CSS like
+`leaflet/dist/leaflet.css`), stash them in state, and render a skeleton
+until they land:
+
+```tsx
+function ClientOnlyWidget() {
+  const [mods, setMods] = useState<Mods | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([import('some-browser-lib'), import('some-browser-lib/styles.css')])
+      .then(([lib]) => {
+        if (cancelled) return
+        setMods({ Widget: lib.Widget })
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (!mods) return <Skeleton />
+  return <mods.Widget>…</mods.Widget>
+}
+```
+
+(The demo map page that originally motivated this was removed in v0.1.0,
+but the trap applies to any browser-only lib you add.)
+
+## Convex dev typecheck
+
+`pnpm exec convex dev` runs its own typecheck (`--typecheck=enable`). If
+that fails the deploy is rejected. Use `pnpm typecheck` separately to keep
+the local feedback loop tight; the Convex check catches the same errors at
+deploy time anyway.
+
+## Post-event notification coverage
+
+`notifications.notifyPasswordChanged` fires from the client right after
+`authClient.changePassword()` succeeds on `/app/me`. **It does NOT fire on
+the `/forgot-password` → `/reset-password` flow** because that path runs
+server-side inside Better Auth and we don't have a clean hook (BA exposes
+`sendResetPassword` for sending the *link*, not a post-reset callback). The
+existing `revokeSessionsOnPasswordReset: true` covers the takeover-mitigation
+side (all sessions revoked, user must re-auth) so a hijacker is locked out;
+the missing piece is the *informational* email to the rightful owner.
+
+Two paths if/when this matters:
+1. Add `databaseHooks.account.update.after(account)` in `convex/auth.ts` and
+   gate on `providerId === 'credential'`. Risk: BA's `databaseHooks` type
+   surface is heavy and may trigger the TS inference cycle that CLAUDE.md
+   anti-pattern flags. Try in isolation.
+2. Add a thin wrapper around `authClient.resetPassword()` that, on success,
+   POSTs to a public Convex mutation. Symmetric to the `/me` pattern but
+   needs the user's email — derivable from the JWT BA sets on the response,
+   or by passing it through the reset-password page state.
+
+**NewDeviceEmail** is not implemented for the same scoping reason: detecting
+"new device" requires storing UA fingerprints in our schema (BA's component
+tables aren't queryable from `ctx.db` directly). Tracked as Phase 3 work
+behind a dedicated PR — needs a `deviceFingerprints` table + a session-create
+hook + an action to send the email.
+
+## Hydration & session timing — never re-instantiate `ConvexQueryClient`
+
+### Symptom (dev-only)
+
+In localhost, hard-refreshing `/app/*` redirects to `/login` for a beat,
+then snaps back. Opening a second tab to `/app/*` does the same. Prod is
+fine (network is fast enough that the gap closes inside React's batching).
+
+### Root cause
+
+`src/router.tsx` is `getRouter()` — TanStack Start calls it on the server
+AND again on the client during hydration. If `getRouter()` creates
+`new ConvexQueryClient(...)` on every call, each call opens a fresh
+WebSocket. The new socket has no JWT yet, so `useConvexAuth()` reports
+`{ isLoading: false, isAuthenticated: false }` for the round-trip while
+BA's cookieCache already knows the user is signed in. Any guard that
+redirects on `!isAuthenticated` will fire during that gap.
+
+### Rule
+
+1. **Memoize `ConvexQueryClient` and `QueryClient` at module scope on the
+   client** (`typeof window !== 'undefined'` check). Reuse across all
+   `getRouter()` calls. See the `getOrCreateClients()` helper in
+   `src/router.tsx`. On the server, always create fresh — the singleton
+   would leak state across requests.
+
+2. **Don't redirect on `useConvexAuth()` alone**. Use the `useAuthState()`
+   hook in `src/lib/auth-state.ts`, which combines Convex's signal with
+   Better Auth's `useSession()`. Only redirect when BA confirms no
+   session (`isSignedOut`), not when Convex is mid-refresh.
+
+3. **Anti-pattern** already listed in `CLAUDE.md` (« ❌ `ConvexReactClient`
+   recreated each render ») — this is the same bug at the router level.
+   If you add a new route guard, prefer `useAuthState()` over
+   `useConvexAuth()` directly.
+
+## Hot `users` row — a write there invalidates EVERY open query
+
+Every query and mutation in this app resolves the caller through
+`requireAppUser` / `safeAppUser` (`convex/lib/auth.ts`), which reads the
+caller's `users` row. That row is therefore in the **read set of every open
+subscription**. Convex re-runs a query whenever anything in its read set
+changes, so **one write to the `users` row re-executes ALL mounted queries**
+for that user — across every tab.
+
+### The trap we hit (4.8 GB on a 1 GB Free quota)
+
+`lastOrgSlug` used to live on the `users` row, and
+`src/routes/app/$orgSlug/route.tsx` fired `organizations.setLastOrg` from a
+`useEffect` that depended on `users.me`. Two tabs open on two different orgs
+turned that into an infinite cross-tab loop: tab A writes its slug → the
+`users` row changes → `me` re-runs in tab B → B's effect writes *its* slug
+back → A's effect fires again, forever. Each write also re-ran every other
+mounted query (dashboard, lists, members…). A derived project with 2 users
+and ~10 MB of data burned **4.8 GB of Database Bandwidth** this way.
+
+### Two rules to avoid a recurrence
+
+1. **No frequently-written field on `users`.** Per-user mutable state goes to
+   `userPrefs` (`convex/lib/userPrefs.ts`) or its own dedicated table, which
+   only `users.me` reads — a write there invalidates that single cheap query
+   instead of the whole subscription set. `users` stays for stable identity
+   data (email, name, `superAdmin`, …).
+2. **Never fire a mutation from a `useEffect` that depends on a Convex query
+   observing the data being written.** That is the loop above. When a one-shot
+   sync is genuinely needed, guard it with a "write-once per intention"
+   `useRef` (see `lastOrgSyncedRef` in `app/$orgSlug/route.tsx`): persist at
+   most once per visited slug so a `me` update from another tab can't
+   re-trigger the write.
+3. **Moving a field off `users` is a schema *narrow* — widen + deprecate, do
+   not delete in the same shippable change.** Convex validates the new schema
+   against documents at rest, and `convex deploy` runs inside Vercel's
+   `build:vercel`. Removing `lastOrgSlug` from the `users` validator while prod
+   rows still carried it failed the production deploy with
+   `Object contains extra field `lastOrgSlug` that is not in the validator`
+   (Vite built fine — the failure is the Convex push, not the bundle). Fix:
+   keep the field as `v.optional` with a `// Deprecated` comment and read it as
+   a fallback in `getLastOrgSlug` (writes still go only to `userPrefs`, so the
+   hot-row win holds). Only narrow the validator in a *later* deploy, after a
+   migration has cleared the field from every row — the widen → migrate →
+   narrow pattern.
+
+## release-please was removed (failed on every merge with `other side closed`)
+
+The `release-please.yml` workflow turned the **Release please** check red on
+every push to `main` with:
+
+```
+release-please failed: other side closed
+```
+
+`other side closed` is an undici socket error during the action's GitHub API
+calls. Forcing the action onto Node 24 (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`)
+did **not** fix it — the run still failed and still reported running on Node 20,
+so the env var never switched the runtime. It never produced a tag, a
+`CHANGELOG.md`, or a release PR.
+
+**Decision: the workflow was deleted.** This template deploys continuously on
+Vercel (independent of GitHub Actions), so automated version tags / changelogs
+weren't needed. Deleting it does not affect deploys or the `ci.yml` typecheck.
+
+If you later want automated releases, don't just re-add the old file — it had
+two latent problems on top of the crash: `package.json` has no `version` field
+(`release-type: node` needs one) and there was no `release-please-config.json` /
+`.release-please-manifest.json` bootstrap, so the first run scanned all history
+unbounded. Set those up before re-enabling.
+
+Field data from a derived project (2 weeks in) confirms the removal:
+the workflow failed 47/47 runs with `GitHub Actions is not permitted to create
+or approve pull requests` (the Actions setting is off by default on new
+repos), and even repaired it would have produced empty changelogs because the
+commits there don't follow Conventional Commits. Re-enabling needs all four:
+the Actions setting, the `version` field, the manifest bootstrap, **and**
+Conventional Commits discipline. For this template's actual release flow
+(manual notes + tag), see `release-tag.yml`.
+
+## sync-skills.yml (cron + auto-PR) was removed — CI drift check replaced it
+
+A weekly workflow (Monday cron + `peter-evans/create-pull-request`) used to
+open a `chore/sync-skills` PR when upstream SKILL.md files changed. Removed
+because every link in its chain was fragile while the alternative needs zero
+setup:
+
+- The PR step fails with `GitHub Actions is not permitted to create or
+  approve pull requests` unless a repo Actions setting (off by default, and
+  org-gated for org repos) is flipped on every derived repo.
+- Even then, PRs opened with the default `GITHUB_TOKEN` don't trigger
+  `on: pull_request` workflows — the bot PR shows no CI checks unless you
+  close/reopen it or wire up a PAT.
+- Crons are best-effort: they only run from the default branch, GitHub
+  auto-disables them on public repos after 60 days of inactivity, and on a
+  derived project the Monday cron never fired once in 2 weeks.
+
+Replacement: the `skills-drift` job in `ci.yml` runs
+`node scripts/sync-skills.mjs --check` on every push/PR (the script is
+dependency-free — no `pnpm install`). Red job → `pnpm run sync:skills:update`,
+review the diff, commit. Drift surfaces exactly when someone is coding,
+which is the only time fresh skills matter.
+
+Because that cron is gone, `skills-drift` is the **only** thing watching
+upstream here, so it stays in CI even though it needs the network. A derived
+project that *keeps* a weekly sync cron can drop `skills-drift` from CI and rely
+on `skills-verify` alone, for a 100 % offline CI — that's what Interw OS did. Do
+not port that change back here without restoring a cron first.
+
+## Vendored skills: cross-family links, and why `..` is banned in `references`
+
+Upstream repos increasingly ship *trees* of skills (TanStack/router:
+`packages/<pkg>/skills/<skill>/[<sub>/]SKILL.md`). We vendor flat, one lock key
+per family: `.agents/skills/<name>/`. Two consequences:
+
+- **Sibling links inside a family resolve, links climbing out of it don't.**
+  A sub-skill vendored as a `reference` keeps its position relative to its
+  parent, so `./middleware/SKILL.md` and `../server-functions/SKILL.md` work.
+  But upstream also links *across* packages
+  (`../../../../router-core/skills/router-core/auth-and-guards/SKILL.md`), and
+  that prefix doesn't exist locally — 17 such links currently dangle. We do
+  **not** rewrite them at vendor time: `computedHash` is computed on the fetched
+  bytes, so patching links on write would make the working tree permanently
+  disagree with the hash, and every `--check` would look like drift. The mapping
+  lives in `CLAUDE.md` § Skills instead.
+- **A `references` entry must never start with `..`.** It looks like it works —
+  `raw.githubusercontent.com` normalises the path and returns 200 — but
+  `vendor()` resolves the same string against `.agents/skills/<name>/` and
+  writes **outside** the skill directory. That's why
+  `compositions/router-query`, a *sibling* of `react-router` upstream, is its own
+  lock entry (`tanstack-router-query`) rather than a `../` reference.
+
+Rule of thumb: one lock entry per upstream directory you want to root a tree at;
+`references` may only point at descendants of that directory.
+
+## `sync:skills --check` needs its in-flight fetches capped
+
+`runCheck` fans out over every skill at once, and each skill with `references`
+multiplies its own file count. Vendoring the TanStack tree took the check from
+~30 to ~53 files and it started failing consistently: past roughly 30 parallel
+TLS handshakes `raw.githubusercontent.com` stops answering, undici burns its
+full 10 s connect timeout, and the script dies with `TypeError: fetch failed`.
+That breaks two things at once — the `SessionStart` hook in `.claude/settings.json`
+has a 10 s budget, and the `skills-drift` CI job goes red for no real reason.
+
+Fixed in `scripts/sync-skills.mjs` with an 8-slot semaphore around `fetch`
+(`MAX_IN_FLIGHT`). Counter-intuitively this made the check ~4× *faster* than it
+ever was (0.3–0.5 s vs 1.3–7.8 s), because ≤8 sockets get reused instead of
+thrashing. If you add many more skills, raise the skill count freely — do not
+raise `MAX_IN_FLIGHT`.
+
+The `skills-drift` CI job still carries this network exposure, by design (no
+cron here — previous section). The `skills-verify` job doesn't: it is a pure
+local re-hash and issues zero requests, so tree-integrity failures are never
+confounded with a GitHub hiccup.
+
+## `--check` is blind to the working tree — hence `--verify`
+
+`--check` and the default mode both compared **the lock's hash to upstream**,
+never **the lock to the disk**: `isVendored()` only tested that the files
+*exist*. So a vendored file hand-edited, truncated or simply left stale was
+invisible from both sides. Reproduced on this repo:
+
+```
+$ node scripts/sync-skills.mjs --check          # green
+$ echo "CORRUPTION" >> .agents/skills/convex-create-component/SKILL.md
+$ node scripts/sync-skills.mjs --check          # STILL green, exit 0
+$ node scripts/sync-skills.mjs                  # "Skills up to date." — no repair
+```
+
+Note the exact shape of the hole: **deleting** a file *was* caught (the
+existence test), **modifying** its content was not. That's what let three Convex
+`references/` files rot after their manual backfill, `migrations-component.md`
+being 54 lines behind. Nothing could ring.
+
+Two modes, two questions, not interchangeable:
+
+| Mode       | Question                  | Network |
+| ---------- | ------------------------- | ------- |
+| `--verify` | is my tree intact?        | no      |
+| `--check`  | has upstream moved?       | yes     |
+
+### Second hole, same family: an unreachable skill used to pass
+
+`--check` had a third possible outcome nobody counted — *we failed to look*.
+A fetch error set `process.exitCode = 1`, but the function ended with
+`process.exit(drift > 0 ? 2 : 0)`, and **`process.exit()` overrides
+`process.exitCode`**:
+
+```
+$ node -e "process.exitCode = 1; process.exit(0)"; echo $?
+0
+```
+
+So with `drift === 0`, a skill 404-ing upstream — or the whole network being
+down — printed **"Skills up to date with upstream." and exited 0**. The one
+thing that saved us was a coincidence: 3 Convex skills 404'd *and* 2 others
+drifted, so `drift` was 2 and the job went red for the wrong reason. Resolve
+the drift and the 404s would have gone silent.
+
+`--check` now counts `unreachable` separately, reports it on its own line, and
+fails on `drift > 0 || unreachable > 0`. **A 404 is worse than drift, not
+better**: drift means upstream changed, 404 means it's gone or renamed and the
+skill is no longer tracked by anything.
+
+Both run in CI here (`skills-verify`, `skills-drift`). `--verify` is the cheap
+deterministic gate; `--check` stays because this repo has no sync cron to catch
+upstream drift otherwise.
+
+The default mode is now **self-healing** too: it rewrites any file that no
+longer matches `computedHash`, so a plain `pnpm run sync:skills` repairs a
+corrupted tree. `--force` is no longer needed for that (it remains useful to
+re-download everything unconditionally).
+
+### Third hole, same family: a pruned skill left its symlink behind
+
+Both gates iterated `lock.skills`. So they could only ever ask questions *about
+entries that exist* — a skill **removed** from the lock fell out of their field
+of view entirely, taking its `.claude/skills/<name>` symlink with it.
+
+That is exactly what PR #59 did: it pruned five Convex skills from
+`skills-lock.json` and deleted `.agents/skills/convex*`, but nothing removed the
+five symlinks, and they are tracked files — so they were *committed dangling*:
+
+```
+$ find .claude/skills -type l ! -exec test -e {} \; -print
+.claude/skills/convex-setup-auth
+.claude/skills/convex-migration-helper
+.claude/skills/convex
+.claude/skills/convex-quickstart
+.claude/skills/convex-performance-audit
+```
+
+Claude Code walks `.claude/skills/`, not the lock, so it kept advertising five
+skills whose `SKILL.md` was gone. `--verify` said "Vendored skills match", CI
+was green, and the PR that caused it was the *skill-pruning* PR — the one place
+you would expect someone to look.
+
+`orphanLinks()` now closes it: `--verify` reports any `.claude/skills/` symlink
+with no lock entry, and a plain `sync:skills` unlinks it. Two safety belts keep
+it narrow — it only considers **symlinks** (a real directory is left alone) and
+only those resolving **inside `.agents/skills/`**, so a hand-placed skill or a
+link to somewhere else is never deleted. Pruning has its own counter, so a run
+that only removes orphans does not rewrite `skills-lock.json`.
+
+**The rule this leaves you with**: removing a skill is *two* deletions. Drop the
+lock entry, then run `pnpm run sync:skills` and commit the symlink deletion in
+the same PR.
+
+## `web-design-guidelines` vendors `AGENTS.md`, not the SKILL.md you'll find on GitHub
+
+Search GitHub for `web-design-guidelines/SKILL.md` and you get 100+ hits. They
+are all copies of the same community wrapper, and vendoring one would be a
+mistake. The wrapper's entire body is an instruction to fetch the real rules at
+runtime:
+
+```
+https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md
+```
+
+Pin that and you pin 1.2 kB of "go read a URL". The 7.7 kB that actually steers
+the model is never hashed, never reviewed, and changes under you — so
+`sync:skills:check` reports "up to date" forever while the content it is
+supposed to guard drifts freely. It also turns every invocation into a network
+call and an unreviewed prompt-injection surface, which is precisely what the
+pin-and-hash pipeline exists to prevent.
+
+We vendor the canonical `vercel-labs/web-interface-guidelines` instead. Two
+files there could serve:
+
+| Upstream file | Shape | Verdict |
+| ------------- | ----- | ------- |
+| `command.md`  | slash-command frontmatter + `$ARGUMENTS` + an output format | ✗ already has frontmatter (prepending ours yields two blocks), and `$ARGUMENTS` is meaningless outside a slash command |
+| `AGENTS.md`   | the rules alone, MUST/SHOULD/NEVER, no frontmatter | ✓ |
+
+`AGENTS.md` has no frontmatter at all, which the spec requires (`name` +
+`description`, `name` matching the directory). Hence the `frontmatter` map in
+the lock entry — see `CLAUDE.md`. It is prepended before hashing, so `--check`
+and `--verify` still digest identical bytes and an edit to the block shows up as
+drift.
+
+Consequences worth knowing:
+
+- **Upstream may add frontmatter to `AGENTS.md` one day.** That would produce
+  two blocks and a broken skill. `skills-drift` fires first (the content
+  changed), so read the diff before `--update` — that is the check, not an
+  accident.
+- **`name` must keep matching the directory**, i.e. the lock key. Rename one and
+  you must rename both.
+- The upstream project calls this **"Web Interface Guidelines"**; we keep the
+  directory name `web-design-guidelines` because that is what the ecosystem's
+  copies are called and what people search for.
+
+## Streamdown (AI panel) — `@source` Tailwind v4, plugins removed
+
+The AI panel renders assistant markdown with `streamdown` (via
+`MessageResponse` in `src/components/ai-elements/message.tsx`). Two traps if
+you touch this area:
+
+1. **Unstyled markdown.** Streamdown styles its elements with Tailwind classes
+   that live inside `node_modules`. The line
+   `@source '../../node_modules/streamdown/dist/*.js';` in `src/styles/app.css`
+   is mandatory — without it, Tailwind v4 doesn't scan the package and all
+   assistant markdown renders raw.
+2. **Plugins removed on purpose.** Upstream AI Elements' `message.tsx` imports
+   `@streamdown/{code,math,mermaid,cjk}` (Shiki + KaTeX + Mermaid = megabytes).
+   We keep only the core (GFM: tables, lists). Likewise `tool.tsx` replaces the
+   upstream Shiki `CodeBlock` with a local `<pre>`. Comments mark both trims in
+   the files.
+
+## AI Elements (AI panel) — trimmed vendoring
+
+The panel uses a small subset of Vercel AI Elements, vendored in
+`src/components/ai-elements/` and **deliberately trimmed**. Re-apply these
+after any reinstall from the registry (`npx ai-elements@latest add <name>`):
+
+- `prompt-input.tsx` is a **minimal rewrite**. Upstream ships attachments + a
+  model picker, pulling in `command` / `hover-card` / `input-group` / `nanoid`;
+  the panel only needs a multiline composer + submit/stop, so we vendor a tiny
+  version exporting `PromptInput*` + `PromptInputMessage`.
+- `message.tsx` uses `size="icon"` on action buttons. Upstream uses an
+  `icon-sm` size; this template's `Button` has no such variant (and we don't
+  hand-edit `src/components/ui/*`), so we map it down.
+- `streamdown` plugins and the `tool.tsx` `CodeBlock` are trimmed — see the
+  "Streamdown (AI panel)" section above.
+
+## Tool approval (AI panel) — resuming the stream is mandatory
+
+The agent's write tools carry `needsApproval: true` (`createTool` from
+`@convex-dev/agent`). Four traps:
+
+1. **Generation does NOT resume on its own.** `approveToolCall` /
+   `denyToolCall` only record the decision and return a `messageId`; you MUST
+   re-run `streamText` with `promptMessageId: messageId`, or the thread stays
+   frozen on "Confirmation required". `chat.respondToToolApproval` does exactly
+   this (decision → re-schedule `internal.chat.streamAsync`). Any new approval
+   entry point must follow this contract.
+2. **Minimum `@convex-dev/agent` 0.6.2.** Below that, the message is duplicated
+   after approval with `saveStreamDeltas` and the final step isn't persisted
+   (get-convex/agent#185, fixed in 0.6.2). We are on `^0.6.3`.
+3. **Built-in auto-deny.** Sending a new message while an approval is pending
+   auto-denies it (reason `auto-denied: new generation started`). Intended —
+   the UI shows "Action rejected"; don't "fix" it.
+4. **Approval state rides the tool parts** of `useUIMessages`
+   (`approval-requested` → `approval-responded` → `output-available` /
+   `output-denied`, field `part.approval`) — `confirmation.tsx` is driven by
+   that. `dynamicTool()` does not support approval (vercel/ai#11434): don't
+   convert these tools to dynamic.

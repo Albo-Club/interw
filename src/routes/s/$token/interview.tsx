@@ -6,11 +6,13 @@ import {
   useConvexQuery,
 } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
+
 import { CircleAlert, Play, Square, WifiOff } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import type { UploadProgress } from '~/lib/media/upload'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
 import { uploadToSignedUrl } from '~/lib/media/upload'
@@ -79,7 +81,7 @@ function InterviewRunner() {
     const goOnline = () => setOnline(true)
     const goOffline = () => {
       setOnline(false)
-      void logEvent({ token, kind: 'network_degraded' }).catch(() => undefined)
+      fireAndForget(logEvent({ token, kind: 'network_degraded' }), 'candidate event log')
     }
     setOnline(navigator.onLine)
     window.addEventListener('online', goOnline)
@@ -110,6 +112,8 @@ function InterviewRunner() {
     streamRef.current = stream
     if (videoRef.current) {
       videoRef.current.srcObject = stream
+      // Autoplay rejection is expected, not an error: browsers refuse it
+      // without a user gesture, and the preview still renders the stream.
       await videoRef.current.play().catch(() => undefined)
     }
     return stream
@@ -226,17 +230,17 @@ function InterviewRunner() {
       // answer was attempted and did not arrive — rather than assume the
       // candidate skipped it.
       if (failedSegmentRef.current) {
-        void markFailed({
+        fireAndForget(markFailed({
           token,
           segmentId: failedSegmentRef.current,
           detail: cause instanceof Error ? cause.message : 'unknown',
-        }).catch(() => undefined)
+        }), 'segment failure report')
       }
-      void logEvent({
+      fireAndForget(logEvent({
         token,
         kind: 'upload_failed',
         detail: cause instanceof Error ? cause.message : 'unknown',
-      }).catch(() => undefined)
+      }), 'candidate event log')
     }
   }, [current, requestUpload, markUploaded, markFailed, logEvent, token, t])
 
@@ -253,7 +257,7 @@ function InterviewRunner() {
       recorder.start()
       setElapsed(0)
       setPhase('recording')
-      void logEvent({ token, kind: 'recording_started' }).catch(() => undefined)
+      fireAndForget(logEvent({ token, kind: 'recording_started' }), 'candidate event log')
 
       // Hard stop at the limit the recruiter set. Without silence detection in
       // scope, this and the finish button are the only two ways an answer ends.
@@ -400,7 +404,11 @@ function InterviewRunner() {
                 />
                 {phase === 'recording' && (
                   <div className="bg-destructive text-destructive-foreground absolute top-3 left-3 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium">
-                    <span className="size-2 animate-pulse rounded-full bg-current" />
+                    {/* The dot pulses to say "live". It stops under
+                        prefers-reduced-motion — a candidate is looking at
+                        this screen for minutes, and the badge still reads as
+                        recording without it. */}
+                    <span className="size-2 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
                     {t('interview:run.recording')}
                   </div>
                 )}

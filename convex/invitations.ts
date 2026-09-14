@@ -91,6 +91,8 @@ export const create = mutation({
  * access — no auth required. Returns minimal info so the accept page can
  * branch its UI between sign-in / sign-up / switch-account.
  */
+// access: public by design — an invitee has no account yet and the invitation
+// token is the credential. Returns only the org name and the invited address.
 export const preview = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
@@ -131,6 +133,8 @@ export const preview = query({
   },
 })
 
+// access: public by design — accepting an invitation is how an account first
+// joins an organisation; the token is the credential and is consumed here.
 export const accept = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {

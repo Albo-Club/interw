@@ -1352,3 +1352,217 @@ The agent's write tools carry `needsApproval: true` (`createTool` from
    `output-denied`, field `part.approval`) — `confirmation.tsx` is driven by
    that. `dynamicTool()` does not support approval (vercel/ai#11434): don't
    convert these tools to dynamic.
+
+---
+
+# Interw
+
+Traps found while building the interview product on top of this template.
+
+## `npx convex codegen` needs a live deployment
+
+### What went wrong
+
+Adding a Convex module and then running `pnpm typecheck` fails with
+`Property 'projects' does not exist on type ...` — because
+`convex/_generated/api.d.ts` still lists the old module set. The obvious fix,
+`npx convex codegen`, refuses:
+
+```
+✖ No CONVEX_DEPLOYMENT set, run `npx convex dev` to configure a Convex project
+```
+
+Setting a dummy deployment gets further and then fails on
+`Error fetching GET https://api.convex.dev/... 401 Unauthorized`. Codegen
+authenticates before it writes anything. CI has no deployment either, so this
+is not only a local problem.
+
+### The rule
+
+Run `pnpm codegen:api` after adding, renaming or deleting a Convex module.
+`scripts/codegen-api-types.mjs` regenerates the two mechanically derived
+blocks of `api.d.ts` — the module map from the filesystem, the components map
+from `convex.config.ts`. `api.js` is generic at runtime (`anyApi`,
+`componentsGeneric`), so this only affects the type checker, and
+`npx convex dev` overwrites the file with identical content on its next run.
+
+`pnpm codegen:api:check` runs in CI and fails when a module was added without
+committing its codegen.
+
+**This does not license hand-editing `convex/_generated/*`** — the CLAUDE.md
+rule stands. This is codegen, verified byte-faithful against the tool's own
+output before it was adopted. If you find yourself editing that file in an
+editor, stop.
+
+## `convex-test` is pinned to 0.0.54
+
+0.0.55 and later declare `convex@^1.43.0`. Against the 1.40 this template
+ships, they fail at runtime on the first `t.run()`:
+
+```
+Error: Transaction already committed or rolled back
+```
+
+which looks like a bug in your test and is not. 0.0.54 works, including with
+the two-argument `ctx.db.get('table', id)` API. Revisit when the template
+bumps `convex` itself; do not bump `convex-test` alone.
+
+## Convex type inference collapses on two specific cycles
+
+Both produce the same misleading symptom: `tsc` reports
+`Parameter 'x' implicitly has an 'any' type` in files you did not touch,
+often in `src/routes/`, and the real cause is in `convex/`.
+
+**1. An action calling its own module through `ctx.runQuery` / `ctx.runMutation`.**
+Annotate the handler's return type explicitly:
+
+```ts
+export const requestQuestionUpload = action({
+  args: { ... },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
+    const target = await ctx.runQuery(internal.media.resolveQuestionUpload, args)
+    ...
+  },
+})
+```
+
+**2. A module-level client configured with a function reference.**
+`convex/email.ts` passes `onEmailEvent: internal.emailEvents.record` to
+`new Resend(...)`. `internal` is typed from every Convex module including
+that one, so without an explicit annotation TypeScript walks into the cycle,
+infers `any` for `resend`, and poisons inference across the whole backend:
+
+```ts
+export const resend: Resend = new Resend(components.resend, { ... })
+```
+
+Same family as the Better Auth trigger cycle documented above. When `tsc`
+starts reporting implicit `any` in unrelated files, look for a new function
+reference in a module-level initialiser.
+
+## Candidate recordings are NOT in Convex file storage
+
+`ctx.storage.getUrl()` returns a **permanent, unauthenticated** URL. Convex's
+own documentation is explicit: "anyone with the URL can access the file
+without further authentication from your app", and the only way to revoke one
+is to delete the file. Such a URL, once written to a database, mailed, or left
+in a browser history, exposes a candidate's video irrevocably.
+
+Serving through a Convex HTTP route is not a way out either: HTTP responses
+cap at 20 MB and do not support range requests, so neither a long recording
+nor seeking would work.
+
+Everything a candidate produces — and every recruiter-recorded question,
+because a recruiter's face and voice are personal data too, and a permanent
+link to the question set leaks the interview itself — goes to the private
+S3-compatible bucket via `convex/lib/objectStore.ts`. Only branding images
+(org logo, persona avatar) stay in Convex storage.
+
+**Never "simplify" this by moving recordings back to `ctx.storage`.** It is
+the one change that would reintroduce the exact failure this architecture
+exists to prevent.
+
+## A presigned PUT signs content-type AND content-length
+
+`presignPut` puts both headers in the signature, deliberately: the first stops
+an upload slot issued for a video from being used to park HTML on the bucket's
+own origin, the second stops a 4 MB promise becoming a 40 GB upload.
+
+The cost is that the client must send **exactly** what was signed. `fetch`
+does this automatically for a `Blob` — it sets `Content-Length` from
+`blob.size` and takes `Content-Type` from the header you pass. A hand-rolled
+request, a proxy that re-encodes, or passing a different blob than the one
+whose size you declared, all produce a `403` that reads like a credentials
+problem and is not.
+
+If a `403` appears on upload: compare the blob's size and type against the
+arguments passed to `requestSegmentUpload` / `requestQuestionUpload`.
+
+## `SignatureDoesNotMatch` is usually addressing style, not the key
+
+`convex/lib/objectStore.ts` defaults to virtual-hosted addressing
+(`https://{bucket}.{endpoint}/key`), which AWS, Scaleway and R2 all accept.
+MinIO in local development generally does not — set
+`OBJECT_STORE_FORCE_PATH_STYLE=true`. The second-most common cause is
+`OBJECT_STORE_REGION` not matching the endpoint's region: the region is part
+of the signing scope, so `fr-par` against an `nl-ams` endpoint signs cleanly
+and is rejected on arrival.
+
+The signer itself is pinned by `convex/lib/sigv4.test.ts` against AWS's own
+published worked example — both the canonical request and the final
+signature. If those tests pass, the signer is not the problem.
+
+## Two `MediaRecorder`s run on one camera stream
+
+`SegmentRecorder` records the answer twice: video-with-sound, and audio alone
+(a second `MediaStream` built from the audio track — not a clone of the whole
+stream, which would carry the video track into the "audio" file).
+
+This is not redundancy. The audio track is what gets transcribed and measured,
+and handing a transcription model a WebM **video** container is the difference
+between a timestamped transcript and a provider error. The extra upload is a
+few hundred kilobytes against a recording of tens of megabytes.
+
+## Seeking a `<video>` before `loadedmetadata` is silently ignored
+
+Setting `video.currentTime` before metadata has loaded does nothing — no
+error, no warning — and the video plays from the beginning. This is how
+"jump to the quote" quietly becomes "plays from the start", which reads as a
+broken feature rather than a race.
+
+`AnswerPlayer` waits for `readyState >= 1`, or listens once for
+`loadedmetadata`. It also carries a **nonce** on the seek cue, because
+clicking the same quote twice must replay it and a plain
+`{ segmentId, seconds }` object would compare equal.
+
+## Para-verbal analysis is computed, not generated
+
+The six delivery figures (speaking rate, hesitation, silence, time used,
+consistency, speaking time) come from `convex/lib/paraverbal.ts`, computed
+deterministically from the transcript's timestamps. No model scores them.
+
+This stack has no audio-capable model. A "vocal warmth" or "confidence" score
+would therefore be an invention wearing the clothes of a measurement — and
+nothing in a hiring report may be invented. Rate, hesitation and pausing are
+the measurable substance of para-verbal delivery anyway, they cost nothing
+extra, and being deterministic they are unit-tested and identical on a replay,
+which the pipeline's idempotency requires.
+
+If an audio-capable model is added later, extend the dimension union in
+`convex/schema.ts` — do not quietly start generating the existing six.
+
+## The shadcn CLI rewrites files you did not ask it to
+
+`pnpm dlx shadcn@latest add alert-dialog switch` also rewrote
+`src/components/ui/button.tsx` to a newer registry revision and added a
+package called `cn` to `dependencies`. The new revision imports
+`from "cn"` and `from "radix-ui"`, neither of which matches this project
+(`~/lib/utils` and `@radix-ui/react-*`), so the build breaks in a way that
+looks unrelated to the component you were adding.
+
+After any `shadcn add`: read `git diff` before staging. Revert files you did
+not ask for, re-point `cn` imports at `~/lib/utils`, and check `package.json`
+for a dependency you did not want.
+
+## TypeScript narrows a `let` flag captured by an async closure
+
+The standard cancellation pattern fails ESLint's
+`no-unnecessary-condition` rule:
+
+```ts
+let cancelled = false
+void (async () => {
+  await something()
+  if (cancelled) return   // "value is always falsy"
+})()
+return () => { cancelled = true }
+```
+
+TypeScript cannot see that the cleanup mutates the flag after the closure is
+created, so it narrows `cancelled` to `false` for the rest of the block. Put
+the flag on an object (`const run = { cancelled: false }`), and prefer a
+single check after all the awaiting and before any state is touched — so
+nothing half-applies when the user has navigated away.

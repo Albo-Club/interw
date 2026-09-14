@@ -27,6 +27,8 @@
     "init": "node scripts/init.mjs",
     "upgrade-template": "node scripts/upgrade-template.mjs",
     "release": "node scripts/release.mjs",
+    "audit:access": "node scripts/audit-convex-access.mjs",
+    "audit:access:check": "node scripts/audit-convex-access.mjs --check",
     "codegen:api": "node scripts/codegen-api-types.mjs",
     "codegen:api:check": "node scripts/codegen-api-types.mjs --check",
     "test": "vitest run",

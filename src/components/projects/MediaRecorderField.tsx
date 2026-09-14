@@ -78,7 +78,9 @@ export function MediaRecorderField({
       streamRef.current = stream
       if (videoRef.current && wantsVideo) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play().catch(() => undefined)
+        // Autoplay rejection is expected, not an error: browsers refuse it
+      // without a user gesture, and the preview still renders the stream.
+      await videoRef.current.play().catch(() => undefined)
       }
       const mimeType = support.video ?? support.audio
       if (!mimeType) throw new Error('unsupported_browser')

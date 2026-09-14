@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useConvexAction, useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
+
 import { Play } from 'lucide-react'
 
 import { api } from '../../../convex/_generated/api'
 import type { SeekCue } from '~/components/report/AnswerPlayer'
 import { getI18n } from '~/lib/i18n'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { getLocale } from '~/lib/locale'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Progress } from '~/components/ui/progress'
@@ -51,7 +53,7 @@ function SharedReport() {
 
   useEffect(() => {
     if (data?.state !== 'active') return
-    void recordView({ token: shareToken }).catch(() => undefined)
+    fireAndForget(recordView({ token: shareToken }), 'share view counter')
     void sharedMedia({ token: shareToken, now: Date.now() })
       .then(setMedia)
       .catch(() => undefined)

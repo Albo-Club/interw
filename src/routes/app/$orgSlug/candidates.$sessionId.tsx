@@ -14,6 +14,7 @@ import type { SeekCue } from '~/components/report/AnswerPlayer'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { Skeleton } from '~/components/ui/skeleton'
@@ -83,11 +84,12 @@ function CandidateReportPage() {
   useEffect(() => {
     if (!data) return
     let cancelled = false
-    void mediaUrls({ sessionId: sessionId as never })
-      .then((result) => {
+    fireAndForget(
+      mediaUrls({ sessionId: sessionId as never }).then((result) => {
         if (!cancelled) setMedia(result)
-      })
-      .catch(() => undefined)
+      }),
+      'playback urls',
+    )
     return () => {
       cancelled = true
     }
@@ -511,7 +513,16 @@ function CandidateReportPage() {
                         .then(() =>
                           toast.success(t('candidates:decision.saved')),
                         )
-                        .catch(() => undefined)
+                        .catch((error: unknown) => {
+                          // A decision that did not save must not look saved.
+                          const { key, fallbackKey } = errorMessageKey(
+                            error,
+                            'candidates',
+                          )
+                          toast.error(
+                            t(key, { defaultValue: t(fallbackKey) }),
+                          )
+                        })
                     }
                   >
                     {t(`candidates:decision.${decision}`)}

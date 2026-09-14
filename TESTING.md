@@ -15,6 +15,20 @@ Prerequisites:
 - `.env.local` filled in (`VITE_CONVEX_URL`, `CONVEX_DEPLOYMENT`)
 - 2 browsers (or 1 browser + 1 incognito window) ready for multi-tenant tests
 
+## Level 0 — Before the first run (one-off, ~20 min)
+
+Nothing below Level 1 works without these, and the first one cannot be
+undone later.
+
+| #  | Step | How | Why it matters |
+| -- | ---- | --- | -------------- |
+| P1 | **Create the Convex project in EU West (Ireland)** | Choose the region in the Convex dashboard when the project is created, and set the team default so preview deployments follow | The region is fixed at creation. Changing it later means a new deployment and an export/import migration. Candidate video is the most sensitive data this product holds |
+| P2 | Private S3-compatible bucket | Scaleway Object Storage, region `fr-par`, bucket **not** public. Set `OBJECT_STORE_*` on the Convex deployment (see `.env.example`) | Every object is served through a signed URL minted after an access check. A public bucket silently defeats all of it |
+| P3 | Verify the bucket is private | `curl -I https://<bucket>.<endpoint>/probe.txt` on an object you uploaded | Must be `403`. A `200` means every candidate recording is world-readable |
+| P4 | Model provider keys | `MISTRAL_API_KEY` (transcription) and `OPENROUTER_API_KEY` (evaluation) on the Convex deployment | The pipeline fails at the first step without them, visibly, in `jobLog` |
+| P5 | Resend delivery webhook | Point a Resend webhook at `https://<convex-site-url>/resend-webhook`, store `RESEND_WEBHOOK_SECRET` | Without it a bounced invitation is indistinguishable from a candidate who has not opened it |
+| P6 | Sentry for the backend | Convex dashboard → Settings → Integrations → Sentry | Convex reports thrown exceptions from actions through its own log stream; there is deliberately no Sentry SDK in the Convex runtime. The code's part of the contract is to never swallow an error, which `pnpm lint` and code review enforce |
+
 ## Level 1 — Build & smoke (automated, 2 min)
 
 | #  | Step          | Command                  | Expected result               |
@@ -27,8 +41,11 @@ Prerequisites:
 | B5 | Prod cookies  | `pnpm test:cookies`      | `interw.session_token` has Secure+HttpOnly+SameSite=Lax+Max-Age≈604800 |
 | B6 | Skills intact | `pnpm sync:skills:verify` | `Vendored skills match skills-lock.json.` (exit 0) — offline, covers the `SKILL.md` files **and** their `references`, plus `.claude/skills/` symlinks with no lock entry (`~ <name>: .claude/skills link with no lock entry`, exit 2 — repair with `pnpm sync:skills`) |
 | B6b | Skills up-to-date | `pnpm sync:skills:check` | `Skills up to date with upstream.` (exit 0) — network. Two distinct failures, both exit 2: `~ N skills drifted` (upstream changed) and `✗ … N skills could not be checked` (404 or network — the skill is tracked by nothing) |
+| B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder, para-verbal metrics, locale parity, and cross-organisation isolation under `convex-test` |
+| B8 | Convex codegen committed | `pnpm codegen:api:check` | `convex/_generated/api.d.ts is up to date.` Fails when a Convex module was added without committing its codegen — CI has no deployment, so `npx convex dev` cannot do it there |
+| B9 | Access audit | `pnpm audit:access:check` | Exit 0. Fails on any **public** Convex function with no access check. Run `pnpm audit:access` to print the full matrix; deliberate exceptions are declared with a `// access: <reason>` comment above the export and are listed in the output |
 
-B2–B3, B6 and B6b also run in CI on every PR (`.github/workflows/ci.yml`,
+B2–B3, B6, B6b, B7, B8 and B9 also run in CI on every PR (`.github/workflows/ci.yml`,
 B6 via the `skills-verify` job, B6b via `skills-drift`). CI covers B0
 implicitly: `pnpm/action-setup@v4` is given no `version:`, so it installs the
 `packageManager` version and cannot drift from local.
@@ -228,6 +245,97 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | S5 | Webhooks HMAC: modified payload → rejected         | Manual test with a tampered payload                               |
 | S6 | `pnpm build` + `pnpm start` (local prod)           | The prod bundle runs without warnings                             |
 
+---
+
+# Interw surfaces
+
+The levels above validate the platform this product is built on — auth,
+multi-tenancy, uploads, the app shell. The levels below validate Interw
+itself. Run them after Level 6, before any production deployment.
+
+Two of them are the ones that actually matter, and neither can be automated
+here: **IB12** (cutting the network mid-answer) and the Safari pass of
+**Interw B**. A candidate gets one attempt; everything else in this document
+is cheaper to get wrong.
+
+
+## Interw A — Roles (12 min)
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| IA1 | Create a role | `/app/{org}/projects` → New role → title + language → Create | Lands in the wizard on step 1, status **Draft** |
+| IA2 | Questions | Wizard → Questions → add three, edit the text, reorder with the arrows | Order persists on reload; indices stay contiguous |
+| IA3 | Record a question | Questions → Record this question → speak → Stop | Uploads, then shows **Recorded**. Check the object exists in the bucket under `orgs/{orgId}/projects/{projectId}/q-{questionId}.*` |
+| IA4 | Re-record | Record again with a different browser (WebM vs MP4) | The old object is deleted, not orphaned. Exactly one `q-{questionId}.*` remains |
+| IA5 | Criteria and weights | Add three criteria with weights 10 / 10 / 10 | Each shows **34% / 33% / 33%** — never 33/33/33 |
+| IA6 | Publish gate | Try to publish with no question | Refused with "Add at least one question" |
+| IA7 | Import a job ad | Questions → Import from a job ad → paste a real published ad URL | Draft appears with the requested number of questions and criteria summing to 100. **Nothing is saved** until "Add all to the role" |
+| IA8 | Import SSRF guard | Paste `http://127.0.0.1:8080/` and `http://169.254.169.254/` | Both refused as "not a public web address" |
+| IA9 | Restrict a role | Share → name one colleague → Save | A different member (non-admin) no longer sees the role in the list, in search, or by URL — and gets **not found**, not "forbidden" |
+| IA10 | Archive | Archive an active role | Becomes read-only; editing is refused; restoring returns it to **Draft**, never straight to Active |
+
+## Interw B — Candidate journey (20 min, repeat per browser)
+
+Run the whole level on **Chrome, Safari and Firefox**, desktop and mobile.
+Safari is the one that matters: it takes the MP4 branch of the recorder.
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| IB1 | Invitation | Role → Candidates → Invite → one name + address | Email arrives; the link is `/s/{token}` |
+| IB2 | Bulk invite | Paste 5 lines mixing `Name, email`, `Name <email>`, a bare address and one unreadable line | Shows "4 candidates ready" and the unreadable line **before** sending |
+| IB3 | Duplicate invite | Paste the same list twice | No second session; the existing link is re-sent |
+| IB4 | Welcome screen | Open the link | Greeting, role, question count, duration, what is needed. No app navigation anywhere on the page |
+| IB5 | Consent | Try to continue without ticking the box | Blocked. After ticking, `consentAcceptedAt` is set |
+| IB6 | CV upload | Upload a PDF, then a `.txt` renamed to `.pdf` | First succeeds; second is refused on content type |
+| IB7 | Device check | Deny camera permission | Explains how to allow it in the address bar — never a blank screen |
+| IB8 | In-app browser | Open the link from the LinkedIn or Gmail mobile app | Warns that recording often fails there and suggests opening in Safari/Chrome |
+| IB9 | Mic meter | Speak, then stay silent | Meter moves and reads "picking you up"; silence reads "can't hear anything" — and the **Start anyway** button is still available |
+| IB10 | Record an answer | Start my answer → speak → I've finished my answer | Both an audio and a video object appear under `orgs/{orgId}/sessions/{sessionId}/q0.*` |
+| IB11 | Time limit | Set a question to 30 s, then say nothing and wait | Countdown appears at 30 s remaining; recording stops on its own; the answer is saved |
+| IB12 | **Network cut mid-answer** | Start an answer, disable the network, finish the answer | Shows "your last answer didn't save" with **Try again** and **Skip**. Re-enable the network → Try again → it uploads |
+| IB13 | Resume | Close the tab after two answers, reopen the link | Resumes at question 3; the first two show as answered |
+| IB14 | Expiry | Set the role's expiry to yesterday, reopen the link | "This interview has closed" — never a dead end or a raw error |
+| IB15 | Unknown token | Open `/s/aaaa…` (43 chars) and `/s/short` | Both give the **same** "This link doesn't work" |
+| IB16 | Finish | Complete the interview | Lands on the thank-you page; session is `completed`; `jobLog` shows `transcribe · started` |
+
+## Interw C — Pipeline and report (15 min)
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| IC1 | Transcription | After C16, watch the candidate page | Pipeline steps appear with timings; transcripts are written per segment |
+| IC2 | Report | Wait for `report · succeeded` | Report appears: verdict, score, per-criterion scores, quotes |
+| IC3 | **Evidence anchoring** | Click a quote's timestamp | The player switches to the right answer and seeks to the moment the quote was actually said — not to 0:00 |
+| IC4 | Idempotent replay | Re-run `internal.pipeline.generateReport` for the same session via the Convex dashboard | Logs `report · skipped`, writes nothing, sends no second email |
+| IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
+| IC6 | Malformed model output | Temporarily point `OPENROUTER_API_KEY` at a model that ignores schemas | The job **fails and retries**; no partial report is written |
+| IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay |
+| IC8 | Recruiter email | Check the inbox of a member of the role's org | "Report ready" with score and recommendation, and the caveat that it is automated |
+| IC9 | Failed upload visible | Mark a segment `failed` by hand, open the report | That answer says the recording never reached us, explicitly as our failure |
+
+## Interw D — Reports, sharing and decisions (10 min)
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| ID1 | Decision | Set Shortlisted, then click it again | Sets, then clears. Shows who decided and when |
+| ID2 | Private note | Type a note, blur | Saved. Never appears on any candidate or shared surface |
+| ID3 | Share link | Share → 7 days → Create | Link copied. Opening it in a private window shows the report |
+| ID4 | Share withholds | On the shared page, search the HTML | No recruiter note, no candidate email, phone, LinkedIn, CV link, or internal role title |
+| ID5 | Revoke | Revoke, reload the shared page | "This link was revoked". Playback URLs stop being issued |
+| ID6 | Expiry | Create a link, set `expiresAt` to the past | "This link has expired" |
+| ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
+
+## Interw E — Retention and erasure (10 min)
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| IE1 | Candidate self-delete | Open `/s/{token}/privacy` → Delete everything | Every object under `orgs/{orgId}/sessions/{sessionId}/` is gone from the bucket; session, segments, transcripts, report and shares are gone; one `purgeLog` row exists carrying a **hash**, not the address |
+| IE2 | Recruiter delete | Candidate page → Delete this candidate's data | Same outcome, `reason: recruiter_delete` |
+| IE3 | Retention purge | Set a completed session's `purgeAfter` to the past, run `internal.retention.purgeDueSessions` | Media objects deleted; the report and transcript **remain**; `mediaPurgedAt` set; the report page says the recordings were deleted |
+| IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
+| IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
+
+---
+
 ## Quick dev seed
 
 To save ~2 min of setup, a dev seed (called via `convex run`) can create
@@ -243,3 +351,17 @@ Alice (SA), Bob (member), an "acme" org, and 3 items. Write it in
   actually deliver.
 - AI not streaming → `ANTHROPIC_API_KEY` + check `convex/agent.ts` (default
   model `claude-haiku-4-5`).
+- Upload gives 403 → the presigned URL signs `content-type` **and**
+  `content-length`. The client must send both exactly as issued; `fetch` does
+  this automatically for a `Blob`, a hand-rolled request may not.
+- Upload gives `SignatureDoesNotMatch` → check `OBJECT_STORE_REGION` and
+  whether the provider needs path-style addressing
+  (`OBJECT_STORE_FORCE_PATH_STYLE=true`, for MinIO in local development).
+- Pipeline stuck → read `jobLog` for that session (it is also shown on the
+  candidate page). Every step records started / succeeded / failed / skipped
+  with a duration and the error.
+- Report never generated but transcripts exist → `generateReport` skips when
+  the role has no criteria. Add one and re-run the chain.
+- Quotes jump to 0:00 → the transcript has no timestamps, so anchoring fell
+  back to the model's estimate. Check that Mistral returned `segments`, which
+  requires `timestamp_granularities`.

@@ -37,17 +37,31 @@ const MAX_SEGMENT_BYTES = 300 * 1024 * 1024
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
 const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
 
-async function requireOpenSession(
+/**
+ * Resolve a token to its session, or fail the same way every token that does
+ * not resolve fails. This IS the access check for the candidate surface —
+ * there is no account to check against.
+ */
+async function resolveSessionByToken(
   ctx: GenericQueryCtx<DataModel>,
   token: string,
-  now: number,
-): Promise<{ session: Doc<'sessions'>; project: Doc<'projects'> }> {
+): Promise<Doc<'sessions'>> {
   if (!looksLikeToken(token)) throw new ConvexError('not_found')
   const session = await ctx.db
     .query('sessions')
     .withIndex('by_token', (q) => q.eq('accessToken', token))
     .unique()
   if (!session) throw new ConvexError('not_found')
+  return session
+}
+
+/** The same, plus "and this interview is actually open right now". */
+async function requireOpenSession(
+  ctx: GenericQueryCtx<DataModel>,
+  token: string,
+  now: number,
+): Promise<{ session: Doc<'sessions'>; project: Doc<'projects'> }> {
+  const session = await resolveSessionByToken(ctx, token)
   const project = await ctx.db.get('projects', session.projectId)
   if (!project) throw new ConvexError('not_found')
 
@@ -393,12 +407,10 @@ export const logEvent = mutation({
     detail: v.optional(v.string()),
   },
   handler: async (ctx, { token, kind, detail }) => {
-    if (!looksLikeToken(token)) throw new ConvexError('not_found')
-    const session = await ctx.db
-      .query('sessions')
-      .withIndex('by_token', (q) => q.eq('accessToken', token))
-      .unique()
-    if (!session) throw new ConvexError('not_found')
+    // Token resolution only, not the full gate: a diagnostic event must still
+    // be recordable when something has gone wrong enough that the interview
+    // is no longer "open" — that is exactly when the trail is worth having.
+    const session = await resolveSessionByToken(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
     await ctx.db.insert('sessionEvents', {
       orgId: session.orgId,
@@ -422,12 +434,12 @@ export const finish = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const now = Date.now()
-    if (!looksLikeToken(token)) throw new ConvexError('not_found')
-    const session = await ctx.db
-      .query('sessions')
-      .withIndex('by_token', (q) => q.eq('accessToken', token))
-      .unique()
-    if (!session) throw new ConvexError('not_found')
+    // Deliberately `resolveSessionByToken` and not `requireOpenSession`: a
+    // candidate who has just recorded their answers must be able to finish
+    // even if the role expired a minute ago. Refusing here would strand a
+    // completed interview in `in_progress` with nothing to trigger the
+    // pipeline — punishing the candidate for our own deadline.
+    const session = await resolveSessionByToken(ctx, token)
     if (session.status === 'completed') return { alreadyCompleted: true }
     await consumeLimit(ctx, 'candidateWrite', token)
 

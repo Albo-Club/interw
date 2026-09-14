@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
+
 import { Check, CircleAlert, Mic, Video } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
 import type { MicVerdict } from '~/lib/media/devices'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import {
   assessMicLevels,
   detectBrowserSupport,
@@ -81,7 +83,9 @@ function DeviceCheck() {
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play().catch(() => undefined)
+        // Autoplay rejection is expected, not an error: browsers refuse it
+      // without a user gesture, and the preview still renders the stream.
+      await videoRef.current.play().catch(() => undefined)
       }
 
       // Labels are only populated once permission has been granted, so the
@@ -119,11 +123,11 @@ function DeviceCheck() {
       const name = error instanceof Error ? error.name : ''
       const next = name === 'NotFoundError' ? 'nodevice' : 'denied'
       setPhase(next)
-      void logEvent({
+      fireAndForget(logEvent({
         token,
         kind: 'device_check_failed',
         detail: name || 'unknown',
-      }).catch(() => undefined)
+      }), 'candidate event log')
     }
   }, [cameraId, micId, logEvent, teardown, token])
 
@@ -161,7 +165,7 @@ function DeviceCheck() {
   }
 
   const proceed = () => {
-    void logEvent({ token, kind: 'device_check_passed' }).catch(() => undefined)
+    fireAndForget(logEvent({ token, kind: 'device_check_passed' }), 'candidate event log')
     teardown()
     void navigate({ to: '/s/$token/interview', params: { token } })
   }
@@ -312,7 +316,7 @@ function MicMeter({ level, verdict }: { level: number; verdict: MicVerdict }) {
     >
       <div
         className={cn(
-          'h-full transition-[width] duration-75',
+          'h-full transition-[width] duration-75 motion-reduce:transition-none',
           verdict === 'good'
             ? 'bg-success'
             : verdict === 'quiet'

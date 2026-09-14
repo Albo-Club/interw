@@ -1,4 +1,5 @@
 import {
+  Briefcase,
   LayoutDashboard,
   Mail,
   Package,
@@ -31,6 +32,11 @@ export function getNavGroups(): Array<NavGroup> {
           titleKey: 'items.dashboard',
           to: '/app/$orgSlug',
           icon: LayoutDashboard,
+        },
+        {
+          titleKey: 'items.projects',
+          to: '/app/$orgSlug/projects',
+          icon: Briefcase,
         },
         {
           titleKey: 'items.items',

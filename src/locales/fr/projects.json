@@ -1,1 +1,258 @@
-{}
+{
+  "metaTitle": "Postes · Interw",
+  "list": {
+    "title": "Postes",
+    "subtitle": "Les postes pour lesquels vous recrutez, et où en est chacun.",
+    "new": "Nouveau poste",
+    "search": "Rechercher un poste",
+    "empty": {
+      "title": "Aucun poste pour l'instant",
+      "body": "Un poste regroupe vos questions, vos critères d'évaluation et les candidats que vous invitez. Créez-en un pour envoyer votre premier lien d'entretien.",
+      "action": "Créer un poste"
+    },
+    "emptyFiltered": {
+      "title": "Aucun résultat",
+      "body": "Aucun poste ne correspond à ce filtre. Essayez un autre statut, ou effacez la recherche."
+    },
+    "columns": {
+      "title": "Poste",
+      "status": "Statut",
+      "candidates": "Candidats",
+      "completed": "Terminés",
+      "created": "Créé le",
+      "actions": "Actions"
+    },
+    "filters": {
+      "all": "Tous",
+      "draft": "Brouillon",
+      "active": "Actif",
+      "archived": "Archivé"
+    }
+  },
+  "status": {
+    "draft": "Brouillon",
+    "active": "Actif",
+    "archived": "Archivé",
+    "expired": "Expiré"
+  },
+  "new": {
+    "title": "Nouveau poste",
+    "subtitle": "Deux champs pour démarrer. Le reste vient juste après.",
+    "fields": {
+      "title": "Intitulé interne",
+      "titleHint": "Visible uniquement par votre équipe.",
+      "jobTitle": "Intitulé affiché au candidat",
+      "jobTitleHint": "C'est ce qui apparaît sur l'écran du candidat.",
+      "language": "Langue de l'entretien",
+      "languageHint": "Détermine la langue des écrans candidat et de l'évaluation IA."
+    },
+    "submit": "Créer et continuer",
+    "cancel": "Annuler"
+  },
+  "detail": {
+    "edit": "Modifier",
+    "publish": "Publier",
+    "publishHint": "La publication permet d'inviter des candidats.",
+    "archive": "Archiver",
+    "restore": "Restaurer",
+    "delete": "Supprimer",
+    "share": "Partager",
+    "invite": "Inviter des candidats",
+    "overview": "Vue d'ensemble",
+    "questions": "Questions",
+    "criteria": "Critères",
+    "candidates": "Candidats",
+    "stats": {
+      "questions": "Questions",
+      "criteria": "Critères",
+      "duration": "Durée maximale",
+      "durationValue": "{{count}} min",
+      "expiry": "Expiration du lien",
+      "noExpiry": "Pas d'expiration"
+    },
+    "draftNotice": {
+      "title": "Ce poste est encore un brouillon",
+      "body": "Vous ne pourrez inviter de candidats qu'après l'avoir publié."
+    },
+    "archivedNotice": {
+      "title": "Ce poste est archivé",
+      "body": "Il est en lecture seule. Restaurez-le pour le modifier ou inviter à nouveau."
+    }
+  },
+  "wizard": {
+    "title": "Modifier le poste",
+    "steps": {
+      "basics": "Le poste",
+      "questions": "Questions",
+      "criteria": "Critères",
+      "candidate": "Formulaire candidat",
+      "review": "Récapitulatif"
+    },
+    "back": "Retour",
+    "next": "Suivant",
+    "saved": "Enregistré",
+    "saveFailed": "Enregistrement impossible. Votre dernière modification n'a pas été prise en compte.",
+    "finish": "Terminer"
+  },
+  "basics": {
+    "title": "Le poste",
+    "subtitle": "Ce que le candidat voit avant de commencer.",
+    "duration": "Durée maximale de l'entretien",
+    "durationHint": "Entre 5 et 120 minutes. Le candidat la voit avant de démarrer.",
+    "persona": "Nom de l'intervieweur",
+    "personaHint": "Le nom affiché à côté de vos questions. Le vôtre fonctionne très bien.",
+    "expiry": "Expiration des liens",
+    "expiryHint": "Passé cette date, les liens d'invitation cessent de fonctionner. Laissez vide pour ne pas expirer.",
+    "clearExpiry": "Pas d'expiration",
+    "intro": {
+      "title": "Message d'introduction",
+      "subtitle": "La première chose que voit un candidat. Un accueil enregistré donne un tout autre ton qu'un pavé de texte.",
+      "mode": {
+        "none": "Pas d'introduction",
+        "text": "Écrit",
+        "audio": "Audio enregistré",
+        "video": "Vidéo enregistrée"
+      },
+      "text": "Texte d'introduction",
+      "textPlaceholder": "Bienvenue, et merci du temps que vous nous accordez…"
+    }
+  },
+  "questions": {
+    "title": "Questions",
+    "subtitle": "Posées dans cet ordre. Enregistrez-vous en train de les poser : un candidat répond bien mieux à une personne qu'à un paragraphe.",
+    "add": "Ajouter une question",
+    "import": "Importer depuis une offre d'emploi",
+    "empty": {
+      "title": "Aucune question",
+      "body": "Ajoutez votre première question, ou importez une offre d'emploi et laissez Interw proposer une trame que vous modifierez."
+    },
+    "position": "Question {{index}} sur {{total}}",
+    "fields": {
+      "title": "Libellé court",
+      "titlePlaceholder": "Motivation",
+      "content": "La question",
+      "contentPlaceholder": "Parlez-moi d'un projet que vous avez livré et dont vous êtes fier, et de ce que vous y avez fait exactement.",
+      "hint": "Indice affiché au candidat",
+      "hintPlaceholder": "Un exemple concret vaut mieux qu'une réponse générale.",
+      "maxResponse": "Temps de réponse",
+      "maxResponseValue": "{{count}} secondes",
+      "maxResponseHint": "L'enregistrement s'arrête automatiquement à ce moment-là. Le candidat voit un décompte sur les 30 dernières secondes."
+    },
+    "media": {
+      "record": "Enregistrer cette question",
+      "rerecord": "Réenregistrer",
+      "remove": "Supprimer l'enregistrement",
+      "recording": "Enregistrement…",
+      "stop": "Arrêter",
+      "uploading": "Envoi en cours…",
+      "uploadFailed": "Envoi impossible. Rien n'a été enregistré — réessayez.",
+      "none": "Aucun enregistrement. La question sera affichée en texte.",
+      "ready": "Enregistrée",
+      "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez."
+    },
+    "remove": "Supprimer la question",
+    "removeConfirm": {
+      "title": "Supprimer cette question ?",
+      "body": "« {{question}} » sera retirée de l'entretien. Les candidats qui y ont déjà répondu conservent leur enregistrement.",
+      "confirm": "Supprimer la question"
+    },
+    "moveUp": "Monter",
+    "moveDown": "Descendre"
+  },
+  "criteria": {
+    "title": "Critères d'évaluation",
+    "subtitle": "Ce sur quoi l'IA évalue chaque candidat. Les poids sont relatifs : ils sont ramenés à 100 pour vous.",
+    "add": "Ajouter un critère",
+    "empty": {
+      "title": "Aucun critère",
+      "body": "Sans critère, il n'y a rien à évaluer. Ajoutez-en deux ou trois, ceux qui décident vraiment de ce recrutement."
+    },
+    "fields": {
+      "label": "Critère",
+      "labelPlaceholder": "Profondeur technique",
+      "description": "Ce qui constitue une bonne réponse",
+      "descriptionPlaceholder": "Explique des arbitrages, pas seulement des outils. Cite des décisions concrètes et leurs raisons.",
+      "weight": "Poids"
+    },
+    "normalized": "{{percent}} % de la note",
+    "remove": "Supprimer le critère",
+    "removeConfirm": {
+      "title": "Supprimer ce critère ?",
+      "body": "« {{label}} » ne sera plus évalué. Les rapports déjà générés conservent leurs notes.",
+      "confirm": "Supprimer le critère"
+    }
+  },
+  "candidateForm": {
+    "title": "Ce que vous demandez aux candidats",
+    "subtitle": "Chaque champ en plus est une raison d'abandonner. Ne demandez que ce que vous lirez vraiment.",
+    "fields": {
+      "phone": "Numéro de téléphone",
+      "linkedin": "Profil LinkedIn",
+      "cv": "CV",
+      "coverLetter": "Lettre de motivation"
+    },
+    "enabled": "Demander",
+    "required": "Obligatoire"
+  },
+  "review": {
+    "title": "Prêt à publier",
+    "subtitle": "Un dernier coup d'œil avant de pouvoir inviter des candidats.",
+    "readyTitle": "Ce poste est prêt",
+    "readyBody": "Publiez-le, puis invitez votre premier candidat.",
+    "blocked": "Pas encore prêt",
+    "missing": {
+      "questions": "Ajoutez au moins une question.",
+      "criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer."
+    }
+  },
+  "share": {
+    "title": "Qui voit ce poste",
+    "subtitle": "Par défaut, tout le monde dans votre organisation. Nommez des personnes pour le restreindre — les administrateurs et vous gardez toujours l'accès.",
+    "everyone": "Toute l'organisation",
+    "restricted": "Uniquement les personnes que je désigne",
+    "save": "Enregistrer les accès",
+    "saved": "Accès mis à jour"
+  },
+  "import": {
+    "title": "Importer depuis une offre d'emploi",
+    "subtitle": "Collez l'adresse d'une offre publiée. Interw propose des questions et des critères ; vous les modifiez avant que quoi que ce soit ne soit enregistré.",
+    "url": "Adresse de l'offre",
+    "urlPlaceholder": "https://…",
+    "questionCount": "Questions à proposer",
+    "criteriaCount": "Critères à proposer",
+    "submit": "Proposer une trame",
+    "working": "Lecture de l'offre…",
+    "resultTitle": "Proposition prête",
+    "resultBody": "Rien n'est encore enregistré. Relisez, puis ajoutez ce que vous souhaitez garder.",
+    "apply": "Tout ajouter au poste",
+    "discard": "Abandonner",
+    "disclaimer": "Proposé par l'IA à partir de la page que vous avez indiquée. Relisez chaque question avant de publier : ce qui est demandé aux candidats relève de votre responsabilité."
+  },
+  "delete": {
+    "title": "Supprimer ce poste ?",
+    "body": "« {{title}} », ses questions et ses critères seront définitivement supprimés. Cette action est irréversible.",
+    "confirm": "Supprimer le poste",
+    "hasSessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt : leurs entretiens et rapports sont conservés."
+  },
+  "errors": {
+    "invalid_title": "Donnez au poste un intitulé de 120 caractères maximum.",
+    "invalid_job_title": "L'intitulé du poste doit faire 120 caractères maximum.",
+    "invalid_content": "Une question doit contenir du texte, 1000 caractères maximum.",
+    "invalid_label": "Un critère doit avoir un libellé, 80 caractères maximum.",
+    "invalid_weight": "Un poids doit être compris entre 0 et 100.",
+    "invalid_duration": "Choisissez une durée comprise entre 5 et 120 minutes.",
+    "invalid_response_seconds": "Le temps de réponse doit être compris entre 15 et 600 secondes.",
+    "no_questions": "Ajoutez au moins une question avant de publier.",
+    "too_many_questions": "Un poste peut contenir au maximum 25 questions.",
+    "too_many_criteria": "Un poste peut contenir au maximum 12 critères.",
+    "project_archived": "Ce poste est archivé. Restaurez-le pour le modifier.",
+    "project_has_sessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt.",
+    "expiry_in_the_past": "Choisissez une date d'expiration dans le futur.",
+    "page_unreachable": "Cette page n'a pas pu être lue. Vérifiez le lien, ou collez le texte directement.",
+    "page_too_thin": "Il n'y avait pas assez de texte sur cette page. Elle nécessite peut-être JavaScript ou l'acceptation des cookies.",
+    "invalid_url": "Ce n'est pas une adresse web publique.",
+    "unsupported_media_type": "Ce format d'enregistrement n'est pas pris en charge.",
+    "media_too_large": "Cet enregistrement est trop volumineux. Limitez les questions à 100 Mo.",
+    "key_mismatch": "L'envoi ne correspond pas à ce qui était attendu. Réessayez l'enregistrement."
+  }
+}

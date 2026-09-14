@@ -187,7 +187,7 @@ export const create = mutation({
       .take(LIST_CAP)
     const slug = uniqueSlug(cleanTitle, new Set(existing.map((p) => p.slug)))
 
-    return await ctx.db.insert('projects', {
+    const projectId = await ctx.db.insert('projects', {
       orgId,
       slug,
       title: cleanTitle,
@@ -203,6 +203,9 @@ export const create = mutation({
       sessionCount: 0,
       completedSessionCount: 0,
     })
+    // The slug is derived here, so hand it back: the caller navigates to the
+    // wizard next and should not have to guess or re-query for it.
+    return { projectId, slug }
   },
 })
 

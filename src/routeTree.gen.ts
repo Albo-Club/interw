@@ -27,9 +27,13 @@ import { Route as AppOrgSlugChangelogRouteImport } from './routes/app/$orgSlug/c
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppOrgSlugSettingsRouteRouteImport } from './routes/app/$orgSlug/settings/route'
 import { Route as AppOrgSlugSettingsIndexRouteImport } from './routes/app/$orgSlug/settings/index'
+import { Route as AppOrgSlugProjectsIndexRouteImport } from './routes/app/$orgSlug/projects.index'
 import { Route as AppOrgSlugSettingsMembersRouteImport } from './routes/app/$orgSlug/settings/members'
 import { Route as AppOrgSlugSettingsInvitationsRouteImport } from './routes/app/$orgSlug/settings/invitations'
 import { Route as AppOrgSlugSettingsGeneralRouteImport } from './routes/app/$orgSlug/settings/general'
+import { Route as AppOrgSlugProjectsNewRouteImport } from './routes/app/$orgSlug/projects.new'
+import { Route as AppOrgSlugProjectsProjectSlugIndexRouteImport } from './routes/app/$orgSlug/projects.$projectSlug.index'
+import { Route as AppOrgSlugProjectsProjectSlugEditRouteImport } from './routes/app/$orgSlug/projects.$projectSlug.edit'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -121,6 +125,11 @@ const AppOrgSlugSettingsIndexRoute = AppOrgSlugSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppOrgSlugSettingsRouteRoute,
 } as any)
+const AppOrgSlugProjectsIndexRoute = AppOrgSlugProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AppOrgSlugRouteRoute,
+} as any)
 const AppOrgSlugSettingsMembersRoute =
   AppOrgSlugSettingsMembersRouteImport.update({
     id: '/members',
@@ -138,6 +147,23 @@ const AppOrgSlugSettingsGeneralRoute =
     id: '/general',
     path: '/general',
     getParentRoute: () => AppOrgSlugSettingsRouteRoute,
+  } as any)
+const AppOrgSlugProjectsNewRoute = AppOrgSlugProjectsNewRouteImport.update({
+  id: '/projects/new',
+  path: '/projects/new',
+  getParentRoute: () => AppOrgSlugRouteRoute,
+} as any)
+const AppOrgSlugProjectsProjectSlugIndexRoute =
+  AppOrgSlugProjectsProjectSlugIndexRouteImport.update({
+    id: '/projects/$projectSlug/',
+    path: '/projects/$projectSlug/',
+    getParentRoute: () => AppOrgSlugRouteRoute,
+  } as any)
+const AppOrgSlugProjectsProjectSlugEditRoute =
+  AppOrgSlugProjectsProjectSlugEditRouteImport.update({
+    id: '/projects/$projectSlug/edit',
+    path: '/projects/$projectSlug/edit',
+    getParentRoute: () => AppOrgSlugRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -158,10 +184,14 @@ export interface FileRoutesByFullPath {
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/app/$orgSlug/': typeof AppOrgSlugIndexRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects/': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings/': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug/': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -178,10 +208,14 @@ export interface FileRoutesByTo {
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/app/$orgSlug': typeof AppOrgSlugIndexRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -202,10 +236,14 @@ export interface FileRoutesById {
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/app/$orgSlug/': typeof AppOrgSlugIndexRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects/': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings/': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug/': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -227,10 +265,14 @@ export interface FileRouteTypes {
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
     | '/app/$orgSlug/'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects/'
     | '/app/$orgSlug/settings/'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -247,10 +289,14 @@ export interface FileRouteTypes {
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
     | '/app/$orgSlug'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects'
     | '/app/$orgSlug/settings'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug'
   id:
     | '__root__'
     | '/'
@@ -270,10 +316,14 @@ export interface FileRouteTypes {
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
     | '/app/$orgSlug/'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects/'
     | '/app/$orgSlug/settings/'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -415,6 +465,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgSlugSettingsIndexRouteImport
       parentRoute: typeof AppOrgSlugSettingsRouteRoute
     }
+    '/app/$orgSlug/projects/': {
+      id: '/app/$orgSlug/projects/'
+      path: '/projects'
+      fullPath: '/app/$orgSlug/projects/'
+      preLoaderRoute: typeof AppOrgSlugProjectsIndexRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
     '/app/$orgSlug/settings/members': {
       id: '/app/$orgSlug/settings/members'
       path: '/members'
@@ -435,6 +492,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/$orgSlug/settings/general'
       preLoaderRoute: typeof AppOrgSlugSettingsGeneralRouteImport
       parentRoute: typeof AppOrgSlugSettingsRouteRoute
+    }
+    '/app/$orgSlug/projects/new': {
+      id: '/app/$orgSlug/projects/new'
+      path: '/projects/new'
+      fullPath: '/app/$orgSlug/projects/new'
+      preLoaderRoute: typeof AppOrgSlugProjectsNewRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/app/$orgSlug/projects/$projectSlug/': {
+      id: '/app/$orgSlug/projects/$projectSlug/'
+      path: '/projects/$projectSlug'
+      fullPath: '/app/$orgSlug/projects/$projectSlug/'
+      preLoaderRoute: typeof AppOrgSlugProjectsProjectSlugIndexRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/app/$orgSlug/projects/$projectSlug/edit': {
+      id: '/app/$orgSlug/projects/$projectSlug/edit'
+      path: '/projects/$projectSlug/edit'
+      fullPath: '/app/$orgSlug/projects/$projectSlug/edit'
+      preLoaderRoute: typeof AppOrgSlugProjectsProjectSlugEditRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
     }
   }
 }
@@ -464,6 +542,10 @@ interface AppOrgSlugRouteRouteChildren {
   AppOrgSlugChangelogRoute: typeof AppOrgSlugChangelogRoute
   AppOrgSlugItemsRoute: typeof AppOrgSlugItemsRoute
   AppOrgSlugIndexRoute: typeof AppOrgSlugIndexRoute
+  AppOrgSlugProjectsNewRoute: typeof AppOrgSlugProjectsNewRoute
+  AppOrgSlugProjectsIndexRoute: typeof AppOrgSlugProjectsIndexRoute
+  AppOrgSlugProjectsProjectSlugEditRoute: typeof AppOrgSlugProjectsProjectSlugEditRoute
+  AppOrgSlugProjectsProjectSlugIndexRoute: typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 
 const AppOrgSlugRouteRouteChildren: AppOrgSlugRouteRouteChildren = {
@@ -471,6 +553,12 @@ const AppOrgSlugRouteRouteChildren: AppOrgSlugRouteRouteChildren = {
   AppOrgSlugChangelogRoute: AppOrgSlugChangelogRoute,
   AppOrgSlugItemsRoute: AppOrgSlugItemsRoute,
   AppOrgSlugIndexRoute: AppOrgSlugIndexRoute,
+  AppOrgSlugProjectsNewRoute: AppOrgSlugProjectsNewRoute,
+  AppOrgSlugProjectsIndexRoute: AppOrgSlugProjectsIndexRoute,
+  AppOrgSlugProjectsProjectSlugEditRoute:
+    AppOrgSlugProjectsProjectSlugEditRoute,
+  AppOrgSlugProjectsProjectSlugIndexRoute:
+    AppOrgSlugProjectsProjectSlugIndexRoute,
 }
 
 const AppOrgSlugRouteRouteWithChildren = AppOrgSlugRouteRoute._addFileChildren(

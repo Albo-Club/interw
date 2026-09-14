@@ -19,7 +19,8 @@
     "items": "Éléments",
     "members": "Membres",
     "invitations": "Invitations",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "projects": "Postes"
   },
   "navUser": {
     "switchOrg": "Changer d'organisation"

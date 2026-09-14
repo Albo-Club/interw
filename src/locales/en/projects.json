@@ -1,1 +1,258 @@
-{}
+{
+  "metaTitle": "Roles · Interw",
+  "list": {
+    "title": "Roles",
+    "subtitle": "Every role you are interviewing for, and how far each one has got.",
+    "new": "New role",
+    "search": "Search roles",
+    "empty": {
+      "title": "No role yet",
+      "body": "A role holds your questions, your evaluation criteria and the candidates you invite. Create one to send your first interview link.",
+      "action": "Create a role"
+    },
+    "emptyFiltered": {
+      "title": "Nothing matches",
+      "body": "No role matches this filter. Try another status, or clear the search."
+    },
+    "columns": {
+      "title": "Role",
+      "status": "Status",
+      "candidates": "Candidates",
+      "completed": "Completed",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "filters": {
+      "all": "All",
+      "draft": "Draft",
+      "active": "Active",
+      "archived": "Archived"
+    }
+  },
+  "status": {
+    "draft": "Draft",
+    "active": "Active",
+    "archived": "Archived",
+    "expired": "Expired"
+  },
+  "new": {
+    "title": "New role",
+    "subtitle": "Two fields to start. Everything else comes next.",
+    "fields": {
+      "title": "Internal title",
+      "titleHint": "Only your team sees this.",
+      "jobTitle": "Job title shown to candidates",
+      "jobTitleHint": "This is what appears on the candidate's screen.",
+      "language": "Interview language",
+      "languageHint": "Decides the language of the candidate screens and of the AI evaluation."
+    },
+    "submit": "Create and continue",
+    "cancel": "Cancel"
+  },
+  "detail": {
+    "edit": "Edit",
+    "publish": "Publish",
+    "publishHint": "Publishing lets you invite candidates.",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete",
+    "share": "Share",
+    "invite": "Invite candidates",
+    "overview": "Overview",
+    "questions": "Questions",
+    "criteria": "Criteria",
+    "candidates": "Candidates",
+    "stats": {
+      "questions": "Questions",
+      "criteria": "Criteria",
+      "duration": "Max duration",
+      "durationValue": "{{count}} min",
+      "expiry": "Link expires",
+      "noExpiry": "No expiry"
+    },
+    "draftNotice": {
+      "title": "This role is still a draft",
+      "body": "Candidates cannot be invited until you publish it."
+    },
+    "archivedNotice": {
+      "title": "This role is archived",
+      "body": "It is read-only. Restore it to make changes or invite again."
+    }
+  },
+  "wizard": {
+    "title": "Edit role",
+    "steps": {
+      "basics": "Basics",
+      "questions": "Questions",
+      "criteria": "Criteria",
+      "candidate": "Candidate form",
+      "review": "Review"
+    },
+    "back": "Back",
+    "next": "Next",
+    "saved": "Saved",
+    "saveFailed": "Could not save. Your last change was not applied.",
+    "finish": "Finish"
+  },
+  "basics": {
+    "title": "The role",
+    "subtitle": "What the candidate sees before they start.",
+    "duration": "Maximum interview length",
+    "durationHint": "Between 5 and 120 minutes. Candidates see this before they begin.",
+    "persona": "Interviewer name",
+    "personaHint": "The name shown alongside your questions. Your own name works well.",
+    "expiry": "Link expiry",
+    "expiryHint": "After this date, invitation links stop working. Leave empty for no expiry.",
+    "clearExpiry": "No expiry",
+    "intro": {
+      "title": "Introduction",
+      "subtitle": "The first thing a candidate sees. A recorded welcome sets a much better tone than a wall of text.",
+      "mode": {
+        "none": "No introduction",
+        "text": "Written",
+        "audio": "Recorded audio",
+        "video": "Recorded video"
+      },
+      "text": "Introduction text",
+      "textPlaceholder": "Welcome, and thank you for your time…"
+    }
+  },
+  "questions": {
+    "title": "Questions",
+    "subtitle": "Asked in this order. Record yourself asking each one — candidates answer a person far better than a paragraph.",
+    "add": "Add a question",
+    "import": "Import from a job ad",
+    "empty": {
+      "title": "No questions yet",
+      "body": "Add your first question, or import a job ad and let Interw draft a set you can edit."
+    },
+    "position": "Question {{index}} of {{total}}",
+    "fields": {
+      "title": "Short label",
+      "titlePlaceholder": "Motivation",
+      "content": "The question",
+      "contentPlaceholder": "Tell me about a project you shipped that you are proud of, and what your part in it was.",
+      "hint": "Hint shown to the candidate",
+      "hintPlaceholder": "A concrete example works better than a general answer.",
+      "maxResponse": "Answer time limit",
+      "maxResponseValue": "{{count}} seconds",
+      "maxResponseHint": "Recording stops automatically at this point. Candidates see a countdown for the last 30 seconds."
+    },
+    "media": {
+      "record": "Record this question",
+      "rerecord": "Record again",
+      "remove": "Remove recording",
+      "recording": "Recording…",
+      "stop": "Stop",
+      "uploading": "Uploading…",
+      "uploadFailed": "Upload failed. Nothing was saved — try again.",
+      "none": "No recording. The question will be shown as text.",
+      "ready": "Recorded",
+      "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again."
+    },
+    "remove": "Delete question",
+    "removeConfirm": {
+      "title": "Delete this question?",
+      "body": "\"{{question}}\" will be removed from the interview. Candidates who already answered it keep their recording.",
+      "confirm": "Delete question"
+    },
+    "moveUp": "Move up",
+    "moveDown": "Move down"
+  },
+  "criteria": {
+    "title": "Evaluation criteria",
+    "subtitle": "What the AI scores each candidate against. Weights are relative — they are normalised to 100 for you.",
+    "add": "Add a criterion",
+    "empty": {
+      "title": "No criteria yet",
+      "body": "Without criteria there is nothing to score against. Add two or three that actually decide this hire."
+    },
+    "fields": {
+      "label": "Criterion",
+      "labelPlaceholder": "Technical depth",
+      "description": "What counts as strong",
+      "descriptionPlaceholder": "Explains trade-offs, not just tools. Names concrete decisions they made and why.",
+      "weight": "Weight"
+    },
+    "normalized": "{{percent}}% of the score",
+    "remove": "Delete criterion",
+    "removeConfirm": {
+      "title": "Delete this criterion?",
+      "body": "\"{{label}}\" will no longer be scored. Reports already generated keep their scores.",
+      "confirm": "Delete criterion"
+    }
+  },
+  "candidateForm": {
+    "title": "What you ask candidates for",
+    "subtitle": "Every extra field is a reason to abandon. Ask for what you will actually read.",
+    "fields": {
+      "phone": "Phone number",
+      "linkedin": "LinkedIn profile",
+      "cv": "CV",
+      "coverLetter": "Cover letter"
+    },
+    "enabled": "Ask for it",
+    "required": "Required"
+  },
+  "review": {
+    "title": "Ready to publish",
+    "subtitle": "One last look before candidates can be invited.",
+    "readyTitle": "This role is ready",
+    "readyBody": "Publish it, then invite your first candidate.",
+    "blocked": "Not ready yet",
+    "missing": {
+      "questions": "Add at least one question.",
+      "criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against."
+    }
+  },
+  "share": {
+    "title": "Who can see this role",
+    "subtitle": "By default everyone in your organisation can. Name people to restrict it — admins and you always keep access.",
+    "everyone": "Everyone in the organisation",
+    "restricted": "Only the people I name",
+    "save": "Save access",
+    "saved": "Access updated"
+  },
+  "import": {
+    "title": "Import from a job ad",
+    "subtitle": "Paste the URL of a published job ad. Interw drafts questions and criteria; you edit them before anything is saved.",
+    "url": "Job ad URL",
+    "urlPlaceholder": "https://…",
+    "questionCount": "Questions to draft",
+    "criteriaCount": "Criteria to draft",
+    "submit": "Draft the interview",
+    "working": "Reading the ad…",
+    "resultTitle": "Draft ready",
+    "resultBody": "Nothing has been saved yet. Review it, then add what you want to keep.",
+    "apply": "Add all to the role",
+    "discard": "Discard",
+    "disclaimer": "Drafted by AI from the page you linked. Read every question before you publish — you are responsible for what candidates are asked."
+  },
+  "delete": {
+    "title": "Delete this role?",
+    "body": "\"{{title}}\" and its questions and criteria will be permanently deleted. This cannot be undone.",
+    "confirm": "Delete role",
+    "hasSessions": "This role has candidates, so it cannot be deleted. Archive it instead — that keeps their interviews and reports."
+  },
+  "errors": {
+    "invalid_title": "Give the role a title of 120 characters or fewer.",
+    "invalid_job_title": "The job title must be 120 characters or fewer.",
+    "invalid_content": "A question needs text, up to 1000 characters.",
+    "invalid_label": "A criterion needs a label, up to 80 characters.",
+    "invalid_weight": "A weight must be between 0 and 100.",
+    "invalid_duration": "Choose a length between 5 and 120 minutes.",
+    "invalid_response_seconds": "Answer time must be between 15 and 600 seconds.",
+    "no_questions": "Add at least one question before publishing.",
+    "too_many_questions": "A role can hold at most 25 questions.",
+    "too_many_criteria": "A role can hold at most 12 criteria.",
+    "project_archived": "This role is archived. Restore it to make changes.",
+    "project_has_sessions": "This role has candidates, so it cannot be deleted. Archive it instead.",
+    "expiry_in_the_past": "Choose an expiry date in the future.",
+    "page_unreachable": "That page could not be read. Check the link, or paste the text instead.",
+    "page_too_thin": "There was not enough text on that page to work from. It may need JavaScript or accept cookies first.",
+    "invalid_url": "That is not a public web address.",
+    "unsupported_media_type": "That recording format is not supported.",
+    "media_too_large": "That recording is too large. Keep question recordings under 100 MB.",
+    "key_mismatch": "The upload did not match what was expected. Try recording again."
+  }
+}

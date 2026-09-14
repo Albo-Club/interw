@@ -19,7 +19,8 @@
     "items": "Items",
     "members": "Members",
     "invitations": "Invitations",
-    "settings": "Settings"
+    "settings": "Settings",
+    "projects": "Roles"
   },
   "navUser": {
     "switchOrg": "Switch organization"

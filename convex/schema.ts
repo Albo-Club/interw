@@ -88,15 +88,25 @@ export const depthLevelValidator = v.union(
   v.literal('expert'),
 )
 
-/** The six vocal dimensions of the para-verbal pass. Fixed on purpose: a
- *  free-form key set would let a model invent dimensions the UI can't label. */
+/**
+ * The six para-verbal dimensions — HOW an answer was delivered, as opposed to
+ * what it said.
+ *
+ * All six are computed from the timestamped transcript, deterministically, by
+ * convex/lib/paraverbal.ts. No model is asked to score them. The stack has no
+ * audio-capable model, so a "vocal warmth" or "confidence" score would be an
+ * invention dressed as a measurement — and this product must not invent
+ * anything about a candidate. Speaking rate, hesitation, pausing and length
+ * discipline are genuinely measurable from what we already hold, and they are
+ * the substance of para-verbal analysis anyway.
+ */
 export const paraverbalDimensionValidator = v.union(
   v.literal('pace'),
-  v.literal('clarity'),
-  v.literal('energy'),
   v.literal('fluency'),
-  v.literal('warmth'),
-  v.literal('confidence'),
+  v.literal('pauses'),
+  v.literal('concision'),
+  v.literal('consistency'),
+  v.literal('engagement'),
 )
 
 export const highlightKindValidator = v.union(
@@ -109,7 +119,6 @@ export const highlightKindValidator = v.union(
 export const jobStepValidator = v.union(
   v.literal('transcribe'),
   v.literal('report'),
-  v.literal('paraverbal'),
   v.literal('notify'),
 )
 
@@ -404,17 +413,20 @@ export default defineSchema({
         ),
       }),
     ),
+    /** Computed, not generated — see paraverbalDimensionValidator. */
     paraverbal: v.optional(
       v.object({
         dimensions: v.array(
           v.object({
             key: paraverbalDimensionValidator,
+            /** 0..10. */
             score: v.number(),
-            comment: v.string(),
+            /** The measurement behind the score, e.g. words per minute. */
+            measure: v.number(),
           }),
         ),
-        summary: v.string(),
-        model: v.string(),
+        wordsPerMinute: v.number(),
+        totalSpeakingSeconds: v.number(),
       }),
     ),
     highlights: v.optional(
@@ -482,10 +494,15 @@ export default defineSchema({
     .index('by_recipient', ['recipient'])
     .index('by_provider_id', ['providerId']),
 
+  /** Proof of erasure. Deliberately holds a HASH of the candidate's address,
+   *  not the address: a deletion register must be able to answer "did you
+   *  erase the data for this person?" — which a hash does, by hashing the
+   *  address they ask with — without keeping the personal data the register
+   *  exists to record the destruction of. */
   purgeLog: defineTable({
     orgId: v.id('organizations'),
     sessionId: v.id('sessions'),
-    candidateEmail: v.string(),
+    candidateEmailHash: v.string(),
     reason: v.union(
       v.literal('retention'),
       v.literal('candidate_request'),

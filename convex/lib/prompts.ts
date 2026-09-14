@@ -88,3 +88,98 @@ export function jobImportPrompt(input: JobImportPromptInput): {
     ].join('\n'),
   }
 }
+
+export type ReportPromptInput = {
+  language: PromptLanguage
+  jobTitle: string
+  candidateName: string
+  criteria: Array<{ label: string; description: string | null; weight: number }>
+  answers: Array<{ question: string; transcript: string }>
+}
+
+/**
+ * The evaluation prompt.
+ *
+ * Written for a recruiter with two minutes and a decision to make, not for a
+ * psychologist. Three things are load-bearing and none of them are style:
+ *
+ *  - every claim carries a quote, because an assertion a recruiter cannot
+ *    check is an opinion and this product does not sell opinions;
+ *  - the model says so when the transcript is too thin to conclude, rather
+ *    than filling the gap;
+ *  - nothing may rest on a protected characteristic. This is a hiring
+ *    decision, and the obligation is legal before it is editorial.
+ */
+export function reportPrompt(input: ReportPromptInput): {
+  system: string
+  user: string
+} {
+  const language = LANGUAGE_NAME[input.language]
+  const criteriaBlock = input.criteria
+    .map(
+      (criterion, index) =>
+        `${index}. ${criterion.label} (weight ${criterion.weight}%)${
+          criterion.description ? ` — ${criterion.description}` : ''
+        }`,
+    )
+    .join('\n')
+  const answersBlock = input.answers
+    .map(
+      (answer, index) =>
+        `### Answer ${index}\nQuestion asked: ${answer.question}\nWhat the candidate said: ${
+          answer.transcript || '(no audible speech)'
+        }`,
+    )
+    .join('\n\n')
+
+  return {
+    system: [
+      'You write DECISION reports for recruiters who have two minutes and a',
+      'call to make. Not an exhaustive analysis: enough to shortlist, dig',
+      'further, or decline, with the reasoning visible.',
+      '',
+      `Write every user-facing string in ${language}. Be concrete and direct.`,
+      'Use the language of a manager who hires, never HR or psychology jargon.',
+      '',
+      'Non-negotiable rules:',
+      '- Every claim — a strength, a concern, a criterion score, a summary —',
+      '  must rest on something the candidate actually said, quoted as closely',
+      '  as you can manage, with the index of the answer it came from.',
+      '- Quote only from the transcripts provided. Never invent a quote, an',
+      '  answer index, or a criterion index.',
+      '- If the transcript is too short or too vague to judge something, say',
+      '  so plainly and score low with a rationale that says why. Do not fill',
+      '  the gap.',
+      '- Score EVERY criterion listed, exactly once, using its index.',
+      '- Give one entry per answer, using its index, even for an answer that',
+      '  was empty, off-topic or inaudible.',
+      `- ${antiDiscriminationClause()}`,
+      '',
+      'Scoring a criterion, 0-100: 0-30 no usable evidence or a clear gap;',
+      '31-55 partial, generic, or asserted without example; 56-80 solid, with',
+      'concrete examples; 81-100 demonstrably strong, with specifics and',
+      'trade-offs. Scoring an answer, 0-10: 1-3 absent, off-topic or very thin;',
+      '4-6 correct but generic; 7-8 clear with concrete examples; 9-10',
+      'expert and demonstrative.',
+      '',
+      'Return JSON only, matching the provided schema.',
+    ].join('\n'),
+    user: [
+      `Role: ${input.jobTitle}`,
+      `Candidate: ${input.candidateName}`,
+      '',
+      'Criteria to score, by index:',
+      criteriaBlock,
+      '',
+      'The interview:',
+      '',
+      answersBlock,
+      '',
+      'Produce the report. verdictHeadline is one sentence a recruiter would',
+      'say to their manager — a verdict, not a description. For each piece of',
+      'evidence give answerIndex, the quote, and roughly how many seconds into',
+      'that answer it falls; the exact timestamp is recalculated from the',
+      'transcript, so your estimate is only a safety net.',
+    ].join('\n'),
+  }
+}

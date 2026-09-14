@@ -543,3 +543,154 @@ export function newUserSignupNotificationEmail({
   })
   return { subject, html, text: plainText(text) }
 }
+
+/**
+ * The invitation a candidate receives. Vouvoiement in French, and no jargon:
+ * most recipients have never heard of an asynchronous video interview, so the
+ * email has to say what will happen, how long it takes, and that they choose
+ * when.
+ */
+export function candidateInvitationEmail({
+  locale,
+  candidateName,
+  jobTitle,
+  orgName,
+  startUrl,
+  durationMinutes,
+}: {
+  locale: EmailLocale
+  candidateName: string
+  jobTitle: string
+  orgName: string
+  startUrl: string
+  durationMinutes: number
+}) {
+  const safeName = esc(candidateName)
+  const safeJob = esc(jobTitle)
+  const safeOrg = esc(orgName)
+  const c = pick(locale, {
+    en: {
+      subject: `${orgName}: your interview for ${jobTitle}`,
+      heading: `Your interview for ${safeJob}`,
+      intro: `Hello ${safeName}, <strong>${safeOrg}</strong> would like to hear from you about the ${safeJob} role.`,
+      how: `It is a short video interview you record on your own, from your browser, whenever suits you. You will answer a handful of questions asked on camera by the team. It takes about ${durationMinutes} minutes.`,
+      needs: `You will need a working camera and microphone, and a quiet few minutes. Your answers are recorded and reviewed by ${safeOrg}.`,
+      footer: `This link is personal to you — please do not forward it. If you were not expecting this, you can ignore this email.`,
+      preheader: `A short video interview for ${safeJob}, whenever suits you.`,
+      cta: 'Start the interview',
+      text: [
+        `Hello ${candidateName},`,
+        `${orgName} would like to hear from you about the ${jobTitle} role.`,
+        `It is a short video interview you record on your own, from your browser, whenever suits you. It takes about ${durationMinutes} minutes.`,
+        `Start the interview:`,
+        startUrl,
+        `You will need a working camera and microphone, and a quiet few minutes.`,
+        `This link is personal to you — please do not forward it.`,
+      ],
+    },
+    fr: {
+      subject: `${orgName} : votre entretien pour le poste de ${jobTitle}`,
+      heading: `Votre entretien pour le poste de ${safeJob}`,
+      intro: `Bonjour ${safeName}, <strong>${safeOrg}</strong> souhaite vous entendre au sujet du poste de ${safeJob}.`,
+      how: `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Vous répondrez à quelques questions posées face caméra par l'équipe. Comptez environ ${durationMinutes} minutes.`,
+      needs: `Prévoyez une caméra et un micro en état de marche, et quelques minutes au calme. Vos réponses sont enregistrées et consultées par ${safeOrg}.`,
+      footer: `Ce lien vous est personnel : merci de ne pas le transmettre. Si vous n'attendiez pas ce message, vous pouvez l'ignorer.`,
+      preheader: `Un court entretien vidéo pour le poste de ${safeJob}, quand vous voulez.`,
+      cta: "Commencer l'entretien",
+      text: [
+        `Bonjour ${candidateName},`,
+        `${orgName} souhaite vous entendre au sujet du poste de ${jobTitle}.`,
+        `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Comptez environ ${durationMinutes} minutes.`,
+        `Commencer l'entretien :`,
+        startUrl,
+        `Prévoyez une caméra et un micro en état de marche, et quelques minutes au calme.`,
+        `Ce lien vous est personnel : merci de ne pas le transmettre.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.how, c.needs],
+    cta: { label: c.cta, url: startUrl },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}
+
+/**
+ * The recruiter's "a report is ready" email.
+ *
+ * Deliberately says the verdict and the score and stops there. Putting the
+ * full analysis in an email would mean candidate assessments living in every
+ * recipient's inbox and forwarded beyond the organisation — the report stays
+ * behind the login.
+ */
+export function reportReadyEmail({
+  locale,
+  candidateName,
+  jobTitle,
+  score,
+  recommendation,
+  reportUrl,
+}: {
+  locale: EmailLocale
+  candidateName: string
+  jobTitle: string
+  score: number
+  recommendation: string
+  reportUrl: string
+}) {
+  const safeCandidate = esc(candidateName)
+  const safeJob = esc(jobTitle)
+  const c = pick(locale, {
+    en: {
+      subject: `${candidateName} — interview report ready (${jobTitle})`,
+      heading: `${safeCandidate}'s interview is ready to review`,
+      intro: `<strong>${safeCandidate}</strong> has completed their interview for <strong>${safeJob}</strong>.`,
+      score: `Overall score: <strong>${score}/100</strong> · Recommendation: <strong>${esc(recommendation)}</strong>`,
+      caveat: `The score and recommendation are produced automatically from the interview. They are there to speed up your reading, not to make the decision — open the report and check the quotes behind them.`,
+      footer: `You are receiving this because you have access to this role in Interw.`,
+      preheader: `${safeCandidate} finished their interview for ${safeJob}.`,
+      cta: 'Open the report',
+      text: [
+        `${candidateName} has completed their interview for ${jobTitle}.`,
+        `Overall score: ${score}/100. Recommendation: ${recommendation}.`,
+        `Open the report:`,
+        reportUrl,
+        `The score and recommendation are produced automatically. They speed up your reading; they do not make the decision.`,
+      ],
+    },
+    fr: {
+      subject: `${candidateName} — rapport d'entretien disponible (${jobTitle})`,
+      heading: `L'entretien de ${safeCandidate} est prêt à être consulté`,
+      intro: `<strong>${safeCandidate}</strong> a terminé son entretien pour le poste de <strong>${safeJob}</strong>.`,
+      score: `Score global : <strong>${score}/100</strong> · Recommandation : <strong>${esc(recommendation)}</strong>`,
+      caveat: `Le score et la recommandation sont produits automatiquement à partir de l'entretien. Ils servent à accélérer votre lecture, pas à décider à votre place — ouvrez le rapport et vérifiez les citations qui les justifient.`,
+      footer: `Vous recevez cet e-mail parce que vous avez accès à ce poste dans Interw.`,
+      preheader: `${safeCandidate} a terminé son entretien pour le poste de ${safeJob}.`,
+      cta: 'Ouvrir le rapport',
+      text: [
+        `${candidateName} a terminé son entretien pour le poste de ${jobTitle}.`,
+        `Score global : ${score}/100. Recommandation : ${recommendation}.`,
+        `Ouvrir le rapport :`,
+        reportUrl,
+        `Le score et la recommandation sont produits automatiquement. Ils accélèrent votre lecture ; ils ne décident pas à votre place.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.score, c.caveat],
+    cta: { label: c.cta, url: reportUrl },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}

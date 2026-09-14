@@ -1,0 +1,62 @@
+import type { ReactNode } from 'react'
+
+import { cn } from '~/lib/utils'
+
+/**
+ * The frame every candidate screen sits in.
+ *
+ * Deliberately almost empty: no sidebar, no menu, no navigation of any kind.
+ * A candidate is nervous and gets one attempt; anything that invites them to
+ * click elsewhere is a way to lose an interview. The only secondary link is
+ * the one the law requires — what is held about them.
+ */
+export function CandidateShell({
+  organisationName,
+  children,
+  footer,
+  width = 'narrow',
+}: {
+  organisationName?: string
+  children: ReactNode
+  footer?: ReactNode
+  width?: 'narrow' | 'wide'
+}) {
+  return (
+    <div className="bg-background flex min-h-svh flex-col">
+      <header className="border-b">
+        <div
+          className={cn(
+            'mx-auto flex h-14 items-center px-4',
+            width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
+          )}
+        >
+          <span className="text-sm font-semibold tracking-tight">
+            {organisationName ?? 'interw'}
+          </span>
+        </div>
+      </header>
+
+      <main
+        className={cn(
+          'mx-auto w-full flex-1 px-4 py-10',
+          width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
+        )}
+      >
+        {children}
+      </main>
+
+      {footer && (
+        <footer className="border-t">
+          <div
+            className={cn(
+              'text-muted-foreground mx-auto px-4 py-6 text-xs',
+              width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
+            )}
+          >
+            {footer}
+          </div>
+        </footer>
+      )}
+    </div>
+  )
+}

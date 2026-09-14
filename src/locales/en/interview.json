@@ -1,1 +1,188 @@
-{}
+{
+  "metaTitle": "Your interview",
+  "shell": {
+    "privacy": "Your data",
+    "help": "Something not working?"
+  },
+  "state": {
+    "notFound": {
+      "title": "This link doesn't work",
+      "body": "It may have been mistyped, or it may have been replaced by a newer one. Check the email you received, or reply to it to ask for a new link."
+    },
+    "expired": {
+      "title": "This interview has closed",
+      "body": "The deadline for this role has passed. If you think that's a mistake, reply to the email that invited you."
+    },
+    "closed": {
+      "title": "This interview isn't open",
+      "body": "The role is no longer accepting interviews. If you were expecting to record one, reply to the email that invited you."
+    },
+    "cancelled": {
+      "title": "This interview was cancelled",
+      "body": "Nothing you recorded was lost, but this link no longer works. Reply to the email that invited you if you have questions."
+    },
+    "completed": {
+      "title": "You've already completed this interview",
+      "body": "Thank you — there is nothing more to do. {{org}} has your answers and will be in touch."
+    }
+  },
+  "welcome": {
+    "greeting": "Hello {{name}}",
+    "invitedBy": "{{org}} has invited you to record a short interview for the {{jobTitle}} role.",
+    "invitedByNoRole": "{{org}} has invited you to record a short interview.",
+    "howItWorks": "How it works",
+    "steps": {
+      "questions": "{{count}} question, asked on camera by the team",
+      "questions_other": "{{count}} questions, asked on camera by the team",
+      "record": "You record your answer to each one, in your own time",
+      "duration": "About {{count}} minutes in total",
+      "alone": "No one is waiting — you choose when to start"
+    },
+    "whatYouNeed": "What you'll need",
+    "needs": {
+      "camera": "A working camera and microphone",
+      "quiet": "A few quiet minutes somewhere you can speak out loud",
+      "browser": "This page, open until you've finished"
+    },
+    "yourDetails": "Your details",
+    "detailsHint": "Only what {{org}} asked for. Everything here is optional unless marked.",
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone number",
+      "linkedin": "LinkedIn profile",
+      "cv": "Your CV",
+      "coverLetter": "Cover letter",
+      "required": "Required",
+      "uploadHint": "PDF or Word, up to 10 MB",
+      "uploaded": "Uploaded",
+      "replace": "Replace",
+      "choose": "Choose a file"
+    },
+    "start": "Continue",
+    "resume": "Continue where you left off",
+    "resumeHint": "You stopped at question {{index}}. Your earlier answers are saved."
+  },
+  "consent": {
+    "title": "Before you start",
+    "body": "This interview is recorded. Here is exactly what that means.",
+    "points": {
+      "recording": "Your camera and microphone record your answers, question by question.",
+      "who": "{{org}} can watch your recordings and read an automatic transcript of them.",
+      "ai": "An automated analysis summarises your answers against the criteria for this role. It assists the decision — a person makes it.",
+      "retention": "Your recordings are kept for the time {{org}} needs to decide, and then deleted. You can ask for them to be deleted at any time from your data page."
+    },
+    "accept": "I understand and agree to be recorded",
+    "acceptHint": "You must agree to continue. If you would rather not, simply close this page and reply to the email that invited you.",
+    "continue": "Agree and continue"
+  },
+  "device": {
+    "title": "Let's check your camera and microphone",
+    "subtitle": "Nothing here is recorded or saved. This is just to make sure everything works before you start.",
+    "cameraLabel": "Camera",
+    "micLabel": "Microphone",
+    "preview": "You should see yourself below",
+    "speakPrompt": "Say something out loud — the bar should move",
+    "micGood": "Your microphone is picking you up",
+    "micQuiet": "We can barely hear you. Try speaking up, moving closer, or choosing another microphone.",
+    "micSilent": "We can't hear anything yet",
+    "permissionDenied": "Camera or microphone access was refused. Allow it in your browser's address bar, then reload this page.",
+    "permissionHelp": "Look for the camera icon in your browser's address bar.",
+    "noDevices": "No camera or microphone was found. Plug one in, then reload this page.",
+    "unsupported": "This browser can't record video interviews. Please open this link in the latest Chrome, Safari, Firefox or Edge — on a computer if you can.",
+    "inAppBrowser": "You seem to be in an in-app browser. Recording often fails here. Open this link in Safari or Chrome instead.",
+    "retry": "Check again",
+    "continue": "Everything works — start the interview",
+    "continueAnyway": "Start anyway"
+  },
+  "run": {
+    "progress": "Question {{index}} of {{total}}",
+    "intro": {
+      "title": "A word before we begin",
+      "continue": "I'm ready"
+    },
+    "playQuestion": "Play the question",
+    "replayQuestion": "Play again",
+    "readQuestion": "The question",
+    "hint": "A tip",
+    "notRecording": "Not recording yet",
+    "startAnswer": "Start my answer",
+    "recording": "Recording",
+    "finishAnswer": "I've finished my answer",
+    "timeLeft": "{{seconds}}s left",
+    "timeUpSoon": "Recording will stop in {{seconds}} seconds",
+    "timeUp": "Time is up for this question — your answer was saved.",
+    "sending": "Saving your answer…",
+    "sendingHint": "Keep this page open.",
+    "saved": "Answer saved",
+    "retrying": "Connection problem — trying again ({{attempt}} of {{max}})",
+    "sendFailed": {
+      "title": "Your last answer didn't save",
+      "body": "Nothing has been lost yet, but we couldn't reach the server. Check your connection and try again.",
+      "retry": "Try again",
+      "skip": "Skip this question and continue"
+    },
+    "networkPoor": "Your connection looks unstable. Recording still works — saving may just take longer.",
+    "offline": "You're offline. Your answer will be sent as soon as you're back.",
+    "next": "Next question",
+    "finishInterview": "Finish the interview",
+    "finishing": "Finishing…",
+    "leaveWarning": "Your answer is still being saved. Leave now and it will be lost.",
+    "crash": {
+      "title": "Something went wrong on this page",
+      "body": "Your saved answers are safe. Reload to pick up at question {{index}}.",
+      "reload": "Reload and continue"
+    }
+  },
+  "done": {
+    "title": "That's it — thank you",
+    "body": "Your interview has been sent to {{org}}. There is nothing more for you to do.",
+    "whatNext": "What happens next",
+    "nextSteps": {
+      "review": "{{org}} will review your answers.",
+      "contact": "They will contact you directly, at {{email}}.",
+      "noReply": "This address doesn't accept replies — reply to the email that invited you instead."
+    },
+    "privacy": "See what data is kept, and delete it"
+  },
+  "privacy": {
+    "title": "Your data",
+    "subtitle": "What {{org}} holds about this interview, and how to remove it.",
+    "held": "What is held",
+    "items": {
+      "identity": "Your name and email, as {{org}} entered them when inviting you.",
+      "recordings": "Your video and audio answers.",
+      "transcript": "An automatic transcript of what you said.",
+      "analysis": "An automated analysis of your answers against this role's criteria.",
+      "documents": "Any CV or cover letter you uploaded."
+    },
+    "rights": "Your rights",
+    "rightsBody": "You can ask for all of it to be deleted, at any time, without giving a reason. Deletion is immediate and cannot be undone — including for {{org}}, who will no longer be able to consider your application for this role.",
+    "delete": "Delete everything",
+    "deleteConfirm": {
+      "title": "Delete your interview?",
+      "body": "Your recordings, transcript, analysis and uploaded documents will be permanently deleted. {{org}} will no longer be able to consider this application. This cannot be undone.",
+      "confirm": "Delete permanently"
+    },
+    "deleted": {
+      "title": "Your data has been deleted",
+      "body": "Nothing from this interview is held any more. You can close this page."
+    }
+  },
+  "errors": {
+    "not_found": "This link doesn't work.",
+    "expired": "This interview has closed.",
+    "closed": "This interview isn't open.",
+    "cancelled": "This interview was cancelled.",
+    "completed": "You've already completed this interview.",
+    "invalid_phone": "That phone number is too long.",
+    "invalid_linkedin": "Enter a full address starting with https://",
+    "not_requested": "This role didn't ask for that.",
+    "unsupported_document_type": "Please upload a PDF or a Word document.",
+    "document_too_large": "That file is larger than 10 MB.",
+    "key_mismatch": "The upload didn't complete properly. Please try again.",
+    "consent_required": "You need to agree to be recorded before starting.",
+    "rate_limited": "That was a lot of requests at once. Wait a moment and try again.",
+    "unexpected": "Something went wrong. Please try again."
+  }
+}

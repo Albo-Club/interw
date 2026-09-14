@@ -27,6 +27,7 @@
 
 import { ConvexError, v } from 'convex/values'
 
+import { vOnCompleteValidator } from '@convex-dev/workpool'
 import { internalAction, internalMutation, internalQuery } from './_generated/server'
 import { internal } from './_generated/api'
 import { jobOutcomeValidator, jobStepValidator } from './schema'
@@ -38,7 +39,6 @@ import { buildReport } from './lib/reportBuilder'
 import { reportOutputSchema } from './lib/reportSchema'
 import { normalizeWeights } from './lib/weights'
 import { mediaPool, reportPool } from './lib/workpools'
-import type { Id } from './_generated/dataModel'
 
 /* ─────────────────────────────── Job log ────────────────────────────────── */
 
@@ -117,9 +117,10 @@ export const segmentForTranscription = internalQuery({
       .query('transcripts')
       .withIndex('by_segment', (q) => q.eq('segmentId', segmentId))
       .unique()
-    const project = await ctx.db.get('projects', (
-      await ctx.db.get('sessions', segment.sessionId)
-    )?.projectId ?? ('' as Id<'projects'>))
+    const session = await ctx.db.get('sessions', segment.sessionId)
+    const project = session
+      ? await ctx.db.get('projects', session.projectId)
+      : null
     return {
       sessionId: segment.sessionId,
       orgId: segment.orgId,
@@ -232,11 +233,10 @@ export const transcribeSegment = internalAction({
  * transcript, the report job goes on the queue — once.
  */
 export const onTranscribeComplete = internalMutation({
-  args: {
-    workId: v.string(),
-    context: v.object({ sessionId: v.id('sessions') }),
-    result: v.any(),
-  },
+  // The component's own validator, rather than a hand-written one: `workId`
+  // is a branded string and `result` a union, and getting either subtly wrong
+  // fails at dispatch time, in a queue, where nobody is watching.
+  args: vOnCompleteValidator(v.object({ sessionId: v.id('sessions') })),
   handler: async (ctx, { context }): Promise<null> => {
     const { sessionId } = context
     const segments = await ctx.db
@@ -472,11 +472,7 @@ export const generateReport = internalAction({
 })
 
 export const onReportComplete = internalMutation({
-  args: {
-    workId: v.string(),
-    context: v.object({ sessionId: v.id('sessions') }),
-    result: v.any(),
-  },
+  args: vOnCompleteValidator(v.object({ sessionId: v.id('sessions') })),
   handler: async (ctx, { context }): Promise<null> => {
     const report = await ctx.db
       .query('reports')

@@ -10,7 +10,13 @@
 import { ConvexError, v } from 'convex/values'
 import { paginationOptsValidator } from 'convex/server'
 
-import { action, internalQuery, mutation, query } from './_generated/server'
+import {
+  action,
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from './_generated/server'
 import { internal } from './_generated/api'
 import { requireOrgMember } from './lib/auth'
 import { requireProjectAccess } from './lib/projectAccess'
@@ -27,6 +33,8 @@ import type { DataModel, Doc, Id } from './_generated/dataModel'
 const NAME_MAX = 120
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const MAX_BULK_INVITES = 100
+/** Emails per scheduled batch, so one batch stays well inside a transaction. */
+const NOTIFY_BATCH = 20
 
 /**
  * What a recruiter list shows. `accessToken` is absent by construction: the
@@ -116,6 +124,7 @@ export const invite = mutation({
 
     const now = Date.now()
     const results: Array<{ sessionId: Id<'sessions'>; created: boolean }> = []
+    const toNotify: Array<Id<'sessions'>> = []
     let created = 0
 
     for (const raw of candidates) {
@@ -123,11 +132,7 @@ export const invite = mutation({
       const already = byEmail.get(candidate.email)
       if (already) {
         results.push({ sessionId: already._id, created: false })
-        await sendInvitation(ctx, {
-          session: already,
-          project,
-          orgName: org.name,
-        })
+        toNotify.push(already._id)
         continue
       }
 
@@ -145,16 +150,23 @@ export const invite = mutation({
       })
       created += 1
       results.push({ sessionId, created: true })
-
-      const session = await ctx.db.get('sessions', sessionId)
-      if (session) {
-        await sendInvitation(ctx, { session, project, orgName: org.name })
-      }
+      toNotify.push(sessionId)
     }
 
     if (created > 0) {
       await ctx.db.patch('projects', projectId, {
         sessionCount: project.sessionCount + created,
+      })
+    }
+
+    // The sessions are committed here; the emails go out afterwards, in
+    // batches, from the scheduler. Sending a hundred of them inside this
+    // transaction would put the whole invitation campaign at the mercy of one
+    // provider hiccup — and roll back a hundred perfectly good sessions with
+    // it. Scheduled work is retried on its own.
+    for (let i = 0; i < toNotify.length; i += NOTIFY_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.sessions.sendInvitationBatch, {
+        sessionIds: toNotify.slice(i, i + NOTIFY_BATCH),
       })
     }
     return { results, created }
@@ -269,6 +281,28 @@ export const countsForOrg = query({
       inProgress: recent.filter((s) => s.status === 'in_progress').length,
       pending: recent.filter((s) => s.status === 'pending').length,
     }
+  },
+})
+
+/**
+ * Send the invitations for a batch of sessions.
+ *
+ * Internal and scheduled: it runs after the sessions are committed, so a
+ * provider failure costs an email that can be re-sent, never the session
+ * itself. Each send is independent — one bad address does not stop the batch.
+ */
+export const sendInvitationBatch = internalMutation({
+  args: { sessionIds: v.array(v.id('sessions')) },
+  handler: async (ctx, { sessionIds }) => {
+    for (const sessionId of sessionIds) {
+      const session = await ctx.db.get('sessions', sessionId)
+      if (!session) continue
+      const project = await ctx.db.get('projects', session.projectId)
+      const org = await ctx.db.get('organizations', session.orgId)
+      if (!project || !org) continue
+      await sendInvitation(ctx, { session, project, orgName: org.name })
+    }
+    return null
   },
 })
 

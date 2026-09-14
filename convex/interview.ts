@@ -242,14 +242,18 @@ export const reserveSegment = internalMutation({
       questionIndex,
       audioMedia.extension,
     )
-    const videoKey = videoMedia
-      ? segmentKey(
-          session.orgId,
-          session._id,
-          questionIndex,
-          videoMedia.extension,
-        )
-      : undefined
+    const videoSlot = videoMedia
+      ? {
+          key: segmentKey(
+            session.orgId,
+            session._id,
+            questionIndex,
+            videoMedia.extension,
+          ),
+          contentType: videoMedia.contentType,
+        }
+      : null
+    const videoKey = videoSlot?.key
 
     const existing = await ctx.db
       .query('segments')
@@ -286,9 +290,7 @@ export const reserveSegment = internalMutation({
     return {
       segmentId,
       audio: { key: audioKey, contentType: audioMedia.contentType },
-      video: videoKey
-        ? { key: videoKey, contentType: videoMedia!.contentType }
-        : null,
+      video: videoSlot,
     }
   },
 })

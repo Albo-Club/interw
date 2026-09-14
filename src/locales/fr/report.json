@@ -1,1 +1,146 @@
-{}
+{
+  "metaTitle": "Rapport d'entretien · Interw",
+  "disclaimer": {
+    "short": "Analyse automatique — la décision vous appartient.",
+    "long": "Les scores, la recommandation et le résumé sont produits automatiquement à partir de la transcription de l'entretien. Ce sont des aides à la lecture, pas une décision. Vérifiez les citations qui appuient chaque affirmation, et tranchez vous-même."
+  },
+  "verdict": {
+    "recommendation": "Recommandation",
+    "score": "Score global",
+    "outOf": "/ 100",
+    "strong_no": "Non franc",
+    "no": "Non",
+    "maybe": "À creuser",
+    "yes": "Oui",
+    "strong_yes": "Oui franc",
+    "generated": "Analysé le {{date}}",
+    "model": "Modèle : {{model}}"
+  },
+  "sections": {
+    "summary": "Synthèse",
+    "criteria": "Au regard de vos critères",
+    "strengths": "Points forts",
+    "concerns": "Points de vigilance",
+    "answers": "Réponse par réponse",
+    "delivery": "Élocution",
+    "highlights": "À regarder",
+    "documents": "Documents",
+    "note": "Vos notes"
+  },
+  "criteria": {
+    "weight": "{{percent}} % de la note",
+    "level": {
+      "excellent": "Excellent",
+      "solid": "Solide",
+      "partial": "Partiel",
+      "gap": "Manque"
+    },
+    "evidence": "Ce qu'il ou elle a dit",
+    "jump": "Aller à {{time}}"
+  },
+  "answers": {
+    "question": "Question {{index}}",
+    "score": "{{score}}/10",
+    "depth": {
+      "surface": "Superficiel",
+      "concrete": "Concret",
+      "expert": "Expert"
+    },
+    "transcript": "Transcription",
+    "showTranscript": "Afficher la transcription",
+    "hideTranscript": "Masquer la transcription",
+    "notAnswered": "Aucune réponse enregistrée",
+    "uploadFailed": "Le candidat a enregistré une réponse, mais elle ne nous est jamais parvenue. C'est une défaillance technique de notre côté, pas une question esquivée."
+  },
+  "delivery": {
+    "subtitle": "Mesuré à partir des horodatages de la transcription, non jugé par un modèle.",
+    "pace": "Débit",
+    "paceUnit": "{{value}} mots / min",
+    "fluency": "Hésitations",
+    "fluencyUnit": "{{value}} pour 100 mots",
+    "pauses": "Silences",
+    "pausesUnit": "{{value}} % du temps",
+    "concision": "Temps utilisé",
+    "concisionUnit": "{{value}} % du temps accordé",
+    "consistency": "Régularité",
+    "consistencyUnit": "{{value}} % de variation",
+    "engagement": "Temps de parole",
+    "engagementUnit": "{{value}} s parlées"
+  },
+  "note": {
+    "placeholder": "Votre impression, ce qu'il faudra creuser…",
+    "hint": "Visible uniquement par votre équipe. Jamais par le candidat.",
+    "saved": "Note enregistrée"
+  },
+  "pending": {
+    "title": "L'analyse est en cours",
+    "body": "L'entretien est bien arrivé : il est en cours de transcription et d'analyse. Cela prend généralement quelques minutes.",
+    "failedTitle": "L'analyse n'a pas abouti",
+    "failedBody": "Les enregistrements sont intacts et l'analyse sera relancée automatiquement. Les dernières étapes sont listées ci-dessous.",
+    "steps": {
+      "transcribe": "Transcription",
+      "report": "Analyse",
+      "notify": "Notification"
+    },
+    "outcome": {
+      "started": "Démarré",
+      "succeeded": "Terminé",
+      "failed": "Échec",
+      "skipped": "Ignoré"
+    }
+  },
+  "notStarted": {
+    "title": "Pas encore commencé",
+    "body": "{{name}} a été invité mais n'a encore rien enregistré."
+  },
+  "inProgress": {
+    "title": "En cours",
+    "body": "{{name}} est en cours d'entretien — {{answered}} réponses sur {{total}} enregistrées."
+  },
+  "mediaPurged": {
+    "title": "Enregistrements supprimés",
+    "body": "Les enregistrements ont été supprimés le {{date}} au titre de la politique de conservation. L'analyse et la transcription sont conservées."
+  },
+  "share": {
+    "title": "Partager ce rapport",
+    "subtitle": "Crée un lien qui n'affiche que ce rapport — aucun autre candidat, aucun accès à votre compte.",
+    "create": "Créer un lien",
+    "expiry": "Cesse de fonctionner après",
+    "expiryOptions": {
+      "7": "7 jours",
+      "30": "30 jours",
+      "never": "Pas d'expiration"
+    },
+    "copy": "Copier le lien",
+    "copied": "Lien copié",
+    "revoke": "Révoquer",
+    "revoked": "Lien révoqué",
+    "existing": "Lien actif",
+    "views": "Ouvert {{count}} fois",
+    "views_other": "Ouvert {{count}} fois",
+    "neverViewed": "Jamais ouvert",
+    "expiresOn": "Cesse de fonctionner le {{date}}"
+  },
+  "shared": {
+    "title": "Rapport d'entretien",
+    "sharedBy": "Partagé par {{org}}",
+    "expired": {
+      "title": "Ce lien a expiré",
+      "body": "Demandez-en un nouveau à la personne qui vous l'a transmis."
+    },
+    "revoked": {
+      "title": "Ce lien a été révoqué",
+      "body": "Il ne donne plus accès au rapport."
+    },
+    "notFound": {
+      "title": "Ce lien ne fonctionne pas",
+      "body": "Il a peut-être été mal recopié, ou révoqué."
+    }
+  },
+  "errors": {
+    "not_found": "Ce rapport est introuvable.",
+    "note_too_long": "Cette note est trop longue.",
+    "share_expired": "Ce lien a expiré.",
+    "share_revoked": "Ce lien a été révoqué."
+  }
+}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { Mic, Pencil, Send, Share2, Video } from 'lucide-react'
+import { Mic, Pencil, Send, Share2, UserPlus, Video } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
@@ -15,8 +15,12 @@ import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Progress } from '~/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { ProjectStatusBadge } from '~/components/projects/ProjectStatusBadge'
 import { ShareProjectDialog } from '~/components/projects/ShareProjectDialog'
+import { CandidatesTable } from '~/components/candidates/CandidatesTable'
+import { InviteCandidatesDialog } from '~/components/candidates/InviteCandidatesDialog'
+import { EmptyState } from '~/components/projects/EmptyState'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/$projectSlug/')({
   component: ProjectDetailPage,
@@ -28,10 +32,11 @@ export const Route = createFileRoute('/app/$orgSlug/projects/$projectSlug/')({
 })
 
 function ProjectDetailPage() {
-  const { t } = useTranslation(['projects', 'common'])
+  const { t } = useTranslation(['projects', 'candidates', 'common'])
   const { orgSlug, projectSlug } = Route.useParams()
   const navigate = useNavigate()
   const [sharing, setSharing] = useState(false)
+  const [inviting, setInviting] = useState(false)
 
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
   const data = useConvexQuery(
@@ -87,6 +92,12 @@ function ProjectDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {project.status === 'active' && (
+            <Button onClick={() => setInviting(true)}>
+              <UserPlus className="size-4" />
+              {t('projects:detail.invite')}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setSharing(true)}>
             <Share2 className="size-4" />
             {t('projects:detail.share')}
@@ -174,91 +185,127 @@ function ProjectDetailPage() {
         />
       </div>
 
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">
+            {t('projects:detail.overview')}
+          </TabsTrigger>
+          <TabsTrigger value="candidates">
+            {t('projects:detail.candidates')}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="pt-6">
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {t('projects:detail.questions')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {questions.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                {t('projects:questions.empty.body')}
-              </p>
-            ) : (
-              <ol className="space-y-3">
-                {questions.map((question, index) => (
-                  <li key={question._id} className="flex gap-3">
-                    <span className="text-muted-foreground w-5 shrink-0 text-sm tabular-nums">
-                      {index + 1}.
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm">{question.content}</p>
-                      <p className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
-                        {question.hasMedia ? (
-                          <>
-                            {question.mediaKind === 'audio' ? (
-                              <Mic className="size-3" />
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {t('projects:detail.questions')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {questions.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    {t('projects:questions.empty.body')}
+                  </p>
+                ) : (
+                  <ol className="space-y-3">
+                    {questions.map((question, index) => (
+                      <li key={question._id} className="flex gap-3">
+                        <span className="text-muted-foreground w-5 shrink-0 text-sm tabular-nums">
+                          {index + 1}.
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm">{question.content}</p>
+                          <p className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                            {question.hasMedia ? (
+                              <>
+                                {question.mediaKind === 'audio' ? (
+                                  <Mic className="size-3" />
+                                ) : (
+                                  <Video className="size-3" />
+                                )}
+                                {t('projects:questions.media.ready')}
+                              </>
                             ) : (
-                              <Video className="size-3" />
+                              t('projects:questions.media.none')
                             )}
-                            {t('projects:questions.media.ready')}
-                          </>
-                        ) : (
-                          t('projects:questions.media.none')
-                        )}
-                        <span aria-hidden>·</span>
-                        <span className="tabular-nums">
-                          {t('projects:questions.fields.maxResponseValue', {
-                            count: question.maxResponseSeconds,
+                            <span aria-hidden>·</span>
+                            <span className="tabular-nums">
+                              {t('projects:questions.fields.maxResponseValue', {
+                                count: question.maxResponseSeconds,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {t('projects:detail.criteria')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {criteria.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    {t('projects:criteria.empty.body')}
+                  </p>
+                ) : (
+                  criteria.map((criterion) => (
+                    <div key={criterion._id} className="space-y-1.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate text-sm font-medium">
+                          {criterion.label}
+                        </span>
+                        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                          {t('projects:criteria.normalized', {
+                            percent: criterion.normalizedWeight,
                           })}
                         </span>
-                      </p>
+                      </div>
+                      <Progress value={criterion.normalizedWeight} />
+                      {criterion.description && (
+                        <p className="text-muted-foreground text-xs">
+                          {criterion.description}
+                        </p>
+                      )}
                     </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </CardContent>
-        </Card>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {t('projects:detail.criteria')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {criteria.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                {t('projects:criteria.empty.body')}
-              </p>
-            ) : (
-              criteria.map((criterion) => (
-                <div key={criterion._id} className="space-y-1.5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-sm font-medium">
-                      {criterion.label}
-                    </span>
-                    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                      {t('projects:criteria.normalized', {
-                        percent: criterion.normalizedWeight,
-                      })}
-                    </span>
-                  </div>
-                  <Progress value={criterion.normalizedWeight} />
-                  {criterion.description && (
-                    <p className="text-muted-foreground text-xs">
-                      {criterion.description}
-                    </p>
-                  )}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="candidates" className="pt-6">
+          {project.status === 'draft' ? (
+            <EmptyState
+              title={t('candidates:list.emptyDraft.title')}
+              body={t('candidates:list.emptyDraft.body')}
+            />
+          ) : (
+            <CandidatesTable
+              projectId={project._id}
+              orgSlug={orgSlug}
+              canInvite={project.status === 'active'}
+              onInvite={() => setInviting(true)}
+              locale={getLocale()}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <InviteCandidatesDialog
+        projectId={project._id}
+        open={inviting}
+        onOpenChange={setInviting}
+      />
 
       {org && (
         <ShareProjectDialog

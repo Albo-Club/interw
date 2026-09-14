@@ -54,6 +54,7 @@ import type * as publicConfig from "../publicConfig.js";
 import type * as purge from "../purge.js";
 import type * as questions from "../questions.js";
 import type * as rateLimiters from "../rateLimiters.js";
+import type * as reports from "../reports.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -110,6 +111,7 @@ declare const fullApi: ApiFromModules<{
   purge: typeof purge;
   questions: typeof questions;
   rateLimiters: typeof rateLimiters;
+  reports: typeof reports;
   sessions: typeof sessions;
   users: typeof users;
 }>;

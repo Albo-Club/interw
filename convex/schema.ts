@@ -334,7 +334,13 @@ export default defineSchema({
     .index('by_project', ['projectId'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
-    .index('by_purge_after', ['purgeAfter']),
+    .index('by_purge_after', ['purgeAfter'])
+    // Global candidate search. Scoped by orgId in the filter field so a query
+    // can never reach past the caller's organisation, index or not.
+    .searchIndex('search_candidate', {
+      searchField: 'candidateName',
+      filterFields: ['orgId'],
+    }),
 
   /** One row per answered question. A first-class table, not an entry in a
    *  message array: conflating turn-taking with media is what made resume and

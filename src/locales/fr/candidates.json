@@ -1,1 +1,100 @@
-{}
+{
+  "metaTitle": "Candidats · Interw",
+  "list": {
+    "title": "Candidats",
+    "invite": "Inviter des candidats",
+    "empty": {
+      "title": "Aucun candidat invité",
+      "body": "Invitez votre premier candidat : il recevra un lien personnel pour enregistrer son entretien quand il le souhaite.",
+      "action": "Inviter des candidats"
+    },
+    "emptyDraft": {
+      "title": "Publiez d'abord le poste",
+      "body": "Vous ne pourrez inviter des candidats qu'une fois le poste publié."
+    },
+    "columns": {
+      "candidate": "Candidat",
+      "status": "Statut",
+      "score": "Score",
+      "decision": "Décision",
+      "invited": "Invité le",
+      "completed": "Terminé le",
+      "duration": "Durée"
+    },
+    "loadMore": "Charger plus"
+  },
+  "status": {
+    "pending": "Pas commencé",
+    "in_progress": "En cours",
+    "completed": "Terminé",
+    "cancelled": "Annulé",
+    "expired": "Expiré"
+  },
+  "decision": {
+    "none": "Pas de décision",
+    "rejected": "Écarté",
+    "maybe": "À creuser",
+    "shortlisted": "Retenu",
+    "hired": "Recruté",
+    "set": "Votre décision",
+    "saved": "Décision enregistrée"
+  },
+  "invite": {
+    "title": "Inviter des candidats",
+    "subtitle": "Chaque personne reçoit son lien privé par e-mail. C'est elle qui choisit quand enregistrer.",
+    "single": "Un par un",
+    "bulk": "Coller une liste",
+    "name": "Nom",
+    "email": "E-mail",
+    "add": "Ajouter une ligne",
+    "bulkLabel": "Un par ligne : nom, e-mail",
+    "bulkPlaceholder": "Camille Durand, camille@exemple.com\nSam Okonkwo, sam@exemple.com",
+    "bulkHint": "Nom et e-mail séparés par une virgule ou un point-virgule. Les lignes illisibles vous sont montrées avant tout envoi.",
+    "parsed": "{{count}} candidat prêt à être invité",
+    "parsed_other": "{{count}} candidats prêts à être invités",
+    "invalid": "{{count}} ligne n'a pas pu être lue",
+    "invalid_other": "{{count}} lignes n'ont pas pu être lues",
+    "send": "Envoyer les invitations",
+    "sending": "Envoi…",
+    "sent": "{{count}} invitation envoyée",
+    "sent_other": "{{count}} invitations envoyées",
+    "duplicates": "{{count}} avaient déjà une invitation en cours — leur lien a été renvoyé.",
+    "cancel": "Annuler"
+  },
+  "actions": {
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien copié",
+    "resend": "Renvoyer l'invitation",
+    "resent": "Invitation renvoyée",
+    "cancel": "Annuler cette invitation",
+    "cancelled": "Invitation annulée",
+    "open": "Ouvrir le rapport",
+    "delete": "Supprimer les données de ce candidat"
+  },
+  "cancelConfirm": {
+    "title": "Annuler cette invitation ?",
+    "body": "Le lien de {{name}} cessera de fonctionner. Ce qui a déjà été enregistré est conservé.",
+    "confirm": "Annuler l'invitation"
+  },
+  "deleteConfirm": {
+    "title": "Supprimer toutes les données de ce candidat ?",
+    "body": "Les enregistrements, la transcription, l'analyse et les documents de {{name}} seront définitivement supprimés. Cette action est irréversible.",
+    "confirm": "Supprimer définitivement"
+  },
+  "search": {
+    "placeholder": "Rechercher un candidat",
+    "noResults": "Aucun candidat ne correspond à ce nom.",
+    "hint": "Saisissez au moins deux lettres."
+  },
+  "errors": {
+    "invalid_name": "Ce nom est trop long.",
+    "invalid_email": "Cette adresse e-mail n'est pas valide.",
+    "no_candidates": "Ajoutez au moins un candidat.",
+    "too_many_candidates": "Invitez au maximum 100 personnes à la fois.",
+    "project_not_active": "Publiez le poste avant d'inviter des candidats.",
+    "session_closed": "Cet entretien est déjà terminé ou annulé.",
+    "site_url_not_configured": "L'adresse du site n'est pas configurée : les liens d'invitation ne peuvent pas être construits.",
+    "note_too_long": "Cette note est trop longue.",
+    "rate_limited": "Beaucoup d'invitations d'un coup. Patientez un instant et réessayez."
+  }
+}

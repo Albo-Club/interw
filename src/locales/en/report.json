@@ -1,1 +1,146 @@
-{}
+{
+  "metaTitle": "Interview report · Interw",
+  "disclaimer": {
+    "short": "Automated analysis — the decision is yours.",
+    "long": "Scores, recommendation and summary are produced automatically from the interview transcript. They are a reading aid, not a decision. Check the quotes behind each claim, and decide yourself."
+  },
+  "verdict": {
+    "recommendation": "Recommendation",
+    "score": "Overall score",
+    "outOf": "/ 100",
+    "strong_no": "Clear no",
+    "no": "No",
+    "maybe": "Worth digging into",
+    "yes": "Yes",
+    "strong_yes": "Strong yes",
+    "generated": "Analysed {{date}}",
+    "model": "Model: {{model}}"
+  },
+  "sections": {
+    "summary": "Summary",
+    "criteria": "Against your criteria",
+    "strengths": "Strengths",
+    "concerns": "Watch-outs",
+    "answers": "Answer by answer",
+    "delivery": "Delivery",
+    "highlights": "Worth watching",
+    "documents": "Documents",
+    "note": "Your notes"
+  },
+  "criteria": {
+    "weight": "{{percent}}% of the score",
+    "level": {
+      "excellent": "Excellent",
+      "solid": "Solid",
+      "partial": "Partial",
+      "gap": "Gap"
+    },
+    "evidence": "What they said",
+    "jump": "Jump to {{time}}"
+  },
+  "answers": {
+    "question": "Question {{index}}",
+    "score": "{{score}}/10",
+    "depth": {
+      "surface": "Surface",
+      "concrete": "Concrete",
+      "expert": "Expert"
+    },
+    "transcript": "Transcript",
+    "showTranscript": "Show the transcript",
+    "hideTranscript": "Hide the transcript",
+    "notAnswered": "No answer recorded",
+    "uploadFailed": "The candidate recorded an answer, but it never reached us. This is a technical failure on our side, not a skipped question."
+  },
+  "delivery": {
+    "subtitle": "Measured from the transcript timings, not judged by a model.",
+    "pace": "Speaking rate",
+    "paceUnit": "{{value}} words / min",
+    "fluency": "Hesitation",
+    "fluencyUnit": "{{value}} per 100 words",
+    "pauses": "Silence",
+    "pausesUnit": "{{value}}% of the time",
+    "concision": "Time used",
+    "concisionUnit": "{{value}}% of what was allowed",
+    "consistency": "Consistency",
+    "consistencyUnit": "{{value}}% variation",
+    "engagement": "Engagement",
+    "engagementUnit": "{{value}}s spoken"
+  },
+  "note": {
+    "placeholder": "What you thought, what to ask next time…",
+    "hint": "Only your team sees this. The candidate never does.",
+    "saved": "Note saved"
+  },
+  "pending": {
+    "title": "The analysis is still running",
+    "body": "The interview has arrived and is being transcribed and analysed. This usually takes a few minutes.",
+    "failedTitle": "The analysis did not complete",
+    "failedBody": "The recordings are safe and the analysis will be retried automatically. The last steps are listed below.",
+    "steps": {
+      "transcribe": "Transcription",
+      "report": "Analysis",
+      "notify": "Notification"
+    },
+    "outcome": {
+      "started": "Started",
+      "succeeded": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    }
+  },
+  "notStarted": {
+    "title": "Not started yet",
+    "body": "{{name}} has been invited but has not recorded anything yet."
+  },
+  "inProgress": {
+    "title": "In progress",
+    "body": "{{name}} is part-way through — {{answered}} of {{total}} answers recorded."
+  },
+  "mediaPurged": {
+    "title": "Recordings deleted",
+    "body": "The recordings were deleted on {{date}} under the retention policy. The analysis and transcript remain."
+  },
+  "share": {
+    "title": "Share this report",
+    "subtitle": "Creates a link that shows this report only — no other candidate, no access to your account.",
+    "create": "Create a link",
+    "expiry": "Stops working after",
+    "expiryOptions": {
+      "7": "7 days",
+      "30": "30 days",
+      "never": "No expiry"
+    },
+    "copy": "Copy the link",
+    "copied": "Link copied",
+    "revoke": "Revoke",
+    "revoked": "Link revoked",
+    "existing": "Active link",
+    "views": "Opened {{count}} time",
+    "views_other": "Opened {{count}} times",
+    "neverViewed": "Not opened yet",
+    "expiresOn": "Stops working on {{date}}"
+  },
+  "shared": {
+    "title": "Interview report",
+    "sharedBy": "Shared by {{org}}",
+    "expired": {
+      "title": "This link has expired",
+      "body": "Ask whoever shared it with you for a new one."
+    },
+    "revoked": {
+      "title": "This link was revoked",
+      "body": "It no longer gives access to the report."
+    },
+    "notFound": {
+      "title": "This link doesn't work",
+      "body": "It may have been mistyped, or revoked."
+    }
+  },
+  "errors": {
+    "not_found": "This report could not be found.",
+    "note_too_long": "That note is too long.",
+    "share_expired": "This link has expired.",
+    "share_revoked": "This link was revoked."
+  }
+}

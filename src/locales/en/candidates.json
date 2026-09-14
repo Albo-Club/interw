@@ -1,1 +1,100 @@
-{}
+{
+  "metaTitle": "Candidates · Interw",
+  "list": {
+    "title": "Candidates",
+    "invite": "Invite candidates",
+    "empty": {
+      "title": "No one invited yet",
+      "body": "Invite your first candidate and they will get a personal link to record their interview whenever suits them.",
+      "action": "Invite candidates"
+    },
+    "emptyDraft": {
+      "title": "Publish the role first",
+      "body": "Candidates can only be invited once the role is published."
+    },
+    "columns": {
+      "candidate": "Candidate",
+      "status": "Status",
+      "score": "Score",
+      "decision": "Decision",
+      "invited": "Invited",
+      "completed": "Completed",
+      "duration": "Length"
+    },
+    "loadMore": "Load more"
+  },
+  "status": {
+    "pending": "Not started",
+    "in_progress": "In progress",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "expired": "Expired"
+  },
+  "decision": {
+    "none": "No decision",
+    "rejected": "Rejected",
+    "maybe": "To dig into",
+    "shortlisted": "Shortlisted",
+    "hired": "Hired",
+    "set": "Your decision",
+    "saved": "Decision saved"
+  },
+  "invite": {
+    "title": "Invite candidates",
+    "subtitle": "Each person gets their own private link by email. They choose when to record.",
+    "single": "One at a time",
+    "bulk": "Paste a list",
+    "name": "Name",
+    "email": "Email",
+    "add": "Add another",
+    "bulkLabel": "One per line: name, email",
+    "bulkPlaceholder": "Camille Durand, camille@example.com\nSam Okonkwo, sam@example.com",
+    "bulkHint": "Name and email separated by a comma or a semicolon. Lines that can't be read are shown back to you before anything is sent.",
+    "parsed": "{{count}} candidate ready to invite",
+    "parsed_other": "{{count}} candidates ready to invite",
+    "invalid": "{{count}} line couldn't be read",
+    "invalid_other": "{{count}} lines couldn't be read",
+    "send": "Send invitations",
+    "sending": "Sending…",
+    "sent": "{{count}} invitation sent",
+    "sent_other": "{{count}} invitations sent",
+    "duplicates": "{{count}} already had an open invitation — their link was sent again.",
+    "cancel": "Cancel"
+  },
+  "actions": {
+    "copyLink": "Copy the link",
+    "linkCopied": "Link copied",
+    "resend": "Send the invitation again",
+    "resent": "Invitation sent again",
+    "cancel": "Cancel this invitation",
+    "cancelled": "Invitation cancelled",
+    "open": "Open the report",
+    "delete": "Delete this candidate's data"
+  },
+  "cancelConfirm": {
+    "title": "Cancel this invitation?",
+    "body": "{{name}}'s link will stop working. Anything they already recorded is kept.",
+    "confirm": "Cancel the invitation"
+  },
+  "deleteConfirm": {
+    "title": "Delete everything about this candidate?",
+    "body": "{{name}}'s recordings, transcript, analysis and documents will be permanently deleted. This cannot be undone.",
+    "confirm": "Delete permanently"
+  },
+  "search": {
+    "placeholder": "Search candidates",
+    "noResults": "No candidate matches that name.",
+    "hint": "Type at least two letters."
+  },
+  "errors": {
+    "invalid_name": "That name is too long.",
+    "invalid_email": "That is not a valid email address.",
+    "no_candidates": "Add at least one candidate.",
+    "too_many_candidates": "Invite at most 100 people at a time.",
+    "project_not_active": "Publish the role before inviting candidates.",
+    "session_closed": "This interview is already finished or cancelled.",
+    "site_url_not_configured": "The site address is not configured, so invitation links cannot be built.",
+    "note_too_long": "That note is too long.",
+    "rate_limited": "That is a lot of invitations at once. Wait a moment and try again."
+  }
+}

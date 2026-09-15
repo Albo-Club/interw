@@ -88,6 +88,82 @@ opened its onboarding PR.
 Skills freshness needs nothing: the `skills-drift` job in `ci.yml` goes
 red when upstream skills move — run `pnpm run sync:skills`, review, commit.
 
+## Deploying to production
+
+The web tier runs on [Scalingo](https://scalingo.com) — French SAS,
+datacenters in France only, ISO 27001 + HDS. Convex stays where you created it
+(EU West / Ireland); object storage stays on Scaleway `fr-par`. Nothing in the
+app is host-specific: the build emits a plain Node server
+(`.output/server/index.mjs`) and `pnpm start` runs it, so these steps port to
+any European Node host.
+
+**1. Provision the Convex production deployment**
+
+```bash
+pnpm run setup:prod
+```
+
+It mirrors your dev secrets onto prod, generates a fresh
+`BETTER_AUTH_SECRET`, and sets `SITE_URL` + `BETTER_AUTH_URL` to the domain
+you give it. Use the domain you will actually serve, not the
+`*.osc-fr1.scalingo.io` placeholder — Better Auth builds magic-link URLs from
+it.
+
+**2. Create the app and link the repo**
+
+In the Scalingo dashboard: **Create an app**, pick a region, then under
+**Code → GitHub** link this repository and enable **auto-deploy** on `main`.
+Two regions are available, both in France:
+
+| Region | Provider | For |
+| --- | --- | --- |
+| `osc-fr1` | 3DS Outscale, Paris | The default. ISO 27001 + HDS. |
+| `osc-secnum-fr1` | 3DS Outscale `cloudgouv`, Paris | SecNumCloud-qualified. Pick it at creation if you will sell to the public sector — the region cannot be changed afterwards. |
+
+Leave **review apps** off for now: they clone the parent app's environment,
+deploy key included, and would push pull-request branches at production
+Convex. See `KNOWN_ISSUES.md` § "Review apps inherit the parent's environment"
+before turning them on.
+
+**3. Set the environment variables**
+
+| Variable | Value |
+| --- | --- |
+| `DEPLOY_CONVEX` | `true` |
+| `CONVEX_DEPLOY_KEY` | Convex dashboard → Settings → URL & Deploy Key → **Generate Production Deploy Key** |
+| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` (the prod `.cloud` URL, with `.site`) |
+| `VITE_SENTRY_DSN` | optional, front-end DSN |
+
+Do **not** set `VITE_CONVEX_URL` by hand — `convex deploy` injects it into the
+build. Do **not** set `CONVEX_DEPLOYMENT`; it is a per-developer dev binding.
+
+Everything else — `RESEND_*`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`,
+`OPENROUTER_API_KEY`, `OBJECT_STORE_*` — lives on the **Convex** deployment,
+not here. `pnpm run setup:prod` put them there.
+
+**4. Point the domain and deploy**
+
+Add your domain under **Settings → Domains**, update the DNS record Scalingo
+shows you, then push to `main`. From then on a merged PR deploys itself:
+Scalingo installs with pnpm (selected from `pnpm-lock.yaml`), runs
+`pnpm build`, which deploys the Convex backend and builds the frontend in
+lockstep, then starts the web process from `scripts.start`.
+
+**5. Verify**
+
+Run the Level 6 rows in [TESTING.md](TESTING.md), then send yourself a magic
+link from the live domain — it must point at
+`https://<your-domain>/api/auth/magic-link/verify`, not `localhost`. If you
+use Google sign-in, register the production redirect URI
+`https://<your-domain>/api/auth/callback/google` on the same OAuth client.
+
+> **Sovereignty note.** `osc-secnum-fr1` qualifies the *web tier*, which
+> stores nothing. Candidate transcripts and evaluations live in Convex (US
+> company, EU region) and pass through OpenRouter (US) on the way to the
+> evaluating model. If sovereignty is the goal rather than the label, the
+> order of work is the model provider first, the database second, the host
+> last.
+
 ## Staying up to date with the starter
 
 This project was scaffolded from the

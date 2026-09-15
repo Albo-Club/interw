@@ -484,12 +484,12 @@ export const remove = mutation({
   needs the URL parser".
 - ❌ Touching the pnpm version pin. `packageManager` in `package.json` is the
   single source of truth, read by Corepack, by `pnpm/action-setup@v4` (which
-  is why CI passes **no** `version:`) and by Vercel when Corepack is on. Never
-  re-pin a version in `ci.yml`, never hand-edit the sha512 hash (use
-  `corepack use pnpm@<version>`), and never bump to a major Vercel doesn't
-  support. Same family: don't move `pnpm.overrides` out of `package.json` —
-  `pnpm-workspace.yaml` settings are invisible to pnpm 9, which Vercel may
-  still pick. See `KNOWN_ISSUES.md` § "pnpm 11 silently drops
+  is why CI passes **no** `version:`) and by Scalingo's Node buildpack, which
+  selects pnpm from the lockfile. Never re-pin a version in `ci.yml`, never hand-edit the sha512
+  hash (use `corepack use pnpm@<version>`), and never bump to a major the
+  deployment target doesn't resolve. Same family: don't move `pnpm.overrides`
+  out of `package.json` — `pnpm-workspace.yaml` settings are invisible to
+  pnpm 9, which a host resolving `lockfileVersion: 9.0` may still pick. See `KNOWN_ISSUES.md` § "pnpm 11 silently drops
   `pnpm.overrides`".
 - ❌ Sizing `node_modules` with `du`, or "optimising" disk with
   `node-linker=hoisted` / `package-import-method=copy` / a hand-rolled shared

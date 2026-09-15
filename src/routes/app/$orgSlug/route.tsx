@@ -107,6 +107,7 @@ function OrgLayout() {
         <AppHeader
           orgSlug={orgSlug}
           orgName={member.name}
+          orgId={org?._id}
           onToggleAiPanel={() => setAiPanelOpen(!aiOpen)}
         />
         <div className="min-h-0 flex-1 overflow-y-auto">

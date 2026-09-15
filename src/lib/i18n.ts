@@ -17,6 +17,10 @@ import enAccount from '~/locales/en/account.json'
 import enSettings from '~/locales/en/settings.json'
 import enChat from '~/locales/en/chat.json'
 import enChangelog from '~/locales/en/changelog.json'
+import enProjects from '~/locales/en/projects.json'
+import enCandidates from '~/locales/en/candidates.json'
+import enInterview from '~/locales/en/interview.json'
+import enReport from '~/locales/en/report.json'
 
 import frCommon from '~/locales/fr/common.json'
 import frAuth from '~/locales/fr/auth.json'
@@ -30,6 +34,10 @@ import frAccount from '~/locales/fr/account.json'
 import frSettings from '~/locales/fr/settings.json'
 import frChat from '~/locales/fr/chat.json'
 import frChangelog from '~/locales/fr/changelog.json'
+import frProjects from '~/locales/fr/projects.json'
+import frCandidates from '~/locales/fr/candidates.json'
+import frInterview from '~/locales/fr/interview.json'
+import frReport from '~/locales/fr/report.json'
 
 export const NAMESPACES = [
   'common',
@@ -44,6 +52,13 @@ export const NAMESPACES = [
   'settings',
   'chat',
   'changelog',
+  // Interw domain
+  'projects',
+  'candidates',
+  // `interview` is the candidate surface: it is the only namespace that
+  // ships in the candidate bundle, so nothing recruiter-facing belongs here.
+  'interview',
+  'report',
 ] as const
 
 export const defaultNS = 'common'
@@ -62,6 +77,10 @@ export const resources = {
     settings: enSettings,
     chat: enChat,
     changelog: enChangelog,
+    projects: enProjects,
+    candidates: enCandidates,
+    interview: enInterview,
+    report: enReport,
   },
   fr: {
     common: frCommon,
@@ -76,6 +95,10 @@ export const resources = {
     settings: frSettings,
     chat: frChat,
     changelog: frChangelog,
+    projects: frProjects,
+    candidates: frCandidates,
+    interview: frInterview,
+    report: frReport,
   },
 } as const
 

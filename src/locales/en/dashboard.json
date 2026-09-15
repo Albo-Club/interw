@@ -29,5 +29,25 @@
     "description": "The 5 most recent items in this org",
     "viewAll": "View all",
     "empty": "No items yet. <link>Create one</link>."
+  },
+  "interw": {
+    "subtitle": "What is waiting for you, and what is moving.",
+    "awaitingReview": "Awaiting your review",
+    "awaitingReviewHint": "Finished, analysed, no decision yet",
+    "activeRoles": "Open roles",
+    "draftRoles": "{{count}} draft",
+    "draftRoles_other": "{{count}} drafts",
+    "invited": "Invited",
+    "invitedHint": "Last {{count}} days",
+    "completed": "Completed",
+    "completionRate": "{{percent}}% completion",
+    "inFlight": "In flight",
+    "inFlightHint": "{{pending}} not started · {{inProgress}} in progress",
+    "recent": "Recently completed",
+    "recentEmpty": "No completed interview yet.",
+    "decisions": "Decisions so far",
+    "noDecisions": "No decision recorded yet.",
+    "viewAll": "See all roles",
+    "newRole": "New role"
   }
 }

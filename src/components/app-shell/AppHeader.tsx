@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ThemeToggle } from './ThemeToggle'
 import type { TFunction } from 'i18next'
 
+import type { Id } from '../../../convex/_generated/dataModel'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,11 +18,14 @@ import { Button } from '~/components/ui/button'
 import { Separator } from '~/components/ui/separator'
 import { SidebarTrigger } from '~/components/ui/sidebar'
 import { UserButton } from '~/components/auth/user-button'
+import { CandidateSearch } from '~/components/candidates/CandidateSearch'
 
 type Crumb = { label: string; href?: string }
 
 const CRUMB_SEGMENTS = [
   'items',
+  'projects',
+  'candidates',
   'settings',
   'members',
   'invitations',
@@ -58,10 +62,12 @@ function buildCrumbs(
 export function AppHeader({
   orgSlug,
   orgName,
+  orgId,
   onToggleAiPanel,
 }: {
   orgSlug: string
   orgName: string
+  orgId: Id<'organizations'> | undefined
   onToggleAiPanel: () => void
 }) {
   const location = useLocation()
@@ -94,7 +100,8 @@ export function AppHeader({
           ))}
         </BreadcrumbList>
       </Breadcrumb>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-2">
+        {orgId && <CandidateSearch orgId={orgId} orgSlug={orgSlug} />}
         <Button
           variant="ghost"
           size="sm"

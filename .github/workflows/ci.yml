@@ -21,7 +21,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Catches a Convex module added without its codegen committed — CI has
+      # no deployment, so `npx convex dev` cannot do it here.
+      - run: pnpm codegen:api:check
+      # "Verified function by function, not assumed" only stays true if
+      # something keeps verifying. Fails on a public Convex function with no
+      # access check — see scripts/audit-convex-access.mjs.
+      - run: pnpm audit:access:check
       - run: pnpm lint
+      - run: pnpm test
       - run: pnpm build
 
   # Two jobs, two distinct questions — keep both:

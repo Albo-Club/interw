@@ -1,0 +1,189 @@
+{
+  "metaTitle": "Votre entretien",
+  "shell": {
+    "privacy": "Vos données",
+    "help": "Un problème ?"
+  },
+  "state": {
+    "notFound": {
+      "title": "Ce lien ne fonctionne pas",
+      "body": "Il a peut-être été mal recopié, ou remplacé par un lien plus récent. Vérifiez l'e-mail que vous avez reçu, ou répondez-y pour demander un nouveau lien."
+    },
+    "expired": {
+      "title": "Cet entretien est clos",
+      "body": "La date limite pour ce poste est passée. Si vous pensez qu'il s'agit d'une erreur, répondez à l'e-mail qui vous a invité."
+    },
+    "closed": {
+      "title": "Cet entretien n'est pas ouvert",
+      "body": "Ce poste n'accepte plus d'entretiens. Si vous deviez en enregistrer un, répondez à l'e-mail qui vous a invité."
+    },
+    "cancelled": {
+      "title": "Cet entretien a été annulé",
+      "body": "Rien de ce que vous avez enregistré n'a été perdu, mais ce lien ne fonctionne plus. Répondez à l'e-mail qui vous a invité si vous avez des questions."
+    },
+    "completed": {
+      "title": "Vous avez déjà terminé cet entretien",
+      "body": "Merci — il n'y a rien de plus à faire. {{org}} a vos réponses et reviendra vers vous."
+    }
+  },
+  "welcome": {
+    "greeting": "Bonjour {{name}}",
+    "invitedBy": "{{org}} vous invite à enregistrer un court entretien pour le poste de {{jobTitle}}.",
+    "invitedByNoRole": "{{org}} vous invite à enregistrer un court entretien.",
+    "howItWorks": "Comment ça se passe",
+    "steps": {
+      "questions": "{{count}} question, posée face caméra par l'équipe",
+      "questions_other": "{{count}} questions, posées face caméra par l'équipe",
+      "record": "Vous enregistrez votre réponse à chacune, à votre rythme",
+      "duration": "Environ {{count}} minutes au total",
+      "alone": "Personne ne vous attend : vous choisissez quand commencer"
+    },
+    "whatYouNeed": "Ce qu'il vous faut",
+    "needs": {
+      "camera": "Une caméra et un micro en état de marche",
+      "quiet": "Quelques minutes au calme, dans un endroit où vous pouvez parler à voix haute",
+      "browser": "Cette page, ouverte jusqu'à la fin"
+    },
+    "yourDetails": "Vos informations",
+    "detailsHint": "Uniquement ce que {{org}} a demandé. Tout est facultatif, sauf mention contraire.",
+    "fields": {
+      "name": "Nom",
+      "email": "E-mail",
+      "phone": "Numéro de téléphone",
+      "linkedin": "Profil LinkedIn",
+      "cv": "Votre CV",
+      "coverLetter": "Lettre de motivation",
+      "required": "Obligatoire",
+      "uploadHint": "PDF ou Word, 10 Mo maximum",
+      "uploaded": "Envoyé",
+      "replace": "Remplacer",
+      "choose": "Choisir un fichier"
+    },
+    "start": "Continuer",
+    "resume": "Reprendre où vous en étiez",
+    "resumeHint": "Vous vous êtes arrêté à la question {{index}}. Vos réponses précédentes sont enregistrées."
+  },
+  "consent": {
+    "title": "Avant de commencer",
+    "body": "Cet entretien est enregistré. Voici précisément ce que cela implique.",
+    "points": {
+      "recording": "Votre caméra et votre micro enregistrent vos réponses, question par question.",
+      "who": "{{org}} peut visionner vos enregistrements et lire leur transcription automatique.",
+      "ai": "Une analyse automatique résume vos réponses au regard des critères de ce poste. Elle éclaire la décision — c'est une personne qui la prend.",
+      "retention": "Vos enregistrements sont conservés le temps nécessaire à la décision de {{org}}, puis supprimés. Vous pouvez en demander la suppression à tout moment depuis votre page de données."
+    },
+    "accept": "J'ai compris et j'accepte d'être enregistré",
+    "acceptHint": "Votre accord est nécessaire pour continuer. Si vous préférez ne pas donner suite, fermez simplement cette page et répondez à l'e-mail qui vous a invité.",
+    "continue": "Accepter et continuer"
+  },
+  "device": {
+    "title": "Vérifions votre caméra et votre micro",
+    "subtitle": "Rien n'est enregistré ni conservé ici. C'est juste pour s'assurer que tout fonctionne avant de commencer.",
+    "cameraLabel": "Caméra",
+    "micLabel": "Micro",
+    "preview": "Vous devriez vous voir ci-dessous",
+    "speakPrompt": "Dites quelque chose à voix haute — la barre doit bouger",
+    "micGood": "Votre micro vous capte bien",
+    "micQuiet": "On vous entend à peine. Parlez plus fort, rapprochez-vous, ou choisissez un autre micro.",
+    "micSilent": "On n'entend rien pour l'instant",
+    "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le depuis la barre d'adresse de votre navigateur, puis rechargez cette page.",
+    "permissionHelp": "Cherchez l'icône de caméra dans la barre d'adresse de votre navigateur.",
+    "noDevices": "Aucune caméra ni micro détecté. Branchez-en un, puis rechargez cette page.",
+    "unsupported": "Ce navigateur ne peut pas enregistrer d'entretien vidéo. Ouvrez ce lien dans une version récente de Chrome, Safari, Firefox ou Edge — sur ordinateur si possible.",
+    "inAppBrowser": "Vous semblez être dans un navigateur intégré à une application. L'enregistrement y échoue souvent. Ouvrez plutôt ce lien dans Safari ou Chrome.",
+    "retry": "Vérifier à nouveau",
+    "continue": "Tout fonctionne — commencer l'entretien",
+    "continueAnyway": "Commencer quand même"
+  },
+  "run": {
+    "progress": "Question {{index}} sur {{total}}",
+    "intro": {
+      "title": "Un mot avant de commencer",
+      "continue": "Je suis prêt"
+    },
+    "playQuestion": "Écouter la question",
+    "replayQuestion": "Réécouter",
+    "readQuestion": "La question",
+    "hint": "Un conseil",
+    "notRecording": "Enregistrement pas encore démarré",
+    "startAnswer": "Commencer ma réponse",
+    "recording": "Enregistrement",
+    "finishAnswer": "J'ai terminé ma réponse",
+    "timeLeft": "{{seconds}} s restantes",
+    "timeUpSoon": "L'enregistrement s'arrête dans {{seconds}} secondes",
+    "timeUp": "Le temps est écoulé pour cette question — votre réponse a été enregistrée.",
+    "sending": "Enregistrement de votre réponse…",
+    "sendingHint": "Gardez cette page ouverte.",
+    "saved": "Réponse enregistrée",
+    "retrying": "Problème de connexion — nouvelle tentative ({{attempt}} sur {{max}})",
+    "sendFailed": {
+      "title": "Votre dernière réponse n'a pas été enregistrée",
+      "body": "Rien n'est perdu pour l'instant, mais le serveur est injoignable. Vérifiez votre connexion et réessayez.",
+      "retry": "Réessayer",
+      "skip": "Passer cette question et continuer"
+    },
+    "networkPoor": "Votre connexion semble instable. L'enregistrement fonctionne toujours — l'envoi peut simplement prendre plus de temps.",
+    "offline": "Vous êtes hors ligne. Votre réponse sera envoyée dès le retour de la connexion.",
+    "next": "Question suivante",
+    "finishInterview": "Terminer l'entretien",
+    "finishing": "Finalisation…",
+    "leaveWarning": "Votre réponse est encore en cours d'envoi. Si vous quittez maintenant, elle sera perdue.",
+    "crash": {
+      "title": "Un problème est survenu sur cette page",
+      "body": "Vos réponses enregistrées sont intactes. Rechargez pour reprendre à la question {{index}}.",
+      "reload": "Recharger et continuer",
+      "restart": "Revenir au début"
+    }
+  },
+  "done": {
+    "title": "C'est terminé — merci",
+    "body": "Votre entretien a été transmis à {{org}}. Vous n'avez plus rien à faire.",
+    "whatNext": "La suite",
+    "nextSteps": {
+      "review": "{{org}} va examiner vos réponses.",
+      "contact": "Vous serez contacté directement, à l'adresse {{email}}.",
+      "noReply": "Cette adresse n'accepte pas de réponse — répondez plutôt à l'e-mail qui vous a invité."
+    },
+    "privacy": "Voir les données conservées, et les supprimer"
+  },
+  "privacy": {
+    "title": "Vos données",
+    "subtitle": "Ce que {{org}} conserve au sujet de cet entretien, et comment le supprimer.",
+    "held": "Ce qui est conservé",
+    "items": {
+      "identity": "Vos nom et e-mail, tels que {{org}} les a saisis en vous invitant.",
+      "recordings": "Vos réponses vidéo et audio.",
+      "transcript": "Une transcription automatique de ce que vous avez dit.",
+      "analysis": "Une analyse automatique de vos réponses au regard des critères de ce poste.",
+      "documents": "Le CV ou la lettre de motivation que vous avez éventuellement envoyés."
+    },
+    "rights": "Vos droits",
+    "rightsBody": "Vous pouvez demander la suppression de l'ensemble, à tout moment et sans avoir à vous justifier. La suppression est immédiate et irréversible — y compris pour {{org}}, qui ne pourra plus étudier votre candidature à ce poste.",
+    "delete": "Tout supprimer",
+    "deleteConfirm": {
+      "title": "Supprimer votre entretien ?",
+      "body": "Vos enregistrements, votre transcription, l'analyse et les documents envoyés seront définitivement supprimés. {{org}} ne pourra plus étudier cette candidature. Cette action est irréversible.",
+      "confirm": "Supprimer définitivement"
+    },
+    "deleted": {
+      "title": "Vos données ont été supprimées",
+      "body": "Plus rien de cet entretien n'est conservé. Vous pouvez fermer cette page."
+    }
+  },
+  "errors": {
+    "not_found": "Ce lien ne fonctionne pas.",
+    "expired": "Cet entretien est clos.",
+    "closed": "Cet entretien n'est pas ouvert.",
+    "cancelled": "Cet entretien a été annulé.",
+    "completed": "Vous avez déjà terminé cet entretien.",
+    "invalid_phone": "Ce numéro de téléphone est trop long.",
+    "invalid_linkedin": "Saisissez une adresse complète commençant par https://",
+    "not_requested": "Ce poste ne demandait pas cela.",
+    "unsupported_document_type": "Envoyez un PDF ou un document Word.",
+    "document_too_large": "Ce fichier dépasse 10 Mo.",
+    "key_mismatch": "L'envoi ne s'est pas terminé correctement. Réessayez.",
+    "consent_required": "Vous devez accepter d'être enregistré avant de commencer.",
+    "rate_limited": "Beaucoup de requêtes d'un coup. Patientez un instant et réessayez.",
+    "unexpected": "Un problème est survenu. Réessayez."
+  }
+}

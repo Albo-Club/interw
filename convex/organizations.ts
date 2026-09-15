@@ -52,6 +52,9 @@ const RESERVED_SLUGS = new Set([
   'privacy', 'pricing', 'home',
 ])
 
+// access: public by design — this is the slug availability probe on the
+// signup form, where the caller has no organisation yet. It returns only
+// available / invalid / reserved / taken, never any organisation data.
 export const checkSlug = query({
   args: { slug: v.string() },
   handler: async (ctx, { slug }) => {

@@ -16,20 +16,32 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
+import { Route as RShareTokenRouteImport } from './routes/r/$shareToken'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as AppMeRouteImport } from './routes/app/me'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
 import { Route as AcceptInviteTokenRouteImport } from './routes/accept-invite.$token'
+import { Route as STokenRouteRouteImport } from './routes/s/$token/route'
 import { Route as AppOrgSlugRouteRouteImport } from './routes/app/$orgSlug/route'
+import { Route as STokenIndexRouteImport } from './routes/s/$token/index'
 import { Route as AppOrgSlugIndexRouteImport } from './routes/app/$orgSlug/index'
+import { Route as STokenPrivacyRouteImport } from './routes/s/$token/privacy'
+import { Route as STokenInterviewRouteImport } from './routes/s/$token/interview'
+import { Route as STokenDoneRouteImport } from './routes/s/$token/done'
+import { Route as STokenCheckRouteImport } from './routes/s/$token/check'
 import { Route as AppOrgSlugItemsRouteImport } from './routes/app/$orgSlug/items'
 import { Route as AppOrgSlugChangelogRouteImport } from './routes/app/$orgSlug/changelog'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppOrgSlugSettingsRouteRouteImport } from './routes/app/$orgSlug/settings/route'
 import { Route as AppOrgSlugSettingsIndexRouteImport } from './routes/app/$orgSlug/settings/index'
+import { Route as AppOrgSlugProjectsIndexRouteImport } from './routes/app/$orgSlug/projects.index'
 import { Route as AppOrgSlugSettingsMembersRouteImport } from './routes/app/$orgSlug/settings/members'
 import { Route as AppOrgSlugSettingsInvitationsRouteImport } from './routes/app/$orgSlug/settings/invitations'
 import { Route as AppOrgSlugSettingsGeneralRouteImport } from './routes/app/$orgSlug/settings/general'
+import { Route as AppOrgSlugProjectsNewRouteImport } from './routes/app/$orgSlug/projects.new'
+import { Route as AppOrgSlugCandidatesSessionIdRouteImport } from './routes/app/$orgSlug/candidates.$sessionId'
+import { Route as AppOrgSlugProjectsProjectSlugIndexRouteImport } from './routes/app/$orgSlug/projects.$projectSlug.index'
+import { Route as AppOrgSlugProjectsProjectSlugEditRouteImport } from './routes/app/$orgSlug/projects.$projectSlug.edit'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -66,6 +78,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const RShareTokenRoute = RShareTokenRouteImport.update({
+  id: '/r/$shareToken',
+  path: '/r/$shareToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -86,15 +103,45 @@ const AcceptInviteTokenRoute = AcceptInviteTokenRouteImport.update({
   path: '/accept-invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const STokenRouteRoute = STokenRouteRouteImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppOrgSlugRouteRoute = AppOrgSlugRouteRouteImport.update({
   id: '/$orgSlug',
   path: '/$orgSlug',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const STokenIndexRoute = STokenIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => STokenRouteRoute,
+} as any)
 const AppOrgSlugIndexRoute = AppOrgSlugIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppOrgSlugRouteRoute,
+} as any)
+const STokenPrivacyRoute = STokenPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => STokenRouteRoute,
+} as any)
+const STokenInterviewRoute = STokenInterviewRouteImport.update({
+  id: '/interview',
+  path: '/interview',
+  getParentRoute: () => STokenRouteRoute,
+} as any)
+const STokenDoneRoute = STokenDoneRouteImport.update({
+  id: '/done',
+  path: '/done',
+  getParentRoute: () => STokenRouteRoute,
+} as any)
+const STokenCheckRoute = STokenCheckRouteImport.update({
+  id: '/check',
+  path: '/check',
+  getParentRoute: () => STokenRouteRoute,
 } as any)
 const AppOrgSlugItemsRoute = AppOrgSlugItemsRouteImport.update({
   id: '/items',
@@ -121,6 +168,11 @@ const AppOrgSlugSettingsIndexRoute = AppOrgSlugSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppOrgSlugSettingsRouteRoute,
 } as any)
+const AppOrgSlugProjectsIndexRoute = AppOrgSlugProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AppOrgSlugRouteRoute,
+} as any)
 const AppOrgSlugSettingsMembersRoute =
   AppOrgSlugSettingsMembersRouteImport.update({
     id: '/members',
@@ -139,6 +191,29 @@ const AppOrgSlugSettingsGeneralRoute =
     path: '/general',
     getParentRoute: () => AppOrgSlugSettingsRouteRoute,
   } as any)
+const AppOrgSlugProjectsNewRoute = AppOrgSlugProjectsNewRouteImport.update({
+  id: '/projects/new',
+  path: '/projects/new',
+  getParentRoute: () => AppOrgSlugRouteRoute,
+} as any)
+const AppOrgSlugCandidatesSessionIdRoute =
+  AppOrgSlugCandidatesSessionIdRouteImport.update({
+    id: '/candidates/$sessionId',
+    path: '/candidates/$sessionId',
+    getParentRoute: () => AppOrgSlugRouteRoute,
+  } as any)
+const AppOrgSlugProjectsProjectSlugIndexRoute =
+  AppOrgSlugProjectsProjectSlugIndexRouteImport.update({
+    id: '/projects/$projectSlug/',
+    path: '/projects/$projectSlug/',
+    getParentRoute: () => AppOrgSlugRouteRoute,
+  } as any)
+const AppOrgSlugProjectsProjectSlugEditRoute =
+  AppOrgSlugProjectsProjectSlugEditRouteImport.update({
+    id: '/projects/$projectSlug/edit',
+    path: '/projects/$projectSlug/edit',
+    getParentRoute: () => AppOrgSlugRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -148,20 +223,32 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/app/$orgSlug': typeof AppOrgSlugRouteRouteWithChildren
+  '/s/$token': typeof STokenRouteRouteWithChildren
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
+  '/s/$token/check': typeof STokenCheckRoute
+  '/s/$token/done': typeof STokenDoneRoute
+  '/s/$token/interview': typeof STokenInterviewRoute
+  '/s/$token/privacy': typeof STokenPrivacyRoute
   '/app/$orgSlug/': typeof AppOrgSlugIndexRoute
+  '/s/$token/': typeof STokenIndexRoute
+  '/app/$orgSlug/candidates/$sessionId': typeof AppOrgSlugCandidatesSessionIdRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects/': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings/': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug/': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -173,15 +260,26 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/r/$shareToken': typeof RShareTokenRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
+  '/s/$token/check': typeof STokenCheckRoute
+  '/s/$token/done': typeof STokenDoneRoute
+  '/s/$token/interview': typeof STokenInterviewRoute
+  '/s/$token/privacy': typeof STokenPrivacyRoute
   '/app/$orgSlug': typeof AppOrgSlugIndexRoute
+  '/s/$token': typeof STokenIndexRoute
+  '/app/$orgSlug/candidates/$sessionId': typeof AppOrgSlugCandidatesSessionIdRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -192,20 +290,32 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/app/$orgSlug': typeof AppOrgSlugRouteRouteWithChildren
+  '/s/$token': typeof STokenRouteRouteWithChildren
   '/accept-invite/$token': typeof AcceptInviteTokenRoute
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
   '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
+  '/s/$token/check': typeof STokenCheckRoute
+  '/s/$token/done': typeof STokenDoneRoute
+  '/s/$token/interview': typeof STokenInterviewRoute
+  '/s/$token/privacy': typeof STokenPrivacyRoute
   '/app/$orgSlug/': typeof AppOrgSlugIndexRoute
+  '/s/$token/': typeof STokenIndexRoute
+  '/app/$orgSlug/candidates/$sessionId': typeof AppOrgSlugCandidatesSessionIdRoute
+  '/app/$orgSlug/projects/new': typeof AppOrgSlugProjectsNewRoute
   '/app/$orgSlug/settings/general': typeof AppOrgSlugSettingsGeneralRoute
   '/app/$orgSlug/settings/invitations': typeof AppOrgSlugSettingsInvitationsRoute
   '/app/$orgSlug/settings/members': typeof AppOrgSlugSettingsMembersRoute
+  '/app/$orgSlug/projects/': typeof AppOrgSlugProjectsIndexRoute
   '/app/$orgSlug/settings/': typeof AppOrgSlugSettingsIndexRoute
+  '/app/$orgSlug/projects/$projectSlug/edit': typeof AppOrgSlugProjectsProjectSlugEditRoute
+  '/app/$orgSlug/projects/$projectSlug/': typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -217,20 +327,32 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/app/$orgSlug'
+    | '/s/$token'
     | '/accept-invite/$token'
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/r/$shareToken'
     | '/app/'
     | '/app/$orgSlug/settings'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
+    | '/s/$token/check'
+    | '/s/$token/done'
+    | '/s/$token/interview'
+    | '/s/$token/privacy'
     | '/app/$orgSlug/'
+    | '/s/$token/'
+    | '/app/$orgSlug/candidates/$sessionId'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects/'
     | '/app/$orgSlug/settings/'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -242,15 +364,26 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/r/$shareToken'
     | '/app'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
+    | '/s/$token/check'
+    | '/s/$token/done'
+    | '/s/$token/interview'
+    | '/s/$token/privacy'
     | '/app/$orgSlug'
+    | '/s/$token'
+    | '/app/$orgSlug/candidates/$sessionId'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects'
     | '/app/$orgSlug/settings'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug'
   id:
     | '__root__'
     | '/'
@@ -260,20 +393,32 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/app/$orgSlug'
+    | '/s/$token'
     | '/accept-invite/$token'
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/r/$shareToken'
     | '/app/'
     | '/app/$orgSlug/settings'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
     | '/app/$orgSlug/items'
+    | '/s/$token/check'
+    | '/s/$token/done'
+    | '/s/$token/interview'
+    | '/s/$token/privacy'
     | '/app/$orgSlug/'
+    | '/s/$token/'
+    | '/app/$orgSlug/candidates/$sessionId'
+    | '/app/$orgSlug/projects/new'
     | '/app/$orgSlug/settings/general'
     | '/app/$orgSlug/settings/invitations'
     | '/app/$orgSlug/settings/members'
+    | '/app/$orgSlug/projects/'
     | '/app/$orgSlug/settings/'
+    | '/app/$orgSlug/projects/$projectSlug/edit'
+    | '/app/$orgSlug/projects/$projectSlug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -283,7 +428,9 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  STokenRouteRoute: typeof STokenRouteRouteWithChildren
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
+  RShareTokenRoute: typeof RShareTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -338,6 +485,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/r/$shareToken': {
+      id: '/r/$shareToken'
+      path: '/r/$shareToken'
+      fullPath: '/r/$shareToken'
+      preLoaderRoute: typeof RShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/onboarding': {
       id: '/app/onboarding'
       path: '/onboarding'
@@ -366,6 +520,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/s/$token': {
+      id: '/s/$token'
+      path: '/s/$token'
+      fullPath: '/s/$token'
+      preLoaderRoute: typeof STokenRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/$orgSlug': {
       id: '/app/$orgSlug'
       path: '/$orgSlug'
@@ -373,12 +534,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgSlugRouteRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/s/$token/': {
+      id: '/s/$token/'
+      path: '/'
+      fullPath: '/s/$token/'
+      preLoaderRoute: typeof STokenIndexRouteImport
+      parentRoute: typeof STokenRouteRoute
+    }
     '/app/$orgSlug/': {
       id: '/app/$orgSlug/'
       path: '/'
       fullPath: '/app/$orgSlug/'
       preLoaderRoute: typeof AppOrgSlugIndexRouteImport
       parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/s/$token/privacy': {
+      id: '/s/$token/privacy'
+      path: '/privacy'
+      fullPath: '/s/$token/privacy'
+      preLoaderRoute: typeof STokenPrivacyRouteImport
+      parentRoute: typeof STokenRouteRoute
+    }
+    '/s/$token/interview': {
+      id: '/s/$token/interview'
+      path: '/interview'
+      fullPath: '/s/$token/interview'
+      preLoaderRoute: typeof STokenInterviewRouteImport
+      parentRoute: typeof STokenRouteRoute
+    }
+    '/s/$token/done': {
+      id: '/s/$token/done'
+      path: '/done'
+      fullPath: '/s/$token/done'
+      preLoaderRoute: typeof STokenDoneRouteImport
+      parentRoute: typeof STokenRouteRoute
+    }
+    '/s/$token/check': {
+      id: '/s/$token/check'
+      path: '/check'
+      fullPath: '/s/$token/check'
+      preLoaderRoute: typeof STokenCheckRouteImport
+      parentRoute: typeof STokenRouteRoute
     }
     '/app/$orgSlug/items': {
       id: '/app/$orgSlug/items'
@@ -415,6 +611,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppOrgSlugSettingsIndexRouteImport
       parentRoute: typeof AppOrgSlugSettingsRouteRoute
     }
+    '/app/$orgSlug/projects/': {
+      id: '/app/$orgSlug/projects/'
+      path: '/projects'
+      fullPath: '/app/$orgSlug/projects/'
+      preLoaderRoute: typeof AppOrgSlugProjectsIndexRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
     '/app/$orgSlug/settings/members': {
       id: '/app/$orgSlug/settings/members'
       path: '/members'
@@ -435,6 +638,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/$orgSlug/settings/general'
       preLoaderRoute: typeof AppOrgSlugSettingsGeneralRouteImport
       parentRoute: typeof AppOrgSlugSettingsRouteRoute
+    }
+    '/app/$orgSlug/projects/new': {
+      id: '/app/$orgSlug/projects/new'
+      path: '/projects/new'
+      fullPath: '/app/$orgSlug/projects/new'
+      preLoaderRoute: typeof AppOrgSlugProjectsNewRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/app/$orgSlug/candidates/$sessionId': {
+      id: '/app/$orgSlug/candidates/$sessionId'
+      path: '/candidates/$sessionId'
+      fullPath: '/app/$orgSlug/candidates/$sessionId'
+      preLoaderRoute: typeof AppOrgSlugCandidatesSessionIdRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/app/$orgSlug/projects/$projectSlug/': {
+      id: '/app/$orgSlug/projects/$projectSlug/'
+      path: '/projects/$projectSlug'
+      fullPath: '/app/$orgSlug/projects/$projectSlug/'
+      preLoaderRoute: typeof AppOrgSlugProjectsProjectSlugIndexRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
+    }
+    '/app/$orgSlug/projects/$projectSlug/edit': {
+      id: '/app/$orgSlug/projects/$projectSlug/edit'
+      path: '/projects/$projectSlug/edit'
+      fullPath: '/app/$orgSlug/projects/$projectSlug/edit'
+      preLoaderRoute: typeof AppOrgSlugProjectsProjectSlugEditRouteImport
+      parentRoute: typeof AppOrgSlugRouteRoute
     }
   }
 }
@@ -464,6 +695,11 @@ interface AppOrgSlugRouteRouteChildren {
   AppOrgSlugChangelogRoute: typeof AppOrgSlugChangelogRoute
   AppOrgSlugItemsRoute: typeof AppOrgSlugItemsRoute
   AppOrgSlugIndexRoute: typeof AppOrgSlugIndexRoute
+  AppOrgSlugCandidatesSessionIdRoute: typeof AppOrgSlugCandidatesSessionIdRoute
+  AppOrgSlugProjectsNewRoute: typeof AppOrgSlugProjectsNewRoute
+  AppOrgSlugProjectsIndexRoute: typeof AppOrgSlugProjectsIndexRoute
+  AppOrgSlugProjectsProjectSlugEditRoute: typeof AppOrgSlugProjectsProjectSlugEditRoute
+  AppOrgSlugProjectsProjectSlugIndexRoute: typeof AppOrgSlugProjectsProjectSlugIndexRoute
 }
 
 const AppOrgSlugRouteRouteChildren: AppOrgSlugRouteRouteChildren = {
@@ -471,6 +707,13 @@ const AppOrgSlugRouteRouteChildren: AppOrgSlugRouteRouteChildren = {
   AppOrgSlugChangelogRoute: AppOrgSlugChangelogRoute,
   AppOrgSlugItemsRoute: AppOrgSlugItemsRoute,
   AppOrgSlugIndexRoute: AppOrgSlugIndexRoute,
+  AppOrgSlugCandidatesSessionIdRoute: AppOrgSlugCandidatesSessionIdRoute,
+  AppOrgSlugProjectsNewRoute: AppOrgSlugProjectsNewRoute,
+  AppOrgSlugProjectsIndexRoute: AppOrgSlugProjectsIndexRoute,
+  AppOrgSlugProjectsProjectSlugEditRoute:
+    AppOrgSlugProjectsProjectSlugEditRoute,
+  AppOrgSlugProjectsProjectSlugIndexRoute:
+    AppOrgSlugProjectsProjectSlugIndexRoute,
 }
 
 const AppOrgSlugRouteRouteWithChildren = AppOrgSlugRouteRoute._addFileChildren(
@@ -497,6 +740,26 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
   AppRouteRouteChildren,
 )
 
+interface STokenRouteRouteChildren {
+  STokenCheckRoute: typeof STokenCheckRoute
+  STokenDoneRoute: typeof STokenDoneRoute
+  STokenInterviewRoute: typeof STokenInterviewRoute
+  STokenPrivacyRoute: typeof STokenPrivacyRoute
+  STokenIndexRoute: typeof STokenIndexRoute
+}
+
+const STokenRouteRouteChildren: STokenRouteRouteChildren = {
+  STokenCheckRoute: STokenCheckRoute,
+  STokenDoneRoute: STokenDoneRoute,
+  STokenInterviewRoute: STokenInterviewRoute,
+  STokenPrivacyRoute: STokenPrivacyRoute,
+  STokenIndexRoute: STokenIndexRoute,
+}
+
+const STokenRouteRouteWithChildren = STokenRouteRoute._addFileChildren(
+  STokenRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
@@ -504,7 +767,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  STokenRouteRoute: STokenRouteRouteWithChildren,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
+  RShareTokenRoute: RShareTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

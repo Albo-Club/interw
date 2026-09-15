@@ -30,6 +30,25 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   },
   // Chat messages: per user. AI calls are expensive.
   chatSend: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 10 },
+  // Job-ad import: per user. Each call is an outbound fetch plus a model
+  // call, so it is both costly and an SSRF-adjacent surface.
+  jobImport: { kind: 'token bucket', rate: 20, period: HOUR, capacity: 5 },
+  // Candidate invitations: per recruiter. A bulk paste is one call, so this
+  // caps campaigns rather than individual addresses.
+  candidateInvite: {
+    kind: 'token bucket',
+    rate: 40,
+    period: HOUR,
+    capacity: 10,
+  },
+  // Candidate reads, keyed by token. Generous — a candidate reloading a page
+  // mid-interview must never be locked out — but bounded, because these are
+  // the only functions reachable without an account.
+  candidateRead: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 60 },
+  // Candidate writes, keyed by token: consent, profile, segment bookkeeping.
+  candidateWrite: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
+  // Report share views, keyed by share token.
+  shareView: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
 })
 
 type LimitName =
@@ -38,6 +57,11 @@ type LimitName =
   | 'verificationSend'
   | 'passwordResetSend'
   | 'chatSend'
+  | 'jobImport'
+  | 'candidateInvite'
+  | 'candidateRead'
+  | 'candidateWrite'
+  | 'shareView'
 
 /**
  * Throws a friendly ConvexError when a limit is hit. The data payload includes

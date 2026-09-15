@@ -1,4 +1,12 @@
 {
+  "async-interviews": {
+    "title": "Asynchronous video interviews",
+    "body": "Create a role, record your questions on camera, and invite candidates by email. They answer from their browser whenever suits them, and you get a report scored against the criteria you set — with every claim linked to the moment in the video that backs it."
+  },
+  "report-sharing": {
+    "title": "Share a report by link",
+    "body": "Send one report to a hiring manager without giving them an account. Links expire on a schedule you choose and can be revoked at any time. They show the assessment and the recordings behind it — never your private notes or the candidate’s documents."
+  },
   "metaTitle": "What's new — interw",
   "button": "What's new",
   "title": "What's new",

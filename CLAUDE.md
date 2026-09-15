@@ -520,3 +520,102 @@ export const remove = mutation({
   the one thing worth an entry despite being invisible in normal use; word it
   as the reassurance ("we hardened X"), never as a map of the vectors, since
   projects forked from here may still be unpatched.
+
+---
+
+# Interw domain rules
+
+Rules that apply to every change in this product, not a record of what was
+built. The *why* behind each one is in `KNOWN_ISSUES.md`; the manual
+verification is in `TESTING.md`.
+
+## Commands that must pass before a commit
+
+- `pnpm codegen:api` after adding, renaming or removing a Convex module.
+  `pnpm codegen:api:check` runs in CI and fails on stale codegen.
+- `pnpm audit:access:check` — fails on any **public** Convex function with no
+  access check. Also in CI.
+- `pnpm test` — unit and `convex-test` integration suites.
+
+## Access control
+
+- Every new **public** Convex function calls a `require*` guard, or resolves a
+  candidate/share token, as its first act. If a function is genuinely meant to
+  be open, say so in a `// access: <reason>` comment directly above the export
+  — the audit reads it and prints it, so exceptions stay few and visible.
+- Never return a database row to a candidate or to a share link. Build the
+  response with the explicit projectors in `convex/lib/candidateView.ts`, and
+  add the field there deliberately. The point is that a new column on
+  `sessions` cannot leak by default.
+- A candidate-facing function resolves its token through `by_token` before
+  anything else, and every token that fails to resolve fails **identically**.
+  Expiry is a state of a resolved session, not a resolution failure.
+- A caller never names the object key it wants to write. Derive it server-side
+  from the row it belongs to, and re-derive it on attach rather than trusting
+  the key you are handed.
+
+## Model output
+
+- Every structured model output is validated with Zod before it reaches a
+  caller, in `convex/lib/ai.ts`. **No repair pass, no silent defaults.** An
+  evaluation that does not validate is not an evaluation; the job fails and
+  the pool retries it.
+- Models address criteria and answers by **index**, never by id. An index
+  outside the range fails validation; an invented id has to be defended
+  against.
+- A skipped or duplicated criterion fails the whole report rather than
+  shifting the weighted average unnoticed. A report that is quietly wrong is
+  worse than one that retried.
+- Every claim in a report carries a quote, and every quote is re-anchored
+  against the transcript (`convex/lib/evidence.ts`). The model's own timestamp
+  is a fallback; an unmatched quote returns null rather than a guess.
+- Prompts live in `convex/lib/prompts.ts`, in English, parameterised by the
+  interview language. Model ids live in `convex/lib/ai.ts` and nowhere else.
+
+## The candidate surface
+
+- `src/routes/s/**` and `src/components/candidate/**` may import
+  `~/components/ui/*` and `~/lib/*`, and nothing else from the recruiter app.
+  ESLint enforces it; the previous build shipped 2.96 MB of JS to candidates
+  because everything sat in one import graph.
+- Every technical state has a visible rendering: recording, sending, retrying,
+  failed. A candidate gets one attempt — a failure they cannot see is an
+  interview lost days before anyone finds out.
+- `/s/**` and `/r/**` carry `noindex, nofollow`. These URLs are personal to
+  one person.
+
+## Pipeline
+
+- Every job checks at entry whether its result already exists, so a retry is a
+  no-op. Every transition is written to `jobLog` with its duration and
+  outcome.
+- **Never add a catch-up or repair script.** If a step can fail, the queue
+  retries it. The previous build had three of them, which mostly documented
+  that the normal path lost sessions.
+- A `catch` either logs a named event or rethrows. For the narrow set of calls
+  whose failure genuinely must not interrupt the user — a telemetry write, an
+  autoplay attempt — use `fireAndForget` from `~/lib/fire-and-forget`, which
+  makes the failure non-blocking rather than invisible.
+
+## Erasure
+
+- Objects are deleted **before** rows, always. A failure then leaves the row
+  intact and the next pass retries; the reverse order orphans media in a
+  bucket with nothing pointing at it.
+- A segment row is written **before** its upload, carrying the keys. That is
+  what makes erasure exact — even an answer whose upload failed is named in
+  the database.
+- Candidate self-erasure and recruiter deletion run the same code path, so
+  they cannot drift into deleting different things.
+- `purgeLog` stores a hash of the candidate's address, never the address.
+
+## AI and hiring
+
+- The AI disclaimer on a report is permanent and not dismissible. This is a
+  hiring decision; saying the score is machine-produced and the call is the
+  recruiter's is an obligation before it is a courtesy.
+- Assistant tools over recruiting data are **read-only**. A decision, an
+  invitation or a role change must never be reachable as a tool call — the
+  person accountable has to be the one who made it.
+- Every prompt touching a candidate carries the anti-discrimination clause
+  from `convex/lib/prompts.ts`. Never remove it to "shorten the prompt".

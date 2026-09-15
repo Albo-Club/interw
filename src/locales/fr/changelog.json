@@ -1,4 +1,12 @@
 {
+  "async-interviews": {
+    "title": "Entretiens vidéo asynchrones",
+    "body": "Créez un poste, enregistrez vos questions face caméra et invitez vos candidats par e-mail. Ils répondent depuis leur navigateur quand ils le souhaitent, et vous recevez un rapport évalué sur vos critères — avec, derrière chaque affirmation, le moment exact de la vidéo qui la justifie."
+  },
+  "report-sharing": {
+    "title": "Partager un rapport par lien",
+    "body": "Transmettez un rapport à un manager sans lui créer de compte. Le lien expire à la date que vous choisissez et se révoque à tout moment. Il affiche l'évaluation et les enregistrements qui l'appuient — jamais vos notes privées ni les documents du candidat."
+  },
   "metaTitle": "Nouveautés — interw",
   "button": "Nouveautés",
   "title": "Nouveautés",

@@ -224,11 +224,11 @@ function MessageParts({
 }
 
 // Empty-state suggestions, picked from the current route. Keys point to
-// `chat:suggestions.*`. The example agent only acts on `items`, so the set is
-// small; branch on the route to surface page-specific prompts as you add
-// tools.
+// `chat:suggestions.*`. They mirror what the agent can actually do — read
+// roles, candidates and reports — so a first click never lands on a refusal;
+// branch on the route to surface page-specific prompts as you add tools.
 function suggestionKeys(_pathname: string): Array<string> {
-  return ['listItems', 'createItem']
+  return ['listRoles', 'topCandidates']
 }
 
 export function AiPanel({

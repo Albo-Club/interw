@@ -1,6 +1,6 @@
 {
   "appName": "interw",
-  "appTitle": "interw — starter MVP",
+  "appTitle": "interw — entretiens vidéo asynchrones",
   "loadingEllipsis": "Chargement…",
   "notFoundPage": {
     "description": "Cette page n'existe pas ou a été déplacée.",
@@ -53,6 +53,22 @@
       "too_large": "L'image dépasse 20 Mo",
       "invalid_type": "Utilisez une image PNG, JPEG, WEBP ou GIF",
       "insufficient_role": "Réservé aux admins ou propriétaires"
+    }
+  },
+  "dataTable": {
+    "columnHeader": {
+      "asc": "Croissant",
+      "desc": "Décroissant",
+      "hide": "Masquer"
+    },
+    "pagination": {
+      "rowsSelected": "{{selected}} ligne(s) sélectionnée(s) sur {{total}}.",
+      "rowsPerPage": "Lignes par page",
+      "pageOf": "Page {{current}} sur {{total}}",
+      "firstPage": "Première page",
+      "previousPage": "Page précédente",
+      "nextPage": "Page suivante",
+      "lastPage": "Dernière page"
     }
   }
 }

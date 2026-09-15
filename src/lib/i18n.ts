@@ -12,7 +12,6 @@ import enValidation from '~/locales/en/validation.json'
 import enLanding from '~/locales/en/landing.json'
 import enNav from '~/locales/en/nav.json'
 import enDashboard from '~/locales/en/dashboard.json'
-import enItems from '~/locales/en/items.json'
 import enAccount from '~/locales/en/account.json'
 import enSettings from '~/locales/en/settings.json'
 import enChat from '~/locales/en/chat.json'
@@ -29,7 +28,6 @@ import frValidation from '~/locales/fr/validation.json'
 import frLanding from '~/locales/fr/landing.json'
 import frNav from '~/locales/fr/nav.json'
 import frDashboard from '~/locales/fr/dashboard.json'
-import frItems from '~/locales/fr/items.json'
 import frAccount from '~/locales/fr/account.json'
 import frSettings from '~/locales/fr/settings.json'
 import frChat from '~/locales/fr/chat.json'
@@ -47,7 +45,6 @@ export const NAMESPACES = [
   'landing',
   'nav',
   'dashboard',
-  'items',
   'account',
   'settings',
   'chat',
@@ -72,7 +69,6 @@ export const resources = {
     landing: enLanding,
     nav: enNav,
     dashboard: enDashboard,
-    items: enItems,
     account: enAccount,
     settings: enSettings,
     chat: enChat,
@@ -90,7 +86,6 @@ export const resources = {
     landing: frLanding,
     nav: frNav,
     dashboard: frDashboard,
-    items: frItems,
     account: frAccount,
     settings: frSettings,
     chat: frChat,

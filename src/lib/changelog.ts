@@ -4,15 +4,6 @@
 export const CHANGELOG_ENTRIES = [
   { id: 'report-sharing', date: '2026-09-14' },
   { id: 'async-interviews', date: '2026-09-14' },
-  { id: 'signin-hardening', date: '2026-08-24' },
-  { id: 'security-hardening', date: '2026-07-26' },
-  { id: 'changelog-page', date: '2026-07-02' },
-  { id: 'invite-no-verification', date: '2026-06-18' },
-  { id: 'ai-panel', date: '2026-06-15' },
-  { id: 'whats-new-panel', date: '2026-06-10' },
-  { id: 'ai-formatting', date: '2026-06-10' },
-  { id: 'loading-skeletons', date: '2026-06-10' },
-  { id: 'friendly-errors', date: '2026-06-10' },
 ] as const
 
 export const LATEST_CHANGELOG_ID = CHANGELOG_ENTRIES[0].id

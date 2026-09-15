@@ -23,7 +23,6 @@ import { CandidateSearch } from '~/components/candidates/CandidateSearch'
 type Crumb = { label: string; href?: string }
 
 const CRUMB_SEGMENTS = [
-  'items',
   'projects',
   'candidates',
   'settings',

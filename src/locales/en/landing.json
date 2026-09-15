@@ -1,7 +1,12 @@
 {
-  "metaTitle": "interw — MVP starter",
-  "metaDescription": "B2B MVP starter — TanStack Start + Convex.",
-  "tagline": "B2B MVP starter template. Auth, multi-tenant orgs, and AI chat are wired and ready.",
-  "signIn": "Sign in",
-  "createAccount": "Create account"
+  "metaTitle": "interw — asynchronous video interviews",
+  "metaDescription": "Record your interview questions on camera. Candidates answer from their browser, whenever suits them. Every claim in the report links to the second of video that backs it.",
+  "tagline": "Asynchronous video interviews, with the evidence attached.",
+  "steps": {
+    "ask": "You record your questions on camera, once.",
+    "answer": "Each candidate answers from their browser, whenever suits them.",
+    "evidence": "Every claim in the report links to the second of video that backs it."
+  },
+  "createAccount": "Create account",
+  "signIn": "Sign in"
 }

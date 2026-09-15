@@ -7,11 +7,11 @@
   "copy": "Copy",
   "thinking": "Thinking…",
   "scrollToBottom": "Scroll to bottom",
-  "emptyState": "Ask anything. The assistant can act on this organization (with your approval).",
+  "emptyState": "Ask anything. The assistant reads your roles, candidates and reports — it never changes them.",
   "inputPlaceholder": "Ask the assistant…",
   "suggestions": {
-    "listItems": "List my items",
-    "createItem": "Create an item called \"Roadmap\""
+    "listRoles": "List my open roles",
+    "topCandidates": "Which candidates scored highest so far?"
   },
   "approval": {
     "pending": "This action needs your approval.",

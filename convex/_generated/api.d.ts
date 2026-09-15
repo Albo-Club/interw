@@ -10,7 +10,6 @@
 
 import type * as admin from "../admin.js";
 import type * as agent from "../agent.js";
-import type * as agentTools from "../agentTools.js";
 import type * as auth from "../auth.js";
 import type * as candidate from "../candidate.js";
 import type * as chat from "../chat.js";
@@ -24,7 +23,6 @@ import type * as files from "../files.js";
 import type * as http from "../http.js";
 import type * as interview from "../interview.js";
 import type * as invitations from "../invitations.js";
-import type * as items from "../items.js";
 import type * as jobImport from "../jobImport.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_ai from "../lib/ai.js";
@@ -73,7 +71,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   agent: typeof agent;
-  agentTools: typeof agentTools;
   auth: typeof auth;
   candidate: typeof candidate;
   chat: typeof chat;
@@ -87,7 +84,6 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   interview: typeof interview;
   invitations: typeof invitations;
-  items: typeof items;
   jobImport: typeof jobImport;
   "lib/agentScope": typeof lib_agentScope;
   "lib/ai": typeof lib_ai;

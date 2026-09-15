@@ -27,6 +27,7 @@ undone later.
 | P3 | Verify the bucket is private | `curl -I https://<bucket>.<endpoint>/probe.txt` on an object you uploaded | Must be `403`. A `200` means every candidate recording is world-readable |
 | P4 | Model provider keys | `MISTRAL_API_KEY` (transcription) and `OPENROUTER_API_KEY` (evaluation) on the Convex deployment | The pipeline fails at the first step without them, visibly, in `jobLog` |
 | P5 | Resend delivery webhook | Point a Resend webhook at `https://<convex-site-url>/resend-webhook`, store `RESEND_WEBHOOK_SECRET` | Without it a bounced invitation is indistinguishable from a candidate who has not opened it |
+| P6a | `MEDIA_ORIGIN` on the **web server** (Vercel project env, or `.env.local` for `pnpm dev`) | The bucket origin signed URLs point at, e.g. `https://interw-media.s3.fr-par.scw.cloud` | The CSP is served by the web server, which never talks to the bucket, so this is the one object-store setting that does not live on the Convex deployment. Unset, `media-src` falls back to `https:` — video still plays, but from any host |
 | P6 | Sentry for the backend | Convex dashboard → Settings → Integrations → Sentry | Convex reports thrown exceptions from actions through its own log stream; there is deliberately no Sentry SDK in the Convex runtime. The code's part of the contract is to never swallow an error, which `pnpm lint` and code review enforce |
 
 ## Level 1 — Build & smoke (automated, 2 min)
@@ -37,7 +38,7 @@ undone later.
 | B1 | Typecheck     | `pnpm typecheck`         | Exit 0, no errors             |
 | B2 | Lint          | `pnpm lint`              | Exit 0, 0 warnings            |
 | B3 | Build         | `pnpm build`             | Bundle written to `.output/`  |
-| B4 | Smoke E2E     | `pnpm test:smoke`        | All scenarios pass            |
+| B4 | Smoke E2E     | `pnpm test:smoke`        | All scenarios pass. Covers the headers the product depends on (`camera=(self)`, `microphone=(self)`, a `media-src` carrying `blob:`) and the two token surfaces: `/s/<invalid>` and `/r/<invalid>` answer identically for an unknown and a malformed token, and both carry `noindex, nofollow` |
 | B5 | Prod cookies  | `pnpm test:cookies`      | `interw.session_token` has Secure+HttpOnly+SameSite=Lax+Max-Age≈604800 |
 | B6 | Skills intact | `pnpm sync:skills:verify` | `Vendored skills match skills-lock.json.` (exit 0) — offline, covers the `SKILL.md` files **and** their `references`, plus `.claude/skills/` symlinks with no lock entry (`~ <name>: .claude/skills link with no lock entry`, exit 2 — repair with `pnpm sync:skills`) |
 | B6b | Skills up-to-date | `pnpm sync:skills:check` | `Skills up to date with upstream.` (exit 0) — network. Two distinct failures, both exit 2: `~ N skills drifted` (upstream changed) and `✗ … N skills could not be checked` (404 or network — the skill is tracked by nothing) |
@@ -61,6 +62,7 @@ Test with a fresh user "Alice" (`alice@test.local`).
 
 | #   | Step                                                   | Expected result                                                                   |
 | --- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| A0  | `/` in EN then FR                                      | Value proposition (questions on camera → candidate answers when they want → every claim linked to its second of video) + primary "Create account" CTA. No "MVP starter" anywhere, including the browser tab title. |
 | A1  | `/register` → submit, onboarding org "Acme"            | Redirects to `/app/acme`, user created, `superAdmin: true` (first user). If `DEV_NOTIFY_EMAIL` is set, a "[interw] New signup: …" email arrives in that inbox (1× per new user, not on re-login). |
 | A2  | Sign out → re-sign in correct                          | Redirects to `/app/acme` (last org via `lastOrgSlug`)                              |
 | A3  | Sign in with wrong password                            | Inline destructive `<Alert>` above the form (not a toast). No session.            |
@@ -85,7 +87,7 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | A22 | Google OAuth failure (cancelled / error)               | Returns to `/login?error=…` → toast "Couldn't sign in with that provider".        |
 | A22b | **Google in prod** — after `pnpm run setup:prod` (Google creds present in dev) | `convex env list --prod` contains `GOOGLE_CLIENT_ID`; prod redirect URI added to the same Google client; button visible on prod domain, sign-in works. |
 | A24 | **Open redirect** — sign in from `/login?redirect=https://evil.com`, then from `/login?redirect=/%09/evil.com` (tab-smuggling) | Both land on `/app`, **never** off-site. The hostile param is dropped silently — normal login page, no error screen. Repeat with `//evil.com` and `/\evil.com`. |
-| A25 | **Return URL preserved** — sign in from `/login?redirect=/app/acme/items` | Lands on `/app/acme/items` (internal paths still work — the guard rejects origins, not paths). |
+| A25 | **Return URL preserved** — sign in from `/login?redirect=/app/acme/projects` | Lands on `/app/acme/projects` (internal paths still work — the guard rejects origins, not paths). |
 
 > **A23+ (known gaps)**: no "Password changed" email on the
 > `/forgot-password → /reset-password` flow, nor NewDeviceEmail — see
@@ -117,30 +119,29 @@ Logged in as Alice on `/app/acme/`.
 | SH1  | `inset` sidebar (floating rounded card): Platform group at top; Members / Invitations / Settings pinned at bottom (`mt-auto`, no label) | OK; admin-only items hidden for "member" role |
 | SH2  | Click `SidebarTrigger` (header) OR the `SidebarRail` (thin strip on the right edge of the sidebar) | Sidebar collapses to `icon`; `sidebar_state` cookie persists; org/profile icons not overwritten in `icon` mode |
 | SH3  | Resize < 768px                                                | Sidebar switches to `Sheet` mobile, opened via burger             |
-| SH4  | Navigate Dashboard → Items → Settings → Members              | Header breadcrumb updates on each route                           |
-| SH5  | Dashboard: 4 KPI cards + AreaChart + PieChart + recent items  | Counts consistent with real `items.list` / `listMembers`          |
+| SH4  | Navigate Dashboard → Roles → Settings → Members               | Header breadcrumb updates on each route                           |
+| SH5  | Dashboard: KPI cards + recent candidates                      | Counts consistent with `dashboard.overview` / `listMembers`       |
 | SH6  | Dark mode toggle (sun/moon icon in header)                    | Page switches light ↔ dark, sidebar + charts adapt               |
 | SH7  | Theme picker (sidebar footer) → choose Blue / Emerald / Violet | Primary + chart-1 change; survives reload (localStorage)          |
 | SH8  | Org switcher (sidebar header), org **without** a logo         | Initial (first letter) centered in the rounded square; lists orgs; click switches route + persists `lastOrgSlug` |
 | SH9  | NavUser (sidebar footer) → profile / switch org / sign out    | **Round** avatar; without photo, first+last initials (e.g. `BB`); same destinations as before the refactor |
 | SH10 | AI button in header (or ⌘J / Ctrl+J)                          | Toggles the AI panel (desktop rounded box / mobile overlay); state persists via the `ai_panel_state` cookie |
-| SH11 | Open a page taller than the viewport (e.g. long Items list)   | The `inset` frame stays fixed to viewport height; scroll happens **inside** the frame, rounded bottom edge always visible |
+| SH11 | Open a page taller than the viewport (e.g. a long roles list) | The `inset` frame stays fixed to viewport height; scroll happens **inside** the frame, rounded bottom edge always visible |
 | SH12 | Unknown URL (e.g. `/app/acme/nope` or `/nope`)                | Styled 404 card (FR/EN by locale) + back-home button              |
-| SH13 | Dashboard / Items on initial load                             | Animated skeletons (KPI, recent items, table) — no naked "Loading…" text |
-| SH14 | "What's new" button (sidebar footer, badge visible on first visit) | Dialog previews the 3 most recent dated FR/EN entries; badge disappears after opening and does not return on reload |
-| SH15 | "What's new" dialog → "See all updates" (`/app/$orgSlug/changelog`) | Dedicated page lists the full history newest-first, FR/EN by locale; browser tab title reflects the locale |
+| SH13 | Dashboard / Roles on initial load                             | Animated skeletons (KPI, recent candidates, table) — no naked "Loading…" text |
+| SH14 | "What's new" button (sidebar footer, badge visible on first visit) | Dialog previews the most recent dated FR/EN entries (up to 3); badge disappears after opening and does not return on reload. Every entry shows **prose**, never a raw `entries.<id>.title` key |
+| SH15 | "What's new" dialog → "See all updates" (`/app/$orgSlug/changelog`) | Dedicated page lists the full history newest-first, FR/EN by locale; browser tab title reflects the locale. The history is Interw's own — no entry from the template it was forked from |
 
-## Level 2 — Data table items (5 min)
+## Level 2 — Data table (5 min)
+
+On `/app/acme/projects` (roles) — the shared `src/components/data-table/`
+primitives, whose copy lives under `common:dataTable.*`.
 
 | #   | Step                                                 | Expected result                                                   |
 | --- | ---------------------------------------------------- | ----------------------------------------------------------------- |
-| T1  | Global filter ("Filter items…" field)                | Reduces rows in real time (title/description/createdBy)           |
-| T2  | Sort by "Created at" (click header → dropdown)       | Asc/Desc works, indicator visible                                 |
-| T3  | Pagination (create >10 items)                        | next/prev/first/last buttons + page size 10/20/30/50              |
-| T4  | Multi-select via checkbox                            | Counter "X of N row(s) selected" + "Delete X" button if admin     |
-| T5  | Bulk delete (admin only)                             | Confirms, deletes all, success toast                              |
-| T6  | "New item" → Dialog → submit                         | Item created, dialog closes, row appears at top (real-time)       |
-| T7  | Row actions (`…` menu) → Edit / Delete               | Edit opens the same Dialog in update mode; Delete asks confirmation |
+| T1  | Sort by a column (click header → dropdown)           | Asc/Desc works in both locales, indicator visible                 |
+| T2  | Pagination (create >10 roles)                        | next/prev/first/last buttons + page size 10/20/30/50              |
+| T3  | Page size + "X of N row(s) selected" counter         | Translated, no raw `common:dataTable.…` key on screen             |
 
 ## Level 2 — Multi-tenant (15 min)
 
@@ -151,14 +152,14 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | M1  | `/app/acme/settings/invitations` → invite `bob@test.local`  | Email sent, listed as pending                                       |
 | M2  | Browser 2 (incognito) → open the invitation link            | `/accept-invite/<token>` accessible unauthenticated                 |
 | M3  | Sign up Bob via the invitation flow                         | Bob created, automatically a member of Acme with "member" role. **No email-verification step**: the invite token pre-verifies the email (token-gated), Bob is signed in and lands on `/app/acme` directly |
-| M4  | Bob visits `/app/acme/items`                                | Sees the list (empty or Alice's items), can create                  |
+| M4  | Bob visits `/app/acme/projects`                             | Sees the roles he is allowed to see, can create one                 |
 | M5  | Alice changes Bob's role → "admin"                          | Persists, Bob sees the updated badge                                |
 | M6  | Bob creates a second org "Beta"                             | Switches to `/app/beta`, Alice is NOT a member                      |
 | M7  | Alice navigates to `/app/beta` directly                     | Redirects to `/app` or 403                                          |
-| M8  | Items isolated: Alice sees Acme items only                  | No Beta items on Alice's side                                       |
-| M9  | Switch org via top-bar dropdown                             | Routes recalculated, items reloaded                                 |
-| M10 | Bob (Acme admin) deletes an item created by Alice           | Allowed (admin override on creator-only)                            |
-| M11 | Non-admin member tries to delete another user's item        | Error "forbidden", no deletion                                      |
+| M8  | Roles isolated: Alice sees Acme roles only                  | No Beta role on Alice's side                                        |
+| M9  | Switch org via top-bar dropdown                             | Routes recalculated, roles reloaded                                 |
+| M10 | Bob (Acme admin) deletes a role created by Alice, no candidate invited yet | Allowed (owner/admin)                                 |
+| M11 | Non-admin member tries to delete another user's role        | Error "insufficient_role", no deletion                              |
 
 ## Level 3 — Invitations edge cases (8 min)
 
@@ -175,19 +176,6 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | I9 | **Token-gated security** — sign up at `/register` with NO valid invite token (normal signup) | Email is **not** pre-verified: verification email sent, `emailVerified` stays false until the link is clicked. A signup whose `inviteToken` is absent/stale/for another email never bypasses verification |
 | I10 | Email-match casing — invite `Bob@Test.local`, accept signed in as `bob@test.local` | Accepted (match is case- and whitespace-insensitive on both sides) |
 | I11 | Sign up from `/register?redirect=/accept-invite/<token>` (not the inline accept page) | Lands **in the org** (`/app/<org>`), not stuck on `/app`: token-gated signup → signin → full nav to the accept page, which attaches the member. Parity with the inline `/accept-invite` flow |
-
-## Level 3 — Items CRUD (8 min)
-
-| #  | Step                                                   | Expected result                                                   |
-| -- | ------------------------------------------------------ | ----------------------------------------------------------------- |
-| P1 | Create item via form                                   | Appears instantly in the list                                     |
-| P2 | Open the app in a second tab → create item from tab A  | Tab B sees the item without refresh (Convex real-time)            |
-| P3 | Edit item → save                                       | Title/description updated everywhere                              |
-| P4 | Delete item by its creator                             | Disappears                                                        |
-| P5 | Delete another user's item as a member                 | Blocked                                                           |
-| P6 | Empty title / > 120 chars                              | Server-side validation error                                      |
-| P7 | Description > 2000 chars                               | Error "description_too_long"                                      |
-| P8 | Items invisible from another org (cf. M8)              | Isolation confirmed                                               |
 
 ## Level 4 — Uploads (5 min)
 
@@ -226,9 +214,8 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | C1b | Press ⌘J / Ctrl+J (or the header AI button), then reload | Panel toggles; state persists across reload (cookie `ai_panel_state`) |
 | C2  | Send a simple message ("ping")                          | Stream visible token by token; "Thinking…" before first token; no UI blocking |
 | C2b | Ask for a formatted response ("bullet list + bold")     | Markdown rendered via streamdown (bullets, bold, inline code, tables) |
-| C3  | Ask the agent "list my items"                           | `listItems` runs (read, no approval), collapsible tool call, response lists Acme items |
-| C4  | "create an item titled Test"                            | `createItem` shows **Confirm / Reject** buttons; **Confirm** writes it and generation resumes; item visible in `/app/acme/items` |
-| C4b | Repeat, then click **Reject**                           | "Action rejected", nothing written; agent acknowledges            |
+| C3  | Ask the agent "list my open roles" (an empty-state suggestion) | `listRoles` runs (read-only, no approval), collapsible tool call, response lists Acme roles |
+| C4  | Ask it to reject a candidate, invite someone, or change a role | It refuses and points at where to do it in the app. **Every tool is read-only** — a hiring decision is never a tool call |
 | C5  | While a long answer streams, click **Stop**             | Generation aborts                                                 |
 | C6  | Spam 30 messages in 1 min                               | `chatSend` rate-limit triggers (also gates approvals)             |
 | C7  | New chat (+), rename and delete a conversation          | Title updates; thread + messages removed                          |
@@ -240,7 +227,7 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | -- | -------------------------------------------------- | ----------------------------------------------------------------- |
 | S1 | No secret with `VITE_` prefix                      | `grep -r "VITE_.*SECRET\|VITE_.*KEY"` → empty                    |
 | S2 | No top-level `process.env.X` in `src/`             | Check client-side bundle                                          |
-| S3 | Security headers present (CSP, HSTS, etc.)         | `curl -I http://localhost:3000` → expected headers                |
+| S3 | Security headers present (CSP, HSTS, etc.)         | `curl -I http://localhost:3000` → expected headers. Specifically `permissions-policy: camera=(self), microphone=(self)` — an empty `camera=()` denies the app's **own** camera — and a CSP `media-src` listing the bucket origin and `blob:` (B4 asserts both) |
 | S4 | Better Auth CORS restricted to `BETTER_AUTH_URL`   | Request from another origin → blocked                             |
 | S5 | Webhooks HMAC: modified payload → rejected         | Manual test with a tampered payload                               |
 | S6 | `pnpm build` + `pnpm start` (local prod)           | The prod bundle runs without warnings                             |
@@ -339,7 +326,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 ## Quick dev seed
 
 To save ~2 min of setup, a dev seed (called via `convex run`) can create
-Alice (SA), Bob (member), an "acme" org, and 3 items. Write it in
+Alice (SA), Bob (member), an "acme" org, and a role with 3 questions. Write it in
 `convex/admin.ts` as an `internalMutation` named `seedDev`, gated behind
 `process.env.CONVEX_DEPLOYMENT !== 'production'`.
 

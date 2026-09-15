@@ -3,7 +3,6 @@
     "ai": "AI",
     "aiToggle": "Toggle AI panel (⌘J)",
     "breadcrumb": {
-      "items": "Items",
       "settings": "Settings",
       "members": "Members",
       "invitations": "Invitations",
@@ -18,7 +17,6 @@
   },
   "items": {
     "dashboard": "Dashboard",
-    "items": "Items",
     "members": "Members",
     "invitations": "Invitations",
     "settings": "Settings",

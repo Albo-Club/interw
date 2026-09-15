@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { Clock, Quote, Video } from 'lucide-react'
 
 import { Button } from '~/components/ui/button'
 import { Logo } from '~/components/Logo'
@@ -26,22 +27,43 @@ function Home() {
   const { t } = useTranslation('landing')
   return (
     <main className="relative flex min-h-svh flex-col items-center justify-center gap-8 p-8">
-      <div className="absolute right-4 top-4">
+      <div className="absolute top-4 right-4">
         <LanguageSwitcher />
       </div>
       <Logo className="h-10" />
-      <h1 className="text-4xl font-bold tracking-tight">interw</h1>
-      <p className="text-muted-foreground max-w-md text-center text-sm">
+      <h1 className="text-center text-4xl font-bold tracking-tight text-balance">
         {t('tagline')}
-      </p>
+      </h1>
+      <ul className="text-muted-foreground max-w-md space-y-3 text-sm">
+        <Step icon={<Video className="size-4" />}>{t('steps.ask')}</Step>
+        <Step icon={<Clock className="size-4" />}>{t('steps.answer')}</Step>
+        <Step icon={<Quote className="size-4" />}>{t('steps.evidence')}</Step>
+      </ul>
       <div className="flex gap-3">
         <Button asChild>
-          <Link to="/login">{t('signIn')}</Link>
+          <Link to="/register">{t('createAccount')}</Link>
         </Button>
         <Button asChild variant="outline">
-          <Link to="/register">{t('createAccount')}</Link>
+          <Link to="/login">{t('signIn')}</Link>
         </Button>
       </div>
     </main>
+  )
+}
+
+function Step({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span aria-hidden="true" className="mt-0.5 shrink-0">
+        {icon}
+      </span>
+      <span className="leading-relaxed">{children}</span>
+    </li>
   )
 }

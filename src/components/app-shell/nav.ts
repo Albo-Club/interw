@@ -2,7 +2,6 @@ import {
   Briefcase,
   LayoutDashboard,
   Mail,
-  Package,
   Settings,
   Users,
 } from 'lucide-react'
@@ -37,11 +36,6 @@ export function getNavGroups(): Array<NavGroup> {
           titleKey: 'items.projects',
           to: '/app/$orgSlug/projects',
           icon: Briefcase,
-        },
-        {
-          titleKey: 'items.items',
-          to: '/app/$orgSlug/items',
-          icon: Package,
         },
       ],
     },

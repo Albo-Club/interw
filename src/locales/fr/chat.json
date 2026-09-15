@@ -7,11 +7,11 @@
   "copy": "Copier",
   "thinking": "Réflexion…",
   "scrollToBottom": "Aller en bas",
-  "emptyState": "Posez votre question. L'assistant peut agir sur cette organisation (après votre validation).",
+  "emptyState": "Posez votre question. L'assistant lit vos postes, vos candidats et vos rapports — il ne les modifie jamais.",
   "inputPlaceholder": "Posez votre question à l'assistant…",
   "suggestions": {
-    "listItems": "Liste mes éléments",
-    "createItem": "Crée un élément nommé « Roadmap »"
+    "listRoles": "Liste mes postes ouverts",
+    "topCandidates": "Quels candidats ont les meilleurs scores pour l’instant ?"
   },
   "approval": {
     "pending": "Cette action nécessite votre validation.",

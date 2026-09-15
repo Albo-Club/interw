@@ -3,7 +3,6 @@
     "ai": "IA",
     "aiToggle": "Afficher/masquer le panneau IA (⌘J)",
     "breadcrumb": {
-      "items": "Éléments",
       "settings": "Paramètres",
       "members": "Membres",
       "invitations": "Invitations",
@@ -18,7 +17,6 @@
   },
   "items": {
     "dashboard": "Tableau de bord",
-    "items": "Éléments",
     "members": "Membres",
     "invitations": "Invitations",
     "settings": "Paramètres",

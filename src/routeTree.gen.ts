@@ -29,7 +29,6 @@ import { Route as STokenPrivacyRouteImport } from './routes/s/$token/privacy'
 import { Route as STokenInterviewRouteImport } from './routes/s/$token/interview'
 import { Route as STokenDoneRouteImport } from './routes/s/$token/done'
 import { Route as STokenCheckRouteImport } from './routes/s/$token/check'
-import { Route as AppOrgSlugItemsRouteImport } from './routes/app/$orgSlug/items'
 import { Route as AppOrgSlugChangelogRouteImport } from './routes/app/$orgSlug/changelog'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AppOrgSlugSettingsRouteRouteImport } from './routes/app/$orgSlug/settings/route'
@@ -143,11 +142,6 @@ const STokenCheckRoute = STokenCheckRouteImport.update({
   path: '/check',
   getParentRoute: () => STokenRouteRoute,
 } as any)
-const AppOrgSlugItemsRoute = AppOrgSlugItemsRouteImport.update({
-  id: '/items',
-  path: '/items',
-  getParentRoute: () => AppOrgSlugRouteRoute,
-} as any)
 const AppOrgSlugChangelogRoute = AppOrgSlugChangelogRouteImport.update({
   id: '/changelog',
   path: '/changelog',
@@ -233,7 +227,6 @@ export interface FileRoutesByFullPath {
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
-  '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/s/$token/check': typeof STokenCheckRoute
   '/s/$token/done': typeof STokenDoneRoute
   '/s/$token/interview': typeof STokenInterviewRoute
@@ -264,7 +257,6 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
-  '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/s/$token/check': typeof STokenCheckRoute
   '/s/$token/done': typeof STokenDoneRoute
   '/s/$token/interview': typeof STokenInterviewRoute
@@ -300,7 +292,6 @@ export interface FileRoutesById {
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/app/$orgSlug/changelog': typeof AppOrgSlugChangelogRoute
-  '/app/$orgSlug/items': typeof AppOrgSlugItemsRoute
   '/s/$token/check': typeof STokenCheckRoute
   '/s/$token/done': typeof STokenDoneRoute
   '/s/$token/interview': typeof STokenInterviewRoute
@@ -337,7 +328,6 @@ export interface FileRouteTypes {
     | '/app/$orgSlug/settings'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
-    | '/app/$orgSlug/items'
     | '/s/$token/check'
     | '/s/$token/done'
     | '/s/$token/interview'
@@ -368,7 +358,6 @@ export interface FileRouteTypes {
     | '/app'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
-    | '/app/$orgSlug/items'
     | '/s/$token/check'
     | '/s/$token/done'
     | '/s/$token/interview'
@@ -403,7 +392,6 @@ export interface FileRouteTypes {
     | '/app/$orgSlug/settings'
     | '/api/auth/$'
     | '/app/$orgSlug/changelog'
-    | '/app/$orgSlug/items'
     | '/s/$token/check'
     | '/s/$token/done'
     | '/s/$token/interview'
@@ -576,13 +564,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof STokenCheckRouteImport
       parentRoute: typeof STokenRouteRoute
     }
-    '/app/$orgSlug/items': {
-      id: '/app/$orgSlug/items'
-      path: '/items'
-      fullPath: '/app/$orgSlug/items'
-      preLoaderRoute: typeof AppOrgSlugItemsRouteImport
-      parentRoute: typeof AppOrgSlugRouteRoute
-    }
     '/app/$orgSlug/changelog': {
       id: '/app/$orgSlug/changelog'
       path: '/changelog'
@@ -693,7 +674,6 @@ const AppOrgSlugSettingsRouteRouteWithChildren =
 interface AppOrgSlugRouteRouteChildren {
   AppOrgSlugSettingsRouteRoute: typeof AppOrgSlugSettingsRouteRouteWithChildren
   AppOrgSlugChangelogRoute: typeof AppOrgSlugChangelogRoute
-  AppOrgSlugItemsRoute: typeof AppOrgSlugItemsRoute
   AppOrgSlugIndexRoute: typeof AppOrgSlugIndexRoute
   AppOrgSlugCandidatesSessionIdRoute: typeof AppOrgSlugCandidatesSessionIdRoute
   AppOrgSlugProjectsNewRoute: typeof AppOrgSlugProjectsNewRoute
@@ -705,7 +685,6 @@ interface AppOrgSlugRouteRouteChildren {
 const AppOrgSlugRouteRouteChildren: AppOrgSlugRouteRouteChildren = {
   AppOrgSlugSettingsRouteRoute: AppOrgSlugSettingsRouteRouteWithChildren,
   AppOrgSlugChangelogRoute: AppOrgSlugChangelogRoute,
-  AppOrgSlugItemsRoute: AppOrgSlugItemsRoute,
   AppOrgSlugIndexRoute: AppOrgSlugIndexRoute,
   AppOrgSlugCandidatesSessionIdRoute: AppOrgSlugCandidatesSessionIdRoute,
   AppOrgSlugProjectsNewRoute: AppOrgSlugProjectsNewRoute,

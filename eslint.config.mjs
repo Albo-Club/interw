@@ -38,7 +38,6 @@ export default defineConfig([
                 '~/components/ai/*',
                 '~/components/ai-elements/*',
                 '~/components/dashboard/*',
-                '~/components/items/*',
                 '~/components/data-table/*',
                 '~/components/auth/*',
                 '~/components/report/*',

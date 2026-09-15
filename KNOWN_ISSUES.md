@@ -256,6 +256,52 @@ across non-auth routes that pre-date Phase 0/1 and want a separate
 cleanup PR. The new Phase 1 files (`hibp.ts`, `auth-errors.ts`,
 `password-input.tsx`, `password-strength.tsx`) lint clean.
 
+## The template's HTTP headers denied the camera, and muted every video
+
+`src/start.ts` sets the security headers on every response. Two of them came
+from the template — written for an app with no camera and no media — and were
+never revisited when the product grew both. They shipped for a whole build.
+
+**`Permissions-Policy: camera=(), microphone=()`.** An empty allowlist `()`
+means *no origin at all, `self` included*: it denies the capability to the
+document that sent the header. Every `getUserMedia` call in the product
+(`src/routes/s/$token/interview.tsx`, `src/routes/s/$token/check.tsx`,
+`src/components/projects/MediaRecorderField.tsx`) fails with
+`NotAllowedError` on Chrome and Edge — and `check.tsx` reads that error as
+"the candidate refused permission" and tells them to click a browser icon
+that is not there. The value that grants the capability to the app and to
+nobody else is `camera=(self), microphone=(self)`.
+
+**A CSP with no `media-src`.** Missing, it falls back to `default-src 'self'`,
+which blocks every `<video src="https://….scw.cloud/…">`: recruiter question
+media, the candidate's answers on the review screen, and the shared report all
+play nothing, with no error the user can see. `blob:` belongs in the directive
+too — local previews are object URLs, not bucket URLs.
+
+**The aggravating part**: `scripts/e2e-smoke.mjs` *asserted* `camera=()`. The
+only automated check that touched these headers was holding the bug in place.
+An assertion that encodes what the code currently emits is not a check; it has
+to encode what the product needs.
+
+The headers now live in `src/lib/security-headers.ts` as data, with
+`src/lib/security-headers.test.ts` over them, because two strings that decide
+whether the product works at all should not be reachable only by booting a
+browser.
+
+### `MEDIA_ORIGIN` is a web-server variable, not a Convex one
+
+Every other object-store setting (`OBJECT_STORE_*`) lives on the Convex
+deployment, which is where signed URLs are minted. But the CSP is served by
+the TanStack Start server, which never talks to the bucket and therefore knows
+nothing about it. Hence one deliberately duplicated setting: `MEDIA_ORIGIN`
+(e.g. `https://interw-media.s3.fr-par.scw.cloud`) on the **web server**
+environment — Vercel project settings, or `.env.local` for `pnpm dev`. Unset,
+`media-src` falls back to `https:`, so a deployment that has not wired it
+plays video instead of failing silently; set, it pins playback to the one host
+it should ever come from. It is read inside the middleware's server handler,
+never at module scope — `src/start.ts` is the isomorphic Start entry, and
+`process` does not exist in the browser.
+
 ## A return-URL search param needs the URL parser, not a regex
 
 `/login` takes `?redirect=` and, after a successful `signIn.email`, calls

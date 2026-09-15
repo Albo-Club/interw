@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Automated smoke tests for albo-ouvre-boite.
-// Covers: dev server reachability, security headers, public routes,
-// Better Auth proxy health, anonymous API sanity, HTML response shape.
+// Automated smoke tests for interw.
+// Covers: dev server reachability, security headers, public routes, the
+// candidate and shared-report surfaces under an invalid token, Better Auth
+// proxy health, anonymous API sanity, HTML response shape.
 //
 // Usage:
 //   pnpm run dev                   # in another terminal
@@ -102,7 +103,11 @@ async function checkHeaders() {
     'x-content-type-options': 'nosniff',
     'referrer-policy': 'strict-origin-when-cross-origin',
     'strict-transport-security': /max-age=\d{4,}/,
-    'permissions-policy': /camera=\(\)/,
+    // `camera=()` is an EMPTY allowlist: it denies the capability to the
+    // document itself, so the candidate cannot record. This assertion used
+    // to demand exactly that (audit 2026-09-15, B1) — the one automated
+    // check on these headers was pinning the bug in place.
+    'permissions-policy': /camera=\(self\)[,\s]+microphone=\(self\)/,
     'content-security-policy': /default-src 'self'/,
   }
   for (const [h, expected] of Object.entries(want)) {
@@ -119,6 +124,17 @@ async function checkHeaders() {
       else ko(`Header ${h}`, `expected "${expected}", got "${got}"`)
     }
   }
+
+  // Second assertion on the CSP: without `media-src`, `default-src 'self'`
+  // blocks every recording served from the bucket — recruiter questions,
+  // candidate answers, shared reports (B2).
+  const csp = res.headers.get('content-security-policy') ?? ''
+  const mediaSrc = /media-src ([^;]+)/.exec(csp)
+  if (mediaSrc && mediaSrc[1].includes('blob:')) {
+    ok('CSP media-src', mediaSrc[1].trim())
+  } else {
+    ko('CSP media-src', csp ? 'missing, or without blob:' : 'no CSP header')
+  }
 }
 
 async function checkPublicRoutes() {
@@ -129,6 +145,85 @@ async function checkPublicRoutes() {
   await checkRoute('/accept-invite/this-token-does-not-exist', {
     name: 'GET /accept-invite/<garbage>',
   })
+}
+
+// A token of the right shape that belongs to nobody, and a string that is not
+// a token at all. Both must produce exactly the same page: telling "no such
+// link" apart from "malformed" is information about other people's links, and
+// these two surfaces are the whole security model for candidate recordings
+// and shared reports.
+const UNKNOWN_TOKEN = 'C0FFEE_smoke-test-token-that-belongs-to-nobody'
+const MALFORMED_TOKEN = 'nope'
+
+/**
+ * Strip what legitimately differs between two SSR responses: the token itself
+ * (it is in the URL and in the dehydrated router state) and epoch-millisecond
+ * timestamps. What is left must match, or the two answers are distinguishable.
+ */
+function normalise(html, token) {
+  return html.split(token).join('<token>').replace(/\d{10,}/g, '<ts>')
+}
+
+async function checkTokenSurface(prefix, label) {
+  let unknown
+  let malformed
+  try {
+    ;[unknown, malformed] = await Promise.all([
+      fetch(`${BASE}${prefix}/${UNKNOWN_TOKEN}`),
+      fetch(`${BASE}${prefix}/${MALFORMED_TOKEN}`),
+    ])
+  } catch (err) {
+    ko(`GET ${prefix}/<invalid>`, `${(err && err.message) || err}`)
+    return
+  }
+
+  if (unknown.status >= 500 || malformed.status >= 500) {
+    ko(
+      `${label}: invalid token does not 5xx`,
+      `unknown ${unknown.status}, malformed ${malformed.status}`,
+    )
+  } else if (unknown.status !== malformed.status) {
+    ko(
+      `${label}: unknown and malformed tokens answer alike`,
+      `unknown ${unknown.status}, malformed ${malformed.status}`,
+    )
+  } else {
+    ok(`${label}: invalid token`, `both ${unknown.status}`)
+  }
+
+  const [unknownBody, malformedBody] = await Promise.all([
+    unknown.text(),
+    malformed.text(),
+  ])
+
+  if (
+    normalise(unknownBody, UNKNOWN_TOKEN) ===
+    normalise(malformedBody, MALFORMED_TOKEN)
+  ) {
+    ok(`${label}: unknown and malformed tokens are indistinguishable`)
+  } else {
+    ko(
+      `${label}: unknown and malformed tokens are indistinguishable`,
+      'the two responses differ once the token is masked',
+    )
+  }
+
+  // These URLs are personal to one person. A crawler that finds one must not
+  // put an interview — or a named person's assessment — in a search result.
+  const noindex = /<meta[^>]+name="robots"[^>]+content="noindex, nofollow"/
+  for (const [what, body] of [
+    ['unknown', unknownBody],
+    ['malformed', malformedBody],
+  ]) {
+    if (noindex.test(body)) ok(`${label}: noindex (${what} token)`)
+    else ko(`${label}: noindex (${what} token)`, 'no robots noindex meta')
+  }
+}
+
+async function checkCandidateSurfaces() {
+  section('Candidate link and shared report (invalid tokens)')
+  await checkTokenSurface('/s', 'GET /s/<invalid>')
+  await checkTokenSurface('/r', 'GET /r/<invalid>')
 }
 
 async function checkAuthProxy() {
@@ -227,12 +322,13 @@ async function checkEnv() {
 }
 
 async function main() {
-  console.log(`${C.bold}albo-ouvre-boite smoke tests${C.reset}  ${C.dim}${BASE}${C.reset}`)
+  console.log(`${C.bold}interw smoke tests${C.reset}  ${C.dim}${BASE}${C.reset}`)
   const up = await preflight()
   if (!up) process.exit(2)
 
   await checkHeaders()
   await checkPublicRoutes()
+  await checkCandidateSurfaces()
   await checkAuthProxy()
   await checkProtectedRoutes()
   await checkHtmlShape()
@@ -249,7 +345,7 @@ async function main() {
     process.exit(1)
   }
   console.log(`\n${C.green}All checks passed.${C.reset}`)
-  console.log(`${C.dim}Manual tests next: auth flow, invitations, items CRUD, AI chat, settings, super-admin.${C.reset}`)
+  console.log(`${C.dim}Manual tests next: TESTING.md levels 2-6 — auth, roles and questions, the candidate interview in a real browser, the report and its share link.${C.reset}`)
   process.exit(0)
 }
 

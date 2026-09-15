@@ -143,8 +143,8 @@ Before each production deployment, run through `TESTING.md`
 `pnpm lint`, `pnpm build`, `pnpm test:smoke`, `pnpm sync:skills:verify`,
 `pnpm sync:skills:check`);
 the rest is manual — a sign-off checklist to validate auth, multi-tenant,
-invitations, items CRUD, uploads, account lifecycle, super-admin, AI chat,
-security.
+invitations, roles and questions, the candidate interview, reports and their
+share links, uploads, account lifecycle, super-admin, AI chat, security.
 
 ## Stack
 
@@ -153,7 +153,7 @@ security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `magicLink()` + `convex()`. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend (default model `claude-haiku-4-5`, override via `ANTHROPIC_MODEL`) + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider abstracted via `getModel()` in `convex/agent.ts`. The chat agent ships with **DB-acting tools** (`convex/agentTools.ts`) scoped to the thread's org: list/create/update/delete `items`.
+- **AI** : `@convex-dev/agent` backend (default model `claude-haiku-4-5`, override via `ANTHROPIC_MODEL`) + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider abstracted via `getModel()` in `convex/agent.ts`. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
 - **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
 - **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
 
@@ -371,14 +371,13 @@ Do not re-vendor Convex skills to "fill a gap" without reading that
 ### Query data scoped to an org
 
 ```ts
-// convex/items.ts
+// convex/projects.ts
 export const list = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, { orgId }) => {
-    const user = await requireAppUser(ctx)
-    await requireOrgMember(ctx, { orgId, userId: user._id })
+    await requireOrgMember(ctx, orgId)
     return ctx.db
-      .query('items')
+      .query('projects')
       .withIndex('by_org', (q) => q.eq('orgId', orgId))
       .collect()
   },
@@ -388,18 +387,15 @@ export const list = query({
 ### Mutation with role check
 
 ```ts
+// convex/questions.ts — the guard reads the org off the ROW, never off an
+// argument: an `orgId` the caller passes proves nothing about the row.
 export const remove = mutation({
-  args: { itemId: v.id('items') },
-  handler: async (ctx, { itemId }) => {
-    const user = await requireAppUser(ctx)
-    const item = await ctx.db.get(itemId)
-    if (!item) throw new ConvexError('not_found')
-    await requireOrgRole(ctx, {
-      orgId: item.orgId,
-      userId: user._id,
-      minRole: 'admin',
-    })
-    await ctx.db.delete(itemId)
+  args: { questionId: v.id('questions') },
+  handler: async (ctx, { questionId }) => {
+    const question = await ctx.db.get('questions', questionId)
+    if (!question) throw new ConvexError('not_found')
+    await requireOrgRole(ctx, question.orgId, 'admin')
+    await ctx.db.delete('questions', questionId)
   },
 })
 ```
@@ -491,6 +487,16 @@ export const remove = mutation({
   `pnpm-workspace.yaml` settings are invisible to pnpm 9, which Vercel may
   still pick. See `KNOWN_ISSUES.md` § "pnpm 11 silently drops
   `pnpm.overrides`".
+- ❌ Keeping an inherited header, CSP directive or config flag that **denies a
+  capability the product has since gained**. `Permissions-Policy: camera=()`
+  is an empty allowlist — it denies the document itself — and a CSP with no
+  `media-src` blocks every `<video>` from the bucket. Both shipped a whole
+  build because the only automated check *asserted the emitted value*. When a
+  change introduces a capability (camera, microphone, media playback, a new
+  origin), re-read `src/lib/security-headers.ts` in the same PR, and write the
+  assertion against what the capability needs — never against what the code
+  currently returns. See `KNOWN_ISSUES.md` § "The template's HTTP headers
+  denied the camera".
 - ❌ Sizing `node_modules` with `du`, or "optimising" disk with
   `node-linker=hoisted` / `package-import-method=copy` / a hand-rolled shared
   `node_modules`. pnpm already clones from the store via APFS copy-on-write:

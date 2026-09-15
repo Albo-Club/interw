@@ -1,6 +1,6 @@
 {
   "appName": "interw",
-  "appTitle": "interw — MVP starter",
+  "appTitle": "interw — asynchronous video interviews",
   "loadingEllipsis": "Loading…",
   "notFoundPage": {
     "description": "This page doesn't exist or has been moved.",
@@ -53,6 +53,22 @@
       "too_large": "Image is larger than 20 MB",
       "invalid_type": "Use a PNG, JPEG, WEBP or GIF image",
       "insufficient_role": "Admins or owners only"
+    }
+  },
+  "dataTable": {
+    "columnHeader": {
+      "asc": "Asc",
+      "desc": "Desc",
+      "hide": "Hide"
+    },
+    "pagination": {
+      "rowsSelected": "{{selected}} of {{total}} row(s) selected.",
+      "rowsPerPage": "Rows per page",
+      "pageOf": "Page {{current}} of {{total}}",
+      "firstPage": "First page",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "lastPage": "Last page"
     }
   }
 }

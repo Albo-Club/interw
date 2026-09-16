@@ -154,6 +154,7 @@ describe('pipeline idempotency', () => {
         sessionId: s.sessionId,
         report: REPORT,
         paraverbal: null,
+        partial: false,
         model: 'test-model',
       })
     }
@@ -242,6 +243,7 @@ describe('purge', () => {
       sessionId: s.sessionId,
       report: REPORT,
       paraverbal: null,
+      partial: false,
       model: 'test-model',
     })
 

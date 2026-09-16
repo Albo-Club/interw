@@ -39,6 +39,37 @@ import { buildReport } from './lib/reportBuilder'
 import { reportOutputSchema } from './lib/reportSchema'
 import { normalizeWeights } from './lib/weights'
 import { mediaPool, reportPool } from './lib/workpools'
+import type { GenericMutationCtx } from 'convex/server'
+import type { DataModel, Id } from './_generated/dataModel'
+
+/* ────────────────────────── Failure reporting ───────────────────────────── */
+
+/**
+ * The server-side half of "a step can fail is observable".
+ *
+ * `jobLog` records the transition for the product; this puts the same failure
+ * where an operator actually looks. One named, structured line per failure, so
+ * a Convex log search on `pipeline_step_failed` finds every one of them
+ * without knowing which step to ask about.
+ *
+ * Not Sentry: the Convex side has no SDK wired up, and `CLAUDE.md`'s claim
+ * that it does is one of the stale statements chantier 5 is to fix. A named
+ * line is the honest version of the same thing until then.
+ */
+function logStepFailure(
+  step: 'transcribe' | 'report' | 'notify',
+  sessionId: Id<'sessions'>,
+  error: unknown,
+): void {
+  console.error(
+    'pipeline_step_failed ' +
+      JSON.stringify({
+        step,
+        sessionId,
+        message: error instanceof Error ? error.message : String(error),
+      }),
+  )
+}
 
 /* ─────────────────────────────── Job log ────────────────────────────────── */
 
@@ -73,6 +104,8 @@ export const recordJob = internalMutation({
 export const onSessionCompleted = internalMutation({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, { sessionId }) => {
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) return null
     const segments = await ctx.db
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
@@ -82,26 +115,56 @@ export const onSessionCompleted = internalMutation({
     // Nothing was recorded: there is no report to make, and saying so in the
     // log is more useful than a job that fails four times on empty input.
     if (uploaded.length === 0) {
-      await ctx.runMutation(internal.pipeline.recordJob, {
+      await ctx.db.insert('jobLog', {
+        orgId: session.orgId,
         sessionId,
         step: 'transcribe',
         outcome: 'skipped',
+        attempt: 1,
         error: 'no_recordings',
+        at: Date.now(),
       })
       return null
     }
 
+    // Re-entrant on purpose: this also runs when an operator relaunches a
+    // stuck session. An answer that already has a transcript keeps it and
+    // counts as settled; one that failed for good goes back to `pending` and
+    // gets another real attempt, which is the whole point of relaunching.
+    let settled = 0
+    const toEnqueue: Array<Id<'segments'>> = []
     for (const segment of uploaded) {
+      if (segment.transcriptionState === 'done') {
+        settled += 1
+        continue
+      }
+      await ctx.db.patch('segments', segment._id, {
+        transcriptionState: 'pending',
+      })
+      toEnqueue.push(segment._id)
+    }
+
+    await ctx.db.patch('sessions', sessionId, {
+      segmentsExpected: uploaded.length,
+      segmentsSettled: settled,
+      reportJobEnqueuedAt: undefined,
+    })
+
+    for (const segmentId of toEnqueue) {
       await mediaPool.enqueueAction(
         ctx,
         internal.pipeline.transcribeSegment,
-        { segmentId: segment._id },
+        { segmentId },
         {
           onComplete: internal.pipeline.onTranscribeComplete,
-          context: { sessionId },
+          context: { sessionId, segmentId },
         },
       )
     }
+
+    // Everything was already transcribed — a relaunch after the report step
+    // failed. Nothing will settle, so the gate has to be asked here.
+    if (toEnqueue.length === 0) await enqueueReportIfSettled(ctx, sessionId)
     return null
   },
 })
@@ -220,6 +283,7 @@ export const transcribeSegment = internalAction({
         durationMs: Date.now() - started,
         error: error instanceof Error ? error.message : String(error),
       })
+      logStepFailure('transcribe', context.sessionId, error)
       // Rethrow so the pool retries with backoff. Swallowing here is exactly
       // how the previous build lost sessions quietly.
       throw error
@@ -229,48 +293,118 @@ export const transcribeSegment = internalAction({
 })
 
 /**
- * Fires after each transcription, success or failure. When every answer has a
- * transcript, the report job goes on the queue — once.
+ * The fan-in, as a state transition rather than a reconstruction.
+ *
+ * Called at most once per answer, by the pool, when that answer's job has
+ * reached a terminal state — after every retry it was going to get. Both
+ * outcomes settle it: the count is of answers that will not change again, not
+ * of answers that worked.
+ *
+ * Every path through here reads and writes the `sessions` row, so two answers
+ * landing in the same instant are serialised by Convex's OCC. Exactly one of
+ * them sees the count complete, and it claims the report job in that same
+ * transaction.
  */
 export const onTranscribeComplete = internalMutation({
   // The component's own validator, rather than a hand-written one: `workId`
   // is a branded string and `result` a union, and getting either subtly wrong
   // fails at dispatch time, in a queue, where nobody is watching.
-  args: vOnCompleteValidator(v.object({ sessionId: v.id('sessions') })),
-  handler: async (ctx, { context }): Promise<null> => {
-    const { sessionId } = context
-    const segments = await ctx.db
-      .query('segments')
-      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-      .collect()
-    const uploaded = segments.filter((s) => s.uploadState === 'uploaded')
-    if (uploaded.length === 0) return null
+  args: vOnCompleteValidator(
+    v.object({ sessionId: v.id('sessions'), segmentId: v.id('segments') }),
+  ),
+  handler: async (ctx, { context, result }): Promise<null> => {
+    const { sessionId, segmentId } = context
+    // A cancellation settles the answer too. Leaving it unsettled would put
+    // the session back in the state this whole mechanism exists to remove:
+    // waiting for something that is never coming.
+    const outcome = result.kind === 'success' ? 'done' : 'failed'
+    const error =
+      result.kind === 'failed'
+        ? result.error
+        : result.kind === 'canceled'
+          ? 'canceled'
+          : undefined
 
-    const transcripts = await ctx.db
-      .query('transcripts')
-      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-      .collect()
-    const transcribed = new Set(transcripts.map((t) => t.segmentId))
-    if (!uploaded.every((segment) => transcribed.has(segment._id))) return null
+    const segment = await ctx.db.get('segments', segmentId)
+    if (!segment || segment.sessionId !== sessionId) return null
+    // Idempotent per answer: an answer already settled does not settle twice,
+    // whatever the pool replays.
+    if (
+      segment.transcriptionState === 'done' ||
+      segment.transcriptionState === 'failed'
+    ) {
+      return null
+    }
 
-    const report = await ctx.db
-      .query('reports')
-      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-      .unique()
-    if (report) return null
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) return null
 
-    await reportPool.enqueueAction(
-      ctx,
-      internal.pipeline.generateReport,
-      { sessionId },
-      {
-        onComplete: internal.pipeline.onReportComplete,
-        context: { sessionId },
-      },
-    )
+    await ctx.db.patch('segments', segmentId, { transcriptionState: outcome })
+    await ctx.db.patch('sessions', sessionId, {
+      segmentsSettled: (session.segmentsSettled ?? 0) + 1,
+    })
+
+    if (outcome === 'failed') {
+      // Distinct from the per-attempt `transcribe/failed` rows the action
+      // writes: this one says the answer is gone for good.
+      await ctx.db.insert('jobLog', {
+        orgId: session.orgId,
+        sessionId,
+        step: 'transcribe',
+        outcome: 'failed',
+        attempt: 1,
+        error: `terminal: ${(error ?? 'unknown').slice(0, 900)}`,
+        at: Date.now(),
+      })
+      logStepFailure('transcribe', sessionId, `terminal: ${error ?? 'unknown'}`)
+    }
+
+    await enqueueReportIfSettled(ctx, sessionId)
     return null
   },
 })
+
+/**
+ * Put the report on the queue if, and only if, every answer has settled and
+ * nobody has claimed it yet.
+ *
+ * The claim (`reportJobEnqueuedAt`) is patched in the same transaction as the
+ * enqueue. Before it existed, deduplication read the `reports` table — which
+ * `generateReport` only writes thirty to sixty seconds later — so in the
+ * ordinary case where the last two answers land together, both callers saw an
+ * empty table and both queued a job. Two deep-model calls per interview, in
+ * the nominal path.
+ */
+async function enqueueReportIfSettled(
+  ctx: GenericMutationCtx<DataModel>,
+  sessionId: Id<'sessions'>,
+): Promise<void> {
+  const session = await ctx.db.get('sessions', sessionId)
+  if (!session) return
+  const expected = session.segmentsExpected ?? 0
+  if (expected === 0) return
+  if ((session.segmentsSettled ?? 0) < expected) return
+  if (session.reportJobEnqueuedAt !== undefined) return
+
+  const report = await ctx.db
+    .query('reports')
+    .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+    .unique()
+  if (report) return
+
+  await ctx.db.patch('sessions', sessionId, {
+    reportJobEnqueuedAt: Date.now(),
+  })
+  await reportPool.enqueueAction(
+    ctx,
+    internal.pipeline.generateReport,
+    { sessionId },
+    {
+      onComplete: internal.pipeline.onReportComplete,
+      context: { sessionId },
+    },
+  )
+}
 
 /* ────────────────────────────── The report ─────────────────────────────── */
 
@@ -305,8 +439,15 @@ export const reportInputs = internalQuery({
       .collect()
     const bySegment = new Map(transcripts.map((t) => [t.segmentId, t]))
 
-    const answers = segments
-      .filter((segment) => segment.uploadState === 'uploaded')
+    const uploaded = segments.filter(
+      (segment) => segment.uploadState === 'uploaded',
+    )
+    // An answer with no transcript is not a silent zero: it is left out of
+    // the report, and the report says it is missing one. Feeding the model an
+    // empty transcript under a real question would have it score an answer
+    // nobody heard.
+    const answers = uploaded
+      .filter((segment) => bySegment.has(segment._id))
       .sort((a, b) => a.questionIndex - b.questionIndex)
       .map((segment) => {
         const transcript = bySegment.get(segment._id)
@@ -328,6 +469,8 @@ export const reportInputs = internalQuery({
     return {
       alreadyGenerated: false as const,
       orgId: session.orgId,
+      /** How many answers were recorded but could not be read. */
+      missingAnswers: uploaded.length - answers.length,
       language: project.language,
       jobTitle: project.jobTitle ?? project.title,
       candidateName: session.candidateName,
@@ -350,8 +493,9 @@ export const saveReport = internalMutation({
     report: v.any(),
     paraverbal: v.any(),
     model: v.string(),
+    partial: v.boolean(),
   },
-  handler: async (ctx, { sessionId, report, paraverbal, model }) => {
+  handler: async (ctx, { sessionId, report, paraverbal, model, partial }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
     const existing = await ctx.db
@@ -364,6 +508,7 @@ export const saveReport = internalMutation({
       orgId: session.orgId,
       sessionId,
       ...report,
+      partial,
       paraverbal: paraverbal ?? undefined,
       model,
       generatedAt: Date.now(),
@@ -388,14 +533,28 @@ export const generateReport = internalAction({
       })
       return null
     }
-    if (inputs.criteria.length === 0 || inputs.answers.length === 0) {
+    // A role with no criteria cannot be assessed and never could be: that is
+    // a configuration gap, not a failure of this interview.
+    if (inputs.criteria.length === 0) {
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId,
         step: 'report',
         outcome: 'skipped',
-        error:
-          inputs.criteria.length === 0 ? 'no_criteria' : 'no_transcribed_answers',
+        error: 'no_criteria',
       })
+      return null
+    }
+    // Nothing readable came back from any answer. Recorded as a failure, not
+    // a skip: an interview was sat and produced no assessment, and the
+    // super-admin screen has to be able to count that.
+    if (inputs.answers.length === 0) {
+      await ctx.runMutation(internal.pipeline.recordJob, {
+        sessionId,
+        step: 'report',
+        outcome: 'failed',
+        error: 'no_transcribed_answers',
+      })
+      logStepFailure('report', sessionId, 'no_transcribed_answers')
       return null
     }
 
@@ -450,12 +609,17 @@ export const generateReport = internalAction({
         report: built,
         paraverbal,
         model,
+        partial: inputs.missingAnswers > 0,
       })
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId,
         step: 'report',
         outcome: 'succeeded',
         durationMs: Date.now() - started,
+        error:
+          inputs.missingAnswers > 0
+            ? `partial: ${inputs.missingAnswers} answer(s) unreadable`
+            : undefined,
       })
     } catch (error) {
       await ctx.runMutation(internal.pipeline.recordJob, {
@@ -465,6 +629,7 @@ export const generateReport = internalAction({
         durationMs: Date.now() - started,
         error: error instanceof Error ? error.message : String(error),
       })
+      logStepFailure('report', sessionId, error)
       throw error
     }
     return null
@@ -512,6 +677,7 @@ export const notifyRecruiter = internalAction({
         durationMs: Date.now() - started,
         error: error instanceof Error ? error.message : String(error),
       })
+      logStepFailure('notify', sessionId, error)
       throw error
     }
     return null

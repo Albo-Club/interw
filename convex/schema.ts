@@ -67,6 +67,15 @@ export const uploadStateValidator = v.union(
   v.literal('failed'),
 )
 
+/** Where one answer got to in the transcription step. Both `done` and
+ *  `failed` are terminal: the fan-in counts them the same way, and only the
+ *  report cares about the difference. */
+export const transcriptionStateValidator = v.union(
+  v.literal('pending'),
+  v.literal('done'),
+  v.literal('failed'),
+)
+
 export const recommendationValidator = v.union(
   v.literal('strong_no'),
   v.literal('no'),
@@ -311,6 +320,22 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     lastQuestionIndex: v.number(),
     durationSeconds: v.optional(v.number()),
+    /* ── Fan-in state, written only by convex/pipeline.ts ──────────────────
+     * How many answers the pipeline is waiting on, and how many have reached
+     * a TERMINAL outcome — succeeded or failed for good. Materialising the
+     * count is what lets a definitive failure be an outcome rather than a
+     * silence: the old gate asked "does every answer have a transcript?",
+     * which a transcription that had exhausted its retries could never make
+     * true again, so the session froze with no report and no alert.
+     *
+     * `reportJobEnqueuedAt` is the claim. The mutation that completes the
+     * count reads and writes this row, so Convex's OCC picks exactly one of
+     * two answers landing together — which is what stopped two `generateReport`
+     * jobs, and two deep-model bills, per interview.
+     * ------------------------------------------------------------------- */
+    segmentsExpected: v.optional(v.number()),
+    segmentsSettled: v.optional(v.number()),
+    reportJobEnqueuedAt: v.optional(v.number()),
     recruiterDecision: v.optional(recruiterDecisionValidator),
     recruiterDecisionBy: v.optional(v.id('users')),
     recruiterDecisionAt: v.optional(v.number()),
@@ -354,6 +379,10 @@ export default defineSchema({
     durationSeconds: v.optional(v.number()),
     uploadState: uploadStateValidator,
     uploadAttempts: v.number(),
+    /** Where this answer got to in the pipeline. `failed` is a terminal state,
+     *  not a missing transcript: it is what lets the fan-in complete and the
+     *  report say which answers it could not read. */
+    transcriptionState: v.optional(transcriptionStateValidator),
     recordedAt: v.number(),
   })
     .index('by_session', ['sessionId', 'questionIndex'])
@@ -393,6 +422,11 @@ export default defineSchema({
     ),
     strengths: v.array(v.string()),
     concerns: v.array(v.string()),
+    /** True when at least one answer could not be transcribed and the report
+     *  was written without it. A report that is missing evidence has to say
+     *  so: the alternative is a confident-looking assessment of five answers
+     *  presented as an assessment of seven. */
+    partial: v.optional(v.boolean()),
     /** Criterion × question grid. Typed rather than `v.any()`: an untyped
      *  blob here is how a model's malformed output reaches the UI. */
     fitMatrix: v.optional(

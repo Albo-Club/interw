@@ -23,6 +23,25 @@ async function loadQuestionForEdit(
   return question
 }
 
+/**
+ * Refuse to renumber the trame once anyone has answered it.
+ *
+ * Deleting or reordering a question rewrites every following `orderIndex`.
+ * Answers already recorded keep the index they were recorded under, and while
+ * the joins downstream now resolve by `questionId` and are safe, the numbering
+ * a candidate saw ("question 3 of 7") and the one the next candidate sees stop
+ * agreeing — on the same role, mid-campaign. Editing a question's text is
+ * still allowed: that changes what was asked, not which answer belongs to it.
+ */
+async function requireNoSessions(
+  ctx: GenericMutationCtx<DataModel>,
+  projectId: Id<'projects'>,
+): Promise<void> {
+  const project = await ctx.db.get('projects', projectId)
+  if (!project) throw new ConvexError('not_found')
+  if (project.sessionCount > 0) throw new ConvexError('project_has_sessions')
+}
+
 function validateResponseSeconds(seconds: number): number {
   if (
     !Number.isInteger(seconds) ||
@@ -116,6 +135,7 @@ export const remove = mutation({
   args: { questionId: v.id('questions') },
   handler: async (ctx, { questionId }) => {
     const question = await loadQuestionForEdit(ctx, questionId)
+    await requireNoSessions(ctx, question.projectId)
     await ctx.db.delete('questions', questionId)
 
     // Close the gap so indexes stay 0..n-1: the candidate engine walks them by
@@ -141,6 +161,7 @@ export const reorder = mutation({
   },
   handler: async (ctx, { projectId, orderedIds }) => {
     await requireProjectEditable(ctx, projectId)
+    await requireNoSessions(ctx, projectId)
     const existing = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))

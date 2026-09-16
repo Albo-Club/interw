@@ -179,6 +179,8 @@ export const view = query({
         .collect(),
     ])
 
+    const questionById = new Map(questions.map((q) => [q._id, q]))
+
     return {
       state: 'active' as const,
       report: {
@@ -208,9 +210,8 @@ export const view = query({
           .map((segment) => ({
             segmentId: segment._id,
             questionIndex: segment.questionIndex,
-            question:
-              questions.find((q) => q.orderIndex === segment.questionIndex)
-                ?.content ?? '',
+            // By id, not by index: see convex/pipeline.ts.
+            question: questionById.get(segment.questionId)?.content ?? '',
           })),
       },
     }

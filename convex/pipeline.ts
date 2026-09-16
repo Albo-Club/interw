@@ -438,6 +438,12 @@ export const reportInputs = internalQuery({
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
       .collect()
     const bySegment = new Map(transcripts.map((t) => [t.segmentId, t]))
+    // By id, not by index. `orderIndex` is a display order and it is
+    // renumbered when the trame is edited; `questionId` is an identity and it
+    // is not. Joining on the order made every stored answer shift one question
+    // along the day someone deleted question 2 — in reports already written as
+    // much as in new ones, and the result did not look wrong.
+    const byQuestionId = new Map(questions.map((q) => [q._id, q]))
 
     const uploaded = segments.filter(
       (segment) => segment.uploadState === 'uploaded',
@@ -451,9 +457,7 @@ export const reportInputs = internalQuery({
       .sort((a, b) => a.questionIndex - b.questionIndex)
       .map((segment) => {
         const transcript = bySegment.get(segment._id)
-        const question = questions.find(
-          (q) => q.orderIndex === segment.questionIndex,
-        )
+        const question = byQuestionId.get(segment.questionId)
         return {
           segmentId: segment._id,
           questionId: segment.questionId,

@@ -93,16 +93,18 @@ export const questions = query({
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', session._id))
       .collect()
+    // By id, not by index: `orderIndex` is renumbered when the trame is
+    // edited, `questionId` is not. See convex/pipeline.ts.
     const answered = new Set(
       segments
         .filter((segment) => segment.uploadState === 'uploaded')
-        .map((segment) => segment.questionIndex),
+        .map((segment) => segment.questionId),
     )
 
     return {
       questions: rows.map((question) => ({
         ...toCandidateQuestionView(question),
-        answered: answered.has(question.orderIndex),
+        answered: answered.has(question._id),
       })),
       resumeAtIndex: session.lastQuestionIndex,
       introMode: project.introMode,

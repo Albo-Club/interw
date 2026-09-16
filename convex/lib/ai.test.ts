@@ -73,21 +73,25 @@ describe('parseModelJson', () => {
 })
 
 /**
- * What actually leaves the deployment, and under what routing.
+ * What actually leaves the deployment, and where it goes.
  *
  * `fetch` is stubbed rather than mocked at the module boundary, so these
- * assertions are made against the real request body `complete` builds.
+ * assertions are made against the real request `complete` builds.
  */
 describe('the completion request', () => {
   const answerSchema = z.object({ verdict: z.string() })
 
-  function stubFetch(
-    capture: Array<{ url: string; body: Record<string, unknown> }>,
-    responder: () => Response,
-  ): void {
+  type Call = {
+    url: string
+    headers: Record<string, string>
+    body: Record<string, unknown>
+  }
+
+  function stubFetch(capture: Array<Call>, responder: () => Response): void {
     vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
       capture.push({
         url,
+        headers: init.headers as Record<string, string>,
         body: JSON.parse(String(init.body)) as Record<string, unknown>,
       })
       return Promise.resolve(responder())
@@ -98,14 +102,22 @@ describe('the completion request', () => {
     new Response(
       JSON.stringify({
         choices: [{ message: { content } }],
-        model: 'google/gemini-2.5-pro',
+        model: 'zai-glm-5-3',
         ...(usage ? { usage } : {}),
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
 
+  const ask = (tier: 'fast' | 'deep' = 'fast') =>
+    complete({
+      messages: [{ role: 'user', content: 'hi' }],
+      schema: answerSchema,
+      schemaName: 'answer',
+      tier,
+    })
+
   beforeEach(() => {
-    vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
+    vi.stubEnv('MISTRAL_API_KEY', 'test-key')
   })
 
   afterEach(() => {
@@ -114,71 +126,77 @@ describe('the completion request', () => {
   })
 
   /**
-   * The module header claims a European provider for the recordings. It said
-   * nothing about the transcript, which is the recording's content — and
-   * OpenRouter routes by price unless told otherwise, including to providers
-   * that retain and train on prompts.
+   * The point of moving off OpenRouter.
+   *
+   * A router picks a provider by price unless told otherwise, and the prompt
+   * here is a candidate's interview in full — so the guarantee used to be a
+   * `data_collection: 'deny'` flag we had to remember to send on every call,
+   * plus a provider allow-list that went stale with someone else's catalogue.
+   * Addressing Mistral directly makes it structural instead: there is no
+   * second hop to configure, and no flag left to forget.
    */
-  it('refuses providers that collect the prompt, and does not fall back past them', async () => {
-    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+  it('goes to Mistral directly, with no router in between', async () => {
+    const calls: Array<Call> = []
     stubFetch(calls, () => ok('{"verdict":"fine"}'))
 
-    await complete({
-      messages: [{ role: 'user', content: 'hi' }],
-      schema: answerSchema,
-      schemaName: 'answer',
-      tier: 'fast',
-    })
+    await ask()
 
-    expect(calls[0].body.provider).toMatchObject({
-      data_collection: 'deny',
-      allow_fallbacks: false,
-    })
+    expect(calls[0].url.startsWith('https://api.mistral.ai/')).toBe(true)
   })
 
-  it('pins the provider order when the deployment names one', async () => {
-    vi.stubEnv('OPENROUTER_PROVIDER_ORDER', 'alpha, beta')
-    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+  it('sends no third-party routing block', async () => {
+    const calls: Array<Call> = []
     stubFetch(calls, () => ok('{"verdict":"fine"}'))
 
-    await complete({
-      messages: [{ role: 'user', content: 'hi' }],
-      schema: answerSchema,
-      schemaName: 'answer',
-      tier: 'fast',
-    })
+    await ask()
 
-    expect(calls[0].body.provider).toMatchObject({ order: ['alpha', 'beta'] })
+    expect(calls[0].body.provider).toBeUndefined()
+  })
+
+  /** One provider, one key — the same one that already transcribes. */
+  it('runs on MISTRAL_API_KEY, with no second provider key set', async () => {
+    const calls: Array<Call> = []
+    stubFetch(calls, () => ok('{"verdict":"fine"}'))
+
+    await ask()
+
+    expect(process.env.OPENROUTER_API_KEY).toBeUndefined()
+    expect(calls[0].headers.Authorization).toBe('Bearer test-key')
+  })
+
+  it('asks for models Mistral serves, on both tiers', async () => {
+    const calls: Array<Call> = []
+    stubFetch(calls, () => ok('{"verdict":"fine"}'))
+
+    await ask('fast')
+    await ask('deep')
+
+    for (const call of calls) {
+      expect(String(call.body.model).startsWith('google/')).toBe(false)
+    }
+    // The interview report is the decision; it starts on the strongest model
+    // in the chain, and only falls back after that one has failed outright.
+    expect(calls[1].body.model).toBe('zai-glm-5-3')
   })
 
   /** A truncated answer is invalid JSON, which costs another attempt at full
    *  price. Unset, the ceiling was whatever the provider defaulted to. */
   it('caps the output length', async () => {
-    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+    const calls: Array<Call> = []
     stubFetch(calls, () => ok('{"verdict":"fine"}'))
 
-    await complete({
-      messages: [{ role: 'user', content: 'hi' }],
-      schema: answerSchema,
-      schemaName: 'answer',
-      tier: 'fast',
-    })
+    await ask()
 
     expect(calls[0].body.max_tokens).toEqual(expect.any(Number))
   })
 
   it('reports what the provider billed', async () => {
-    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+    const calls: Array<Call> = []
     stubFetch(calls, () =>
       ok('{"verdict":"fine"}', { prompt_tokens: 1234, completion_tokens: 56 }),
     )
 
-    const result = await complete({
-      messages: [{ role: 'user', content: 'hi' }],
-      schema: answerSchema,
-      schemaName: 'answer',
-      tier: 'fast',
-    })
+    const result = await ask()
 
     expect(result.usage).toEqual({ promptTokens: 1234, completionTokens: 56 })
   })
@@ -188,20 +206,13 @@ describe('the completion request', () => {
    * could not tell a 401 from a spent budget from a failed validation — which
    * is every question worth asking when a report does not arrive.
    */
-  it('carries the last model’s reason into the error it throws', async () => {
+  it('carries the last model\u2019s reason into the error it throws', async () => {
     vi.stubGlobal('fetch', () =>
       Promise.resolve(
         new Response('quota exhausted for this key', { status: 402 }),
       ),
     )
 
-    await expect(
-      complete({
-        messages: [{ role: 'user', content: 'hi' }],
-        schema: answerSchema,
-        schemaName: 'answer',
-        tier: 'fast',
-      }),
-    ).rejects.toThrow(/quota exhausted/)
+    await expect(ask()).rejects.toThrow(/quota exhausted/)
   })
 })

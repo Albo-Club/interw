@@ -2,14 +2,21 @@
  * The one place that talks to a model provider.
  *
  * No other module names a model, holds a provider URL, or parses a model's
- * output. Two capabilities, two providers, for reasons that are not
- * interchangeable:
+ * output. One provider, Mistral, for both capabilities:
  *
- *   transcription → Mistral, direct. Candidate recordings are the most
- *     sensitive data this product holds; the provider being European is part
- *     of the design, not a preference.
- *   evaluation    → OpenRouter. Model-agnostic, so the evaluation model can
- *     change without a redeploy or a second integration.
+ *   transcription → Voxtral.
+ *   evaluation    → GLM, which Mistral serves alongside its own models.
+ *
+ * A candidate's recording and its transcript are the most sensitive data this
+ * product holds, and the provider being European is part of the design, not a
+ * preference. Evaluation used to run through OpenRouter, which picks a
+ * provider by price unless told otherwise — so the guarantee was a
+ * `data_collection: 'deny'` flag on every call plus an allow-list that went
+ * stale with someone else's catalogue. Addressing one provider directly makes
+ * it structural: there is no second hop to configure, and no flag to forget.
+ *
+ * GLM's weights are Z.ai's, not Mistral's. The inference runs on Mistral's
+ * infrastructure under its regional controls, so no interview leaves it.
  *
  * Every structured output is validated with Zod BEFORE it reaches a caller. A
  * report that does not validate is not written: the job fails and is retried.
@@ -21,13 +28,18 @@ import { z } from 'zod'
 
 /* Model identifiers live here and nowhere else. */
 const TRANSCRIPTION_MODEL = 'voxtral-mini-latest'
-const FAST_MODEL = 'google/gemini-2.5-flash'
-const DEEP_MODEL = 'google/gemini-2.5-pro'
+/** The job-description import, and the fallback under `deep`. */
+const FAST_MODEL = 'mistral-medium-latest'
+/**
+ * Pinned to an exact version rather than a moving `-latest` alias: `deep`
+ * produces a hiring evaluation, and two candidates assessed a week apart
+ * should not meet different models without anyone having chosen that.
+ */
+const DEEP_MODEL = 'zai-glm-5-3'
 
 const MISTRAL_TRANSCRIPTION_URL =
   'https://api.mistral.ai/v1/audio/transcriptions'
-const OPENROUTER_COMPLETIONS_URL =
-  'https://openrouter.ai/api/v1/chat/completions'
+const MISTRAL_COMPLETIONS_URL = 'https://api.mistral.ai/v1/chat/completions'
 
 /**
  * Attempts inside one call. Two, not three: the work pool already retries the
@@ -188,7 +200,7 @@ export async function transcribe(
 
 /* ───────────────────────────── Completions ─────────────────────────────── */
 
-const openRouterResponseSchema = z.object({
+const completionResponseSchema = z.object({
   choices: z
     .array(
       z.object({
@@ -225,32 +237,6 @@ export type CompleteResult<T> = {
 }
 
 /**
- * Where the evaluation is allowed to run.
- *
- * `data_collection: 'deny'` is the one that matters. OpenRouter otherwise
- * routes to whatever is cheapest and available, some of which retains and
- * trains on prompts — and the prompt here is a candidate's interview, in full.
- * The module header above claims a European provider for the recordings; it
- * said nothing about where their content went, and neither did the privacy
- * page. `allow_fallbacks: false` stops a refusal being silently worked around.
- *
- * `order` pins the named providers, in preference order, and is left to the
- * deployment: the slugs are OpenRouter's own and change with its catalogue, so
- * a wrong one here would fail every evaluation with no way to find out from
- * this environment. Unset, `data_collection` still decides.
- */
-function providerRouting(): Record<string, unknown> {
-  const order = process.env.OPENROUTER_PROVIDER_ORDER?.split(',')
-    .map((name) => name.trim())
-    .filter(Boolean)
-  return {
-    data_collection: 'deny',
-    allow_fallbacks: false,
-    ...(order && order.length > 0 ? { order } : {}),
-  }
-}
-
-/**
  * One structured completion, validated.
  *
  * `deep` starts on the strong model and falls back to the fast one only after
@@ -260,7 +246,7 @@ function providerRouting(): Record<string, unknown> {
 export async function complete<T>(
   options: CompleteOptions<T>,
 ): Promise<CompleteResult<T>> {
-  const apiKey = requireEnv('OPENROUTER_API_KEY')
+  const apiKey = requireEnv('MISTRAL_API_KEY')
   const jsonSchema = z.toJSONSchema(options.schema, { io: 'output' })
   const chain =
     options.tier === 'deep' ? [DEEP_MODEL, FAST_MODEL] : [FAST_MODEL]
@@ -269,24 +255,23 @@ export async function complete<T>(
   for (const model of chain) {
     try {
       const payload = await postWithRetry(
-        OPENROUTER_COMPLETIONS_URL,
+        MISTRAL_COMPLETIONS_URL,
         {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'X-Title': 'Interw',
         },
         JSON.stringify({
           model,
           messages: options.messages,
           temperature: options.temperature ?? 0.2,
           max_tokens: MAX_COMPLETION_TOKENS,
-          provider: providerRouting(),
-          // `strict: false` on purpose. Strict decoding is implemented
-          // differently by every model behind OpenRouter, and several reject
-          // perfectly valid JSON Schema keywords outright — which would turn
-          // a provider quirk into a failed evaluation. The schema is still
-          // sent, so models that honour it do; the guarantee comes from the
-          // Zod parse on the way back, which no provider can talk its way past.
+          // `strict: false` on purpose. Mistral does support strict decoding,
+          // but the schema sent here is generated from Zod and has never been
+          // run against its decoder — and a schema it rejects fails every
+          // evaluation at once, not an occasional one. The schema is still
+          // sent, so a model that honours it does; the guarantee comes from
+          // the Zod parse on the way back, which no provider talks its way
+          // past. Worth flipping deliberately, once verified against a key.
           response_format: {
             type: 'json_schema',
             json_schema: {
@@ -300,7 +285,7 @@ export async function complete<T>(
         COMPLETION_TIMEOUT_MS,
       )
 
-      const envelope = openRouterResponseSchema.safeParse(payload)
+      const envelope = completionResponseSchema.safeParse(payload)
       if (!envelope.success) {
         throw new AiError(
           `completion envelope was not understood: ${envelope.error.message}`,

@@ -13,15 +13,34 @@
 import { ConvexError, v } from 'convex/values'
 
 import { internalMutation, internalQuery } from './_generated/server'
-import type { Id } from './_generated/dataModel'
+import { internal } from './_generated/api'
+import type { GenericMutationCtx } from 'convex/server'
+import type { DataModel, Id } from './_generated/dataModel'
 
 /**
  * A stable, non-reversible identifier for the deletion register. Hashing the
  * address lets the register answer "did you erase this person's data?" without
  * keeping the address it exists to record the destruction of.
+ *
+ * Salted, and the salt is a deployment secret. A bare SHA-256 of an email
+ * address is not one-way in any useful sense: the input space is a list of
+ * addresses somebody already has, and checking them is one pass of a
+ * dictionary. Without the salt the register stores the addresses it exists to
+ * prove it destroyed.
+ *
+ * Rotating `PURGE_HASH_SALT` makes older entries unanswerable — they stay
+ * valid proof that *a* session was purged, but you can no longer ask whose.
+ * That is the cost of the property, and it is worth it.
  */
 export async function hashEmail(email: string): Promise<string> {
-  const data = new TextEncoder().encode(email.trim().toLowerCase())
+  const salt = process.env.PURGE_HASH_SALT
+  if (!salt) {
+    // Deliberately fatal. Erasure must not quietly fall back to writing the
+    // unsalted digest: the register would look exactly as it does now and
+    // carry none of the property it claims.
+    throw new ConvexError('purge_hash_salt_not_configured')
+  }
+  const data = new TextEncoder().encode(`${salt}:${email.trim().toLowerCase()}`)
   const digest = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(digest), (b) =>
     b.toString(16).padStart(2, '0'),
@@ -61,11 +80,82 @@ export const collectSessionObjects = internalQuery({
 })
 
 /**
+ * How many rows one pass of `deleteSessionRecords` will delete before handing
+ * the rest to another pass.
+ *
+ * A session's row count is not bounded by anything the product controls:
+ * `sessionEvents` is written by the candidate's own browser and `jobLog` grows
+ * with every retry. Deleting them in one transaction meant erasure could
+ * exceed Convex's limits and fail — *after* the objects were already gone, so
+ * the candidate saw an error, their recordings were deleted, their rows
+ * stayed, and the button would never work again.
+ */
+const DELETE_BATCH = 100
+
+/**
+ * Delete up to `budget` child rows of a session. Returns how many it spent.
+ *
+ * Order matters only for `reports` → `reportShares`: a share must not outlive
+ * the report it points at, even for the moment between two passes.
+ */
+async function deleteChildRows(
+  ctx: GenericMutationCtx<DataModel>,
+  sessionId: Id<'sessions'>,
+  budget: number,
+): Promise<number> {
+  let spent = 0
+
+  const reports = await ctx.db
+    .query('reports')
+    .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+    .take(budget)
+  for (const report of reports) {
+    const shares = await ctx.db
+      .query('reportShares')
+      .withIndex('by_report', (q) => q.eq('reportId', report._id))
+      .take(budget)
+    for (const share of shares) {
+      await ctx.db.delete('reportShares', share._id)
+      spent += 1
+    }
+    await ctx.db.delete('reports', report._id)
+    spent += 1
+  }
+
+  // `emailLog` last used to be missing here entirely: the candidate's address
+  // survived their own erasure in clear text, indexed by recipient and
+  // readable by every member of the organisation through the deliverability
+  // screen — while `purgeLog`, three tables away, took care to store only a
+  // hash. The rows go rather than being anonymised: a deliverability trail
+  // for a candidate who no longer exists is of no use to anyone.
+  for (const table of [
+    'transcripts',
+    'segments',
+    'sessionEvents',
+    'jobLog',
+    'emailLog',
+  ] as const) {
+    if (spent >= budget) return spent
+    const rows = await ctx.db
+      .query(table)
+      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+      .take(budget - spent)
+    for (const row of rows) {
+      await ctx.db.delete(table, row._id)
+      spent += 1
+    }
+  }
+  return spent
+}
+
+/**
  * Remove every row belonging to a session, and record that it happened.
  *
- * Idempotent: a session already gone is a success, because the caller may be
- * a retry of a job whose object deletion succeeded and whose row deletion did
- * not.
+ * Idempotent, and re-entrant: a session already gone is a success, because the
+ * caller may be a retry of a job whose object deletion succeeded and whose row
+ * deletion did not — and a session with more rows than one transaction can
+ * carry reschedules itself until there are none left. The register is written
+ * once, by the pass that removes the session row.
  */
 export const deleteSessionRecords = internalMutation({
   args: {
@@ -82,31 +172,18 @@ export const deleteSessionRecords = internalMutation({
     const session = await ctx.db.get('sessions', args.sessionId)
     if (!session) return null
 
-    const reports = await ctx.db
-      .query('reports')
-      .withIndex('by_session', (q) => q.eq('sessionId', args.sessionId))
-      .collect()
-    for (const report of reports) {
-      const shares = await ctx.db
-        .query('reportShares')
-        .withIndex('by_report', (q) => q.eq('reportId', report._id))
-        .collect()
-      for (const share of shares) await ctx.db.delete('reportShares', share._id)
-      await ctx.db.delete('reports', report._id)
+    const spent = await deleteChildRows(ctx, args.sessionId, DELETE_BATCH)
+    if (spent >= DELETE_BATCH) {
+      // More to go. The session row stays until the end, so a pass that never
+      // comes leaves an obviously unfinished erasure rather than a register
+      // entry claiming a finished one.
+      await ctx.scheduler.runAfter(
+        0,
+        internal.purge.deleteSessionRecords,
+        args,
+      )
+      return null
     }
-
-    for (const table of ['transcripts', 'segments', 'sessionEvents'] as const) {
-      const rows = await ctx.db
-        .query(table)
-        .withIndex('by_session', (q) => q.eq('sessionId', args.sessionId))
-        .collect()
-      for (const row of rows) await ctx.db.delete(table, row._id)
-    }
-    const jobs = await ctx.db
-      .query('jobLog')
-      .withIndex('by_session', (q) => q.eq('sessionId', args.sessionId))
-      .collect()
-    for (const job of jobs) await ctx.db.delete('jobLog', job._id)
 
     const project = await ctx.db.get('projects', session.projectId)
     if (project) {

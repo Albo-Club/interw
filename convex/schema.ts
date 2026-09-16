@@ -540,7 +540,11 @@ export default defineSchema({
   })
     .index('by_org_and_created', ['orgId', 'createdAt'])
     .index('by_recipient', ['recipient'])
-    .index('by_provider_id', ['providerId']),
+    .index('by_provider_id', ['providerId'])
+    // Erasure has to be able to find every row that names a candidate, and
+    // the report notification has to be able to ask "did I already send this
+    // one?" exactly rather than by scanning the last 200 emails of the org.
+    .index('by_session', ['sessionId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,
    *  not the address: a deletion register must be able to answer "did you

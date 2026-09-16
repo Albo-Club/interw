@@ -35,6 +35,8 @@ import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const MAX_SEGMENT_BYTES = 300 * 1024 * 1024
+/** Newest events kept per session. See `logEvent`. */
+const MAX_SESSION_EVENTS = 200
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
 const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
 
@@ -429,6 +431,20 @@ export const logEvent = mutation({
     // is no longer "open" — that is exactly when the trail is worth having.
     const session = await resolveSessionByToken(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
+
+    // Capped per session, oldest first. This endpoint is public, gated only by
+    // the token, and the rate limiter still allows 120 writes a minute — so
+    // the size of this table for one session was chosen by whoever held the
+    // link. It is a support trail, not an audit log: the most recent two
+    // hundred events are the ones that explain what just went wrong.
+    const existing = await ctx.db
+      .query('sessionEvents')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .take(MAX_SESSION_EVENTS + 1)
+    for (const stale of existing.slice(0, existing.length - MAX_SESSION_EVENTS)) {
+      await ctx.db.delete('sessionEvents', stale._id)
+    }
+
     await ctx.db.insert('sessionEvents', {
       orgId: session.orgId,
       sessionId: session._id,

@@ -1,0 +1,303 @@
+/// <reference types="vite/client" />
+import { convexTest } from 'convex-test'
+import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
+import { ConvexError } from 'convex/values'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { api, internal } from './_generated/api'
+import schema from './schema'
+import type { Id } from './_generated/dataModel'
+
+vi.mock('./auth', () => ({
+  authComponent: {
+    safeGetAuthUser: async (ctx: {
+      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
+    }) => {
+      const identity = await ctx.auth.getUserIdentity()
+      return identity ? { _id: identity.subject } : null
+    },
+    getAuthUser: async (ctx: {
+      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
+    }) => {
+      const identity = await ctx.auth.getUserIdentity()
+      if (!identity) throw new Error('Unauthenticated')
+      return { _id: identity.subject }
+    },
+    registerRoutes: () => {},
+  },
+  createAuth: () => ({}),
+}))
+
+const modules = import.meta.glob('./**/*.ts')
+
+function newTest() {
+  const t = convexTest(schema, modules)
+  registerRateLimiter(t, 'rateLimiter')
+  return t
+}
+
+const CANDIDATE_EMAIL = 'alex@example.test'
+const TOKEN = 'e'.repeat(43)
+
+type Seed = {
+  orgId: Id<'organizations'>
+  projectId: Id<'projects'>
+  sessionId: Id<'sessions'>
+}
+
+async function seed(
+  t: ReturnType<typeof newTest>,
+  { sessionEvents = 0 }: { sessionEvents?: number } = {},
+): Promise<Seed> {
+  return await t.run(async (ctx) => {
+    const userId = await ctx.db.insert('users', {
+      betterAuthId: 'ba_recruiter',
+      email: 'r@acme.test',
+      superAdmin: false,
+      createdAt: 0,
+    })
+    const orgId = await ctx.db.insert('organizations', {
+      slug: 'acme',
+      name: 'Acme',
+      createdBy: userId,
+      createdAt: 0,
+    })
+    await ctx.db.insert('organizationMembers', {
+      orgId,
+      userId,
+      role: 'owner',
+      joinedAt: 0,
+    })
+    const projectId = await ctx.db.insert('projects', {
+      orgId,
+      slug: 'backend',
+      title: 'Backend',
+      status: 'active',
+      language: 'fr',
+      introMode: 'video',
+      introMediaKey: 'orgs/o/projects/p/intro.webm',
+      maxDurationMinutes: 20,
+      candidateFields: {
+        phone: { enabled: false, required: false },
+        linkedin: { enabled: false, required: false },
+        cv: { enabled: false, required: false },
+        coverLetter: { enabled: false, required: false },
+      },
+      createdBy: userId,
+      createdAt: 0,
+      restricted: false,
+      sessionCount: 1,
+      completedSessionCount: 1,
+    })
+    await ctx.db.insert('questions', {
+      orgId,
+      projectId,
+      orderIndex: 0,
+      content: 'Question 0',
+      maxResponseSeconds: 120,
+      mediaKey: 'orgs/o/projects/p/q0.webm',
+      mediaKind: 'video',
+    })
+    const sessionId = await ctx.db.insert('sessions', {
+      orgId,
+      projectId,
+      accessToken: TOKEN,
+      candidateName: 'Alex Martin',
+      candidateEmail: CANDIDATE_EMAIL,
+      status: 'completed',
+      consentAcceptedAt: 1,
+      lastQuestionIndex: 1,
+      invitedBy: userId,
+      invitedAt: 0,
+      completedAt: 1,
+    })
+    await ctx.db.insert('emailLog', {
+      orgId,
+      template: 'candidate-invitation',
+      recipient: CANDIDATE_EMAIL,
+      status: 'sent',
+      sessionId,
+      createdAt: 0,
+    })
+    for (let i = 0; i < sessionEvents; i++) {
+      await ctx.db.insert('sessionEvents', {
+        orgId,
+        sessionId,
+        kind: 'upload_retried',
+        at: i,
+      })
+    }
+    return { orgId, projectId, sessionId }
+  })
+}
+
+async function erase(
+  t: ReturnType<typeof newTest>,
+  sessionId: Id<'sessions'>,
+): Promise<void> {
+  await t.mutation(internal.purge.deleteSessionRecords, {
+    sessionId,
+    reason: 'candidate_request',
+    candidateEmailHash: 'hash',
+    objectsDeleted: 0,
+  })
+  await t.finishAllScheduledFunctions(vi.runAllTimers)
+}
+
+describe('erasure', () => {
+  let t: ReturnType<typeof newTest>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubEnv('PURGE_HASH_SALT', 'test-salt')
+    t = newTest()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+  })
+
+  /**
+   * `purgeLog` took care to store only a hash of the address. Three tables
+   * away, `emailLog` kept it in clear text, indexed by recipient and readable
+   * by every member of the organisation through the deliverability screen.
+   */
+  it('takes the candidate address out of emailLog too', async () => {
+    const s = await seed(t)
+    await erase(t, s.sessionId)
+
+    const remaining = await t.run(async (ctx) =>
+      ctx.db
+        .query('emailLog')
+        .withIndex('by_recipient', (q) => q.eq('recipient', CANDIDATE_EMAIL))
+        .collect(),
+    )
+    expect(remaining).toEqual([])
+  })
+
+  /**
+   * `sessionEvents` is written by the candidate's own browser, so the number
+   * of rows to delete was theirs to choose. One transaction over the limit and
+   * erasure failed — after the recordings were already deleted, leaving a
+   * session that could never be erased and a button that would never work.
+   *
+   * `convex-test` does not enforce Convex's per-transaction document limits,
+   * so it cannot reproduce that failure. What it can hold is the property that
+   * replaces it: one pass deletes a bounded number of rows and hands the rest
+   * on, and the session row — with the register entry — goes last.
+   */
+  it('deletes in bounded passes and leaves the session row until the end', async () => {
+    const s = await seed(t, { sessionEvents: 450 })
+
+    // One pass, without draining the scheduler.
+    await t.mutation(internal.purge.deleteSessionRecords, {
+      sessionId: s.sessionId,
+      reason: 'candidate_request',
+      candidateEmailHash: 'hash',
+      objectsDeleted: 0,
+    })
+
+    const { session, events, log } = await t.run(async (ctx) => ({
+      session: await ctx.db.get('sessions', s.sessionId),
+      events: await ctx.db
+        .query('sessionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+      log: await ctx.db.query('purgeLog').collect(),
+    }))
+
+    expect(events.length).toBeGreaterThan(0)
+    expect(events.length).toBeLessThan(450)
+    // Still there, so an erasure that stops half-way is visibly unfinished
+    // rather than a register entry claiming a finished one.
+    expect(session).not.toBeNull()
+    expect(log).toEqual([])
+  })
+
+  it('erases a session with more rows than one transaction can carry', async () => {
+    const s = await seed(t, { sessionEvents: 450 })
+    await erase(t, s.sessionId)
+
+    const { session, events, log } = await t.run(async (ctx) => ({
+      session: await ctx.db.get('sessions', s.sessionId),
+      events: await ctx.db
+        .query('sessionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+      log: await ctx.db.query('purgeLog').collect(),
+    }))
+
+    expect(session).toBeNull()
+    expect(events).toEqual([])
+    // Exactly one register entry, written by the pass that removed the row.
+    expect(log).toHaveLength(1)
+  })
+
+  it('refuses to write the register without a salt', async () => {
+    vi.stubEnv('PURGE_HASH_SALT', '')
+    await expect(
+      t.query(internal.purge.collectSessionObjects, {
+        sessionId: (await seed(t)).sessionId,
+      }),
+    ).resolves.not.toBeNull()
+
+    const { hashEmail } = await import('./purge')
+    await expect(hashEmail(CANDIDATE_EMAIL)).rejects.toThrow(ConvexError)
+  })
+
+  it('salts the register hash', async () => {
+    const { hashEmail } = await import('./purge')
+    const salted = await hashEmail(CANDIDATE_EMAIL)
+    vi.stubEnv('PURGE_HASH_SALT', 'another-salt')
+    expect(await hashEmail(CANDIDATE_EMAIL)).not.toBe(salted)
+  })
+})
+
+/**
+ * The recruiter's own recordings are personal data as well. Deleting only the
+ * rows left them in the bucket, unreachable by any later purge and removable
+ * only by inspecting the bucket by hand.
+ */
+describe('deleting a role', () => {
+  let t: ReturnType<typeof newTest>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    t = newTest()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('schedules the intro and question media for deletion', async () => {
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      await ctx.db.delete('sessions', s.sessionId)
+      await ctx.db.patch('projects', s.projectId, {
+        sessionCount: 0,
+        completedSessionCount: 0,
+      })
+    })
+
+    const deleted: Array<Array<string>> = []
+    const spy = vi
+      .spyOn(await import('./lib/objectStore'), 'deleteObjects')
+      .mockImplementation((keys: Array<string>) => {
+        deleted.push(keys)
+        return Promise.resolve()
+      })
+
+    await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .mutation(api.projects.remove, { projectId: s.projectId })
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+
+    expect(deleted.flat().sort()).toEqual([
+      'orgs/o/projects/p/intro.webm',
+      'orgs/o/projects/p/q0.webm',
+    ])
+    spy.mockRestore()
+  })
+})

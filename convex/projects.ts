@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values'
 
 import { mutation, query } from './_generated/server'
+import { internal } from './_generated/api'
 import {
   candidateFieldsValidator,
   introModeValidator,
@@ -338,12 +339,24 @@ export const remove = mutation({
     const { project } = await requireProjectOwnerOrAdmin(ctx, projectId)
     if (project.sessionCount > 0) throw new ConvexError('project_has_sessions')
 
+    // The recruiter's own recordings. Their face and their voice are personal
+    // data too, and deleting only the rows left them in the bucket with
+    // nothing pointing at them: unreachable by any later purge, billed
+    // indefinitely, and removable only by hand.
+    const keys: Array<string> = []
+    if (project.introMediaKey) keys.push(project.introMediaKey)
+
     for (const table of ['questions', 'criteria'] as const) {
       const rows = await ctx.db
         .query(table)
         .withIndex('by_project', (q) => q.eq('projectId', projectId))
         .collect()
-      for (const row of rows) await ctx.db.delete(table, row._id)
+      for (const row of rows) {
+        if (table === 'questions' && 'mediaKey' in row && row.mediaKey) {
+          keys.push(row.mediaKey)
+        }
+        await ctx.db.delete(table, row._id)
+      }
     }
     const shares = await ctx.db
       .query('projectShares')
@@ -352,6 +365,9 @@ export const remove = mutation({
     for (const share of shares) await ctx.db.delete('projectShares', share._id)
 
     await ctx.db.delete('projects', projectId)
+    if (keys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
+    }
     return null
   },
 })

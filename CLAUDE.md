@@ -559,6 +559,14 @@ verification is in `TESTING.md`.
 - A caller never names the object key it wants to write. Derive it server-side
   from the row it belongs to, and re-derive it on attach rather than trusting
   the key you are handed.
+- **An authorisation never depends on an argument, `now` included.** A query
+  may take the caller's clock to stay reactive — that is what makes a link
+  visibly stop working the moment it expires, without polling — but it passes
+  it through `effectiveNow` from `convex/lib/clock.ts` before comparing it to
+  anything. An action has the server's clock and nothing reactive to preserve,
+  so it calls `Date.now()` and ignores whatever `now` it was handed. `now: 0`
+  used to resurrect an expired share link and mint an hour of signed URLs on
+  the candidate's video.
 
 ## Model output
 

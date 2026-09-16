@@ -19,6 +19,7 @@ import { ConvexError, v } from 'convex/values'
 
 import { action, internalQuery, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
+import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
 import { normalizeWeights } from './lib/weights'
@@ -144,7 +145,10 @@ export const revoke = mutation({
 export const view = query({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const resolved = await resolveShare(ctx, token, now)
+    // `now` is the viewer's clock, and the viewer is whoever holds the link.
+    // It stays, because it is what makes an expiry visible without polling —
+    // but it cannot decide the expiry. See convex/lib/clock.ts.
+    const resolved = await resolveShare(ctx, token, effectiveNow(now))
     if (resolved.state !== 'active') {
       return { state: resolved.state, report: null }
     }
@@ -231,7 +235,10 @@ export const recordView = mutation({
 export const resolveSharedMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const resolved = await resolveShare(ctx, token, now)
+    // Its only caller is the action below, which passes the server's clock.
+    // Bounded anyway: the guarantee should not rest on every future caller
+    // remembering.
+    const resolved = await resolveShare(ctx, token, effectiveNow(now))
     if (resolved.state !== 'active') return null
     const report = await ctx.db.get('reports', resolved.share.reportId)
     if (!report) return null
@@ -252,14 +259,21 @@ export const resolveSharedMedia = internalQuery({
  * The share token is re-checked here, server-side, before a single URL is
  * signed — a revoked or expired link mints nothing, and the URLs it did mint
  * die within the hour.
+ *
+ * An action has the server's clock and nothing reactive to preserve, so it
+ * uses it. `now` is still accepted, and still ignored: the client that sends
+ * it has no say in whether the link it holds has expired.
  */
 export const sharedMediaUrls = action({
-  args: { token: v.string(), now: v.number() },
+  args: { token: v.string(), now: v.optional(v.number()) },
   handler: async (
     ctx,
-    args,
+    { token },
   ): Promise<Array<{ segmentId: Id<'segments'>; url: string }>> => {
-    const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, args)
+    const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, {
+      token,
+      now: Date.now(),
+    })
     if (!segments) return []
     return await Promise.all(
       segments.map(async (segment) => ({

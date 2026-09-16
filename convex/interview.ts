@@ -21,6 +21,7 @@ import {
 import { internal } from './_generated/api'
 import { sessionEventKindValidator } from './schema'
 import { toCandidateQuestionView } from './lib/candidateView'
+import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
@@ -77,7 +78,13 @@ async function requireOpenSession(
 export const questions = query({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const { session, project } = await requireOpenSession(ctx, token, now)
+    // The candidate's clock keeps the gate reactive; it does not decide it.
+    // See convex/lib/clock.ts.
+    const { session, project } = await requireOpenSession(
+      ctx,
+      token,
+      effectiveNow(now),
+    )
     const rows = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
@@ -134,7 +141,7 @@ export const start = mutation({
 export const resolvePromptMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const { project } = await requireOpenSession(ctx, token, now)
+    const { project } = await requireOpenSession(ctx, token, effectiveNow(now))
     const rows = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
@@ -150,19 +157,25 @@ export const resolvePromptMedia = internalQuery({
   },
 })
 
+/**
+ * An action has the server's clock, so it uses it. `now` is still accepted,
+ * and still ignored: an expired role must not be able to sign playback URLs
+ * for whoever kept the link.
+ */
 export const promptMediaUrls = action({
-  args: { token: v.string(), now: v.number() },
+  args: { token: v.string(), now: v.optional(v.number()) },
   handler: async (
     ctx,
-    args,
+    { token },
   ): Promise<{
     intro: string | null
     questions: Array<{ questionId: Id<'questions'>; url: string }>
   }> => {
-    await ctx.runMutation(internal.candidate.consumeWriteLimit, {
-      token: args.token,
+    await ctx.runMutation(internal.candidate.consumeWriteLimit, { token })
+    const target = await ctx.runQuery(internal.interview.resolvePromptMedia, {
+      token,
+      now: Date.now(),
     })
-    const target = await ctx.runQuery(internal.interview.resolvePromptMedia, args)
     return {
       intro: target.introKey ? await presignGet(target.introKey) : null,
       questions: await Promise.all(

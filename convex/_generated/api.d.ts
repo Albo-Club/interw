@@ -28,6 +28,7 @@ import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_ai from "../lib/ai.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_candidateView from "../lib/candidateView.js";
+import type * as lib_clock from "../lib/clock.js";
 import type * as lib_evidence from "../lib/evidence.js";
 import type * as lib_htmlText from "../lib/htmlText.js";
 import type * as lib_instructions from "../lib/instructions.js";
@@ -89,6 +90,7 @@ declare const fullApi: ApiFromModules<{
   "lib/ai": typeof lib_ai;
   "lib/auth": typeof lib_auth;
   "lib/candidateView": typeof lib_candidateView;
+  "lib/clock": typeof lib_clock;
   "lib/evidence": typeof lib_evidence;
   "lib/htmlText": typeof lib_htmlText;
   "lib/instructions": typeof lib_instructions;

@@ -1746,3 +1746,54 @@ whole repo a real check to accommodate one dependency's defect.
 shape and happen to be clean, so they are imported normally; if one of them
 ever trips the same error, give it the same treatment rather than changing the
 compiler options.
+
+## A reasoning model does not answer in a string
+
+`zai-glm-5-3` returns `choices[0].message.content` as an **array of blocks**,
+not the string the OpenAI-compatible shape specifies and every other model we
+had used sends:
+
+```jsonc
+"content": [
+  { "type": "thinking", "closed": true,
+    "thinking": [ { "type": "text", "text": "…the model reasoning aloud…" } ] },
+  { "type": "text", "text": "{\"overallScore\": 71, …}" }
+]
+```
+
+The envelope parser accepted only `z.string()`, so **every** evaluation failed
+with `completion envelope was not understood`. It shipped to production,
+because nothing in the unit suite could see it: each test stubs `fetch` with a
+hand-written response, and every one of those stubs sent a string. A test
+cannot discover that a provider disagrees with its own documented shape.
+
+`answerText` in `convex/lib/ai.ts` now takes either form, and keeps **only the
+top-level `text` blocks**. Not the first block, and not all of them joined: the
+`thinking` block is the model musing, and it regularly contains JSON-looking
+fragments. Feeding those to `JSON.parse` would produce a report nobody wrote,
+which is worse than the crash it replaced — `convex/lib/ai.test.ts` puts a
+decoy JSON inside the reasoning precisely to pin that down.
+
+**The lesson is the procedure, not the patch.** Before pointing this product at
+a model nobody here has called, run it once against the real API and read what
+comes back. A temporary `internalAction` calling `complete()`, pushed to the
+dev deployment with `npx convex dev --once` and run with `npx convex run`,
+costs two minutes and is the only thing that can catch this class of problem.
+
+### Its corollary: reasoning burns the output ceiling
+
+Measured on the same call — a 27-token prompt asking for three fields spent
+**2 747 completion tokens**, nearly all of it reasoning the caller never sees.
+`MAX_COMPLETION_TOKENS` was 16 000, sized for an answer with no thinking in
+front of it. An interview report is a much longer prompt and a much longer
+answer, so the ceiling now stands at 32 000 and has to cover both halves.
+
+It is a ceiling, not a reservation: a short answer is billed short, so headroom
+is free and a truncation costs the whole job. The API accepts a `max_tokens` of
+131 072 on this model without complaint, so there is room above if reports ever
+start truncating.
+
+And when one does truncate, the provider says so plainly with
+`finish_reason: 'length'` — which `complete()` now checks **before** parsing.
+Without it, a cut-off answer surfaced as "model output was not valid JSON" and
+sent whoever read `jobLog` hunting for a schema bug that was not there.

@@ -317,16 +317,22 @@ export default defineSchema({
     recruiterNote: v.optional(v.string()),
     invitedBy: v.id('users'),
     invitedAt: v.number(),
-    /** Retention clock. Set when the interview completes; the purge cron
-     *  deletes media past it and logs the deletion. */
+    /** Retention clock. Set at invitation with a short window and pushed out
+     *  when the interview completes; the purge cron deletes media past it and
+     *  logs the deletion. */
     purgeAfter: v.optional(v.number()),
     mediaPurgedAt: v.optional(v.number()),
   })
     .index('by_token', ['accessToken'])
     .index('by_project', ['projectId'])
+    .index('by_project_and_email', ['projectId', 'candidateEmail'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
-    .index('by_purge_after', ['purgeAfter'])
+    // `mediaPurgedAt` leads so the range can exclude sessions already purged
+    // without a JS filter. Filtering them afterwards would let them pile up in
+    // the range and saturate the batch all over again — the shape of the bug
+    // this index was changed to fix.
+    .index('by_media_purged_and_purge_after', ['mediaPurgedAt', 'purgeAfter'])
     // Global candidate search. Scoped by orgId in the filter field so a query
     // can never reach past the caller's organisation, index or not.
     .searchIndex('search_candidate', {

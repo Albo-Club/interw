@@ -160,10 +160,13 @@ export const clearSessionMedia = internalMutation({
         thumbnailKey: undefined,
       })
     }
+    // `purgeAfter` stays. It is the record of which clock ran out, and
+    // clearing it would make a purged session indistinguishable from one that
+    // never had a clock. `mediaPurgedAt` is what takes the session out of
+    // `sessionsDueForPurge`.
     await ctx.db.patch('sessions', args.sessionId, {
       cvKey: undefined,
       coverLetterKey: undefined,
-      purgeAfter: undefined,
       mediaPurgedAt: Date.now(),
     })
     await ctx.db.insert('purgeLog', {
@@ -178,17 +181,30 @@ export const clearSessionMedia = internalMutation({
   },
 })
 
-/** Sessions whose retention clock has run out. */
+/**
+ * Sessions whose retention clock has run out and whose media is still there.
+ *
+ * Both bounds matter. `purgeAfter` is optional, and an absent field sorts
+ * before every number in a Convex index, so a range bounded only from above
+ * starts at the head of the index and is filled by every session that has no
+ * clock at all — the batch is spent before it reaches a single due one.
+ * `gt(0)` excludes them. The leading `eq('mediaPurgedAt', undefined)` excludes
+ * sessions already purged, which would otherwise stay in range for good and
+ * re-purge on every pass.
+ */
 export const sessionsDueForPurge = internalQuery({
   args: { before: v.number(), limit: v.number() },
   handler: async (ctx, { before, limit }) => {
     const due = await ctx.db
       .query('sessions')
-      .withIndex('by_purge_after', (q) => q.lt('purgeAfter', before))
+      .withIndex('by_media_purged_and_purge_after', (q) =>
+        q
+          .eq('mediaPurgedAt', undefined)
+          .gt('purgeAfter', 0)
+          .lt('purgeAfter', before),
+      )
       .take(limit)
-    return due
-      .filter((session) => session.purgeAfter !== undefined)
-      .map((session) => session._id)
+    return due.map((session) => session._id)
   },
 })
 

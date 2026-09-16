@@ -37,6 +37,19 @@ const MAX_BULK_INVITES = 100
 const NOTIFY_BATCH = 20
 
 /**
+ * Retention clock for an application that has not gone anywhere: six months
+ * from the invitation.
+ *
+ * Deliberately shorter than the twelve months an interview gets once it is
+ * finished (`RETENTION_MS` in convex/interview.ts, set by `finish`, which
+ * overwrites this). Most invitations in a hiring funnel are never opened or
+ * are abandoned part-way, and those are the records hardest to justify
+ * keeping: a name, an address, a CV and two half-answers, for a process that
+ * produced no assessment. Without a clock here they were kept forever.
+ */
+const INVITED_RETENTION_MS = 183 * 24 * 60 * 60 * 1000
+
+/**
  * What a recruiter list shows. `accessToken` is absent by construction: the
  * link is built server-side, on request, for one session at a time.
  */
@@ -147,6 +160,7 @@ export const invite = mutation({
         lastQuestionIndex: 0,
         invitedBy: user._id,
         invitedAt: now,
+        purgeAfter: now + INVITED_RETENTION_MS,
       })
       created += 1
       results.push({ sessionId, created: true })

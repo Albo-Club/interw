@@ -49,6 +49,11 @@ function AdminPage() {
     me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
   )
   const setSuperAdmin = useConvexMutation(api.admin.setSuperAdmin)
+  const health = useConvexQuery(
+    api.admin.pipelineHealth,
+    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
+  )
+  const relaunch = useConvexMutation(api.admin.relaunchSession)
 
   useEffect(() => {
     if (me?.kind === 'ready' && !me.user.superAdmin) {
@@ -86,6 +91,15 @@ function AdminPage() {
     }
   }
 
+  async function handleRelaunch(sessionId: string) {
+    try {
+      await relaunch({ sessionId: sessionId as never })
+      toast.success(t('admin.pipeline.stuck.relaunched'))
+    } catch {
+      toast.error(t('admin.pipeline.stuck.failed'))
+    }
+  }
+
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header className="flex items-center justify-between">
@@ -115,6 +129,108 @@ function AdminPage() {
           value={overview?.pendingInvitations}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('admin.pipeline.title')}</CardTitle>
+          <CardDescription>{t('admin.pipeline.description')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {!health ? (
+            <p className="text-muted-foreground text-sm">{t('loading')}</p>
+          ) : (
+            health.windows.map((window) => (
+              <section key={window.days} className="space-y-2">
+                <h3 className="text-sm font-medium">
+                  {t('admin.pipeline.window', { count: window.days })}
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {window.counts.map((row) => (
+                    <div key={row.step} className="rounded-md border p-3">
+                      <p className="text-xs font-medium">
+                        {t(`admin.pipeline.step.${row.step}`)}
+                      </p>
+                      <dl className="mt-2 space-y-1">
+                        {(['succeeded', 'failed', 'skipped'] as const).map(
+                          (outcome) => (
+                            <div
+                              key={outcome}
+                              className="flex items-baseline justify-between gap-2"
+                            >
+                              <dt className="text-muted-foreground text-xs">
+                                {t(`admin.pipeline.outcome.${outcome}`)}
+                              </dt>
+                              <dd
+                                className={
+                                  'text-sm tabular-nums ' +
+                                  (outcome === 'failed' &&
+                                  row.outcomes[outcome].count > 0
+                                    ? 'text-destructive font-semibold'
+                                    : '')
+                                }
+                              >
+                                {row.outcomes[outcome].count}
+                                {row.outcomes[outcome].capped ? '+' : ''}
+                              </dd>
+                            </div>
+                          ),
+                        )}
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('admin.pipeline.stuck.title')}</CardTitle>
+          <CardDescription>
+            {t('admin.pipeline.stuck.description')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!health ? (
+            <p className="text-muted-foreground text-sm">{t('loading')}</p>
+          ) : health.stuck.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {t('admin.pipeline.stuck.empty')}
+            </p>
+          ) : (
+            <ul className="divide-border divide-y text-sm">
+              {health.stuck.map((row) => (
+                <li
+                  key={row.sessionId}
+                  className="flex items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{row.candidateName}</p>
+                    <p className="text-muted-foreground truncate text-xs tabular-nums">
+                      {t('admin.pipeline.stuck.progress', {
+                        settled: row.settled,
+                        expected: row.expected,
+                      })}
+                      {row.completedAt
+                        ? ` · ${new Date(row.completedAt).toLocaleDateString()}`
+                        : ''}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleRelaunch(row.sessionId)}
+                  >
+                    {t('admin.pipeline.stuck.relaunch')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

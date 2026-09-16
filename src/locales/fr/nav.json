@@ -97,6 +97,31 @@
       "orgs_other": "{{count}} organisations",
       "isSuperAdmin": "Super-admin",
       "makeSuperAdmin": "Rendre super-admin"
+    },
+    "pipeline": {
+      "title": "Santé du pipeline",
+      "description": "Ce que la chaîne d’analyse a fait, et ce qu’elle a laissé derrière elle. Les compteurs sont des balayages bornés : un chiffre affiché « 200+ » a saturé le plafond.",
+      "window_one": "{{count}} dernier jour",
+      "window_other": "{{count}} derniers jours",
+      "step": {
+        "transcribe": "Transcription",
+        "report": "Rapport",
+        "notify": "Notification"
+      },
+      "outcome": {
+        "succeeded": "Réussis",
+        "failed": "Échoués",
+        "skipped": "Ignorés"
+      },
+      "stuck": {
+        "title": "Terminés sans rapport",
+        "description": "Entretiens que le candidat a menés à terme et qui n’ont produit aucune évaluation. Relancer conserve les transcriptions déjà obtenues et redonne une chance aux réponses en échec.",
+        "empty": "Rien de bloqué.",
+        "progress": "{{settled}} réponse(s) sur {{expected}} réglées",
+        "relaunch": "Relancer",
+        "relaunched": "Relance mise en file",
+        "failed": "Échec de la relance"
+      }
     }
   }
 }

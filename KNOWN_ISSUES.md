@@ -1678,6 +1678,19 @@ for (let i = 0; i < 60; i++) {
 Advancing the clock matters: it is what carries a job through the pool's retry
 backoff to a terminal failure, which is the state the fan-in has to handle.
 
+Related, and easy to lose an hour to: `finishInProgressScheduledFunctions`
+waits only on scheduled callbacks that have **already fired**. A mutation that
+calls `ctx.scheduler.runAfter(0, …)` leaves a real `setTimeout(0)` behind, so
+calling it on the next line finds nothing in flight and returns immediately —
+the scheduled work then runs after your assertions. Yield to the macrotask
+queue first:
+
+```ts
+await t.mutation(api.admin.relaunchSession, { sessionId })
+await new Promise((resolve) => setTimeout(resolve, 0))
+await t.finishInProgressScheduledFunctions()
+```
+
 ### `@convex-dev/workpool/test` breaks `pnpm typecheck` for the whole repo
 
 The `./test` subpath export points at the package's raw `src/test.ts`, not at

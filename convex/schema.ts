@@ -124,11 +124,15 @@ export const highlightKindValidator = v.union(
   v.literal('watchpoint'),
 )
 
-/** One pipeline step. Mirrors the chain in convex/pipeline.ts. */
+/** One pipeline step. Mirrors the chain in convex/pipeline.ts.
+ *  `relaunch` is not a step but an operator's decision to re-run one, kept in
+ *  the same log so the reason a session moved again is where the rest of its
+ *  history is. */
 export const jobStepValidator = v.union(
   v.literal('transcribe'),
   v.literal('report'),
   v.literal('notify'),
+  v.literal('relaunch'),
 )
 
 export const jobOutcomeValidator = v.union(
@@ -369,6 +373,10 @@ export default defineSchema({
     .index('by_token', ['accessToken'])
     .index('by_project', ['projectId'])
     .index('by_project_and_email', ['projectId', 'candidateEmail'])
+    // Deployment-wide, for the super-admin health screen: "which interviews
+    // finished and never produced a report?" is not a per-organisation
+    // question.
+    .index('by_status_and_completed', ['status', 'completedAt'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
     // `mediaPurgedAt` leads so the range can exclude sessions already purged

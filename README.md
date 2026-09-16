@@ -138,8 +138,7 @@ Do **not** set `VITE_CONVEX_URL` by hand — `convex deploy` injects it into the
 build. Do **not** set `CONVEX_DEPLOYMENT`; it is a per-developer dev binding.
 
 Everything else — `RESEND_*`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`,
-`OPENROUTER_API_KEY`, `OBJECT_STORE_*` — lives on the **Convex** deployment,
-not here. `pnpm run setup:prod` put them there.
+`OBJECT_STORE_*` — lives on the **Convex** deployment, not here. `pnpm run setup:prod` put them there.
 
 **4. Point the domain and deploy**
 
@@ -158,11 +157,14 @@ use Google sign-in, register the production redirect URI
 `https://<your-domain>/api/auth/callback/google` on the same OAuth client.
 
 > **Sovereignty note.** `osc-secnum-fr1` qualifies the *web tier*, which
-> stores nothing. Candidate transcripts and evaluations live in Convex (US
-> company, EU region) and pass through OpenRouter (US) on the way to the
-> evaluating model. If sovereignty is the goal rather than the label, the
-> order of work is the model provider first, the database second, the host
-> last.
+> persists nothing — though it renders reports server-side, so candidate data
+> does cross it in memory. Transcription and evaluation both run on Mistral;
+> the evaluation model is Z.ai's GLM, whose weights are Chinese but whose
+> inference runs on Mistral's infrastructure under its regional controls, so
+> no interview leaves it. Candidate transcripts and evaluations are *stored*
+> in Convex — a US company, EU region — which is now the largest remaining
+> exposure. If sovereignty is the goal rather than the label, the order of
+> work is the database first, the host second.
 
 ## Staying up to date with the starter
 

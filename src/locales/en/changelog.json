@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "european-ai": {
+      "title": "Interview analysis now runs in Europe",
+      "body": "Transcription and assessment both run on Mistral, a French provider, on European infrastructure. The assessment step used to pass through a router that picked a provider by price; we constrained it, but the guarantee rested on a setting rather than on where the request actually went. There is now one provider and one destination, and a candidate's interview does not leave it."
+    },
     "reliable-reports": {
       "title": "Reports you can rely on",
       "body": "An interview where one answer fails to transcribe now still produces a report, from the answers that worked, and says on its face that it is missing one — instead of silently producing nothing at all. A quote that cannot be matched against the recording is shown without a play button rather than sent to an approximate moment: if we cannot prove where something was said, we do not pretend to. We have also hardened how share links expire, what leaves our infrastructure, and how completely a deletion deletes."

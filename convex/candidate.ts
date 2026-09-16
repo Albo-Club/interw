@@ -277,7 +277,22 @@ export const swapDocumentKey = internalMutation({
     key: v.string(),
   },
   handler: async (ctx, { token, kind, key }) => {
-    const { session } = await requireSession(ctx, token)
+    const { session, project } = await requireSession(ctx, token)
+    // The same two checks `resolveDocumentUpload` makes, replayed here. The
+    // caller of this mutation then DELETES the object it replaced, so without
+    // them anyone still holding the link — the candidate, or whoever the
+    // invitation was forwarded to — could point `cvKey` at a name that does
+    // not exist and destroy the CV the recruiter had already read, days after
+    // the interview closed.
+    const gate = evaluateSessionGate({ session, project, now: Date.now() })
+    if (gate.state !== 'ready' && gate.state !== 'resumable') {
+      throw new ConvexError(gate.state)
+    }
+    const field = kind === 'cv' ? 'cv' : 'coverLetter'
+    if (!project.candidateFields[field].enabled) {
+      throw new ConvexError('not_requested')
+    }
+
     // Re-derive the acceptable prefix instead of trusting the key we are
     // handed: a candidate must not be able to point their row at an object
     // belonging to someone else's session.

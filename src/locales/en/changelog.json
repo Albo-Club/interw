@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "reliable-reports": {
+      "title": "Reports you can rely on",
+      "body": "An interview where one answer fails to transcribe now still produces a report, from the answers that worked, and says on its face that it is missing one — instead of silently producing nothing at all. A quote that cannot be matched against the recording is shown without a play button rather than sent to an approximate moment: if we cannot prove where something was said, we do not pretend to. We have also hardened how share links expire, what leaves our infrastructure, and how completely a deletion deletes."
+    },
     "report-sharing": {
       "title": "Share a report by link",
       "body": "Send one report to a hiring manager without giving them an account. Links expire on a schedule you choose and can be revoked at any time. They show the assessment and the recordings behind it — never your private notes or the candidate’s documents."

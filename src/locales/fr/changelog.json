@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "reliable-reports": {
+      "title": "Des rapports sur lesquels s’appuyer",
+      "body": "Un entretien dont une réponse échoue à la transcription produit désormais quand même un rapport, à partir des réponses exploitables, et indique qu’il lui en manque une — au lieu de ne rien produire du tout, en silence. Une citation qu’on ne retrouve pas dans l’enregistrement s’affiche sans bouton de lecture plutôt que de renvoyer à un moment approximatif : si nous ne pouvons pas prouver où une phrase a été dite, nous ne faisons pas semblant. Nous avons aussi renforcé l’expiration des liens de partage, ce qui sort de notre infrastructure, et le caractère complet d’une suppression."
+    },
     "report-sharing": {
       "title": "Partager un rapport par lien",
       "body": "Transmettez un rapport à un manager sans lui créer de compte. Le lien expire à la date que vous choisissez et se révoque à tout moment. Il affiche l'évaluation et les enregistrements qui l'appuient — jamais vos notes privées ni les documents du candidat."

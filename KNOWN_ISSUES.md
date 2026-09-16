@@ -1651,3 +1651,71 @@ created, so it narrows `cancelled` to `false` for the rest of the block. Put
 the flag on an object (`const run = { cancelled: false }`), and prefer a
 single check after all the awaiting and before any state is touched — so
 nothing half-applies when the user has navigated away.
+
+## Testing the pipeline: the Workpool under `convex-test`
+
+Two things bite when a test drives the real work pools rather than calling the
+pipeline's mutations by hand. Both are in `convex/fanin.test.ts`.
+
+### `finishAllScheduledFunctions` never returns
+
+A `Workpool` keeps a supervisor loop that reschedules itself for as long as
+the pool exists, so "every scheduled function has finished" is a state it
+never reaches. `t.finishAllScheduledFunctions(vi.runAllTimers)` throws
+`too many iterations` after a while, and the diagnosis it suggests —
+infinitely recursive scheduled functions — is a red herring: the pool is
+working exactly as designed.
+
+Drive it in bounded steps instead:
+
+```ts
+for (let i = 0; i < 60; i++) {
+  await vi.advanceTimersByTimeAsync(30_000)
+  await t.finishInProgressScheduledFunctions()
+}
+```
+
+Advancing the clock matters: it is what carries a job through the pool's retry
+backoff to a terminal failure, which is the state the fan-in has to handle.
+
+Related, and easy to lose an hour to: `finishInProgressScheduledFunctions`
+waits only on scheduled callbacks that have **already fired**. A mutation that
+calls `ctx.scheduler.runAfter(0, …)` leaves a real `setTimeout(0)` behind, so
+calling it on the next line finds nothing in flight and returns immediately —
+the scheduled work then runs after your assertions. Yield to the macrotask
+queue first:
+
+```ts
+await t.mutation(api.admin.relaunchSession, { sessionId })
+await new Promise((resolve) => setTimeout(resolve, 0))
+await t.finishInProgressScheduledFunctions()
+```
+
+### `@convex-dev/workpool/test` breaks `pnpm typecheck` for the whole repo
+
+The `./test` subpath export points at the package's raw `src/test.ts`, not at
+a build, so `tsc` follows it into `src/component/shared.ts` — which has an
+unused local. Under our `noUnusedLocals` that is an error, in a file we do not
+own, and it fails the repo's typecheck:
+
+```
+node_modules/…/@convex-dev/workpool/src/component/shared.ts(71,7):
+  error TS6133: '_' is declared but its value is never read.
+```
+
+Import it through a non-literal specifier so it stays out of the TypeScript
+program and is resolved only at runtime:
+
+```ts
+const workpoolTest = '@convex-dev/workpool/test'
+const { register } = (await import(/* @vite-ignore */ workpoolTest)) as {
+  register: (t: unknown, name: string) => void
+}
+```
+
+Do **not** relax `noUnusedLocals` to make this go away — it would cost the
+whole repo a real check to accommodate one dependency's defect.
+`@convex-dev/rate-limiter/test` and `@convex-dev/resend/test` ship the same
+shape and happen to be clean, so they are imported normally; if one of them
+ever trips the same error, give it the same treatment rather than changing the
+compiler options.

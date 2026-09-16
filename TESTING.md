@@ -26,8 +26,9 @@ undone later.
 | P2 | Private S3-compatible bucket | Scaleway Object Storage, region `fr-par`, bucket **not** public. Set `OBJECT_STORE_*` on the Convex deployment (see `.env.example`) | Every object is served through a signed URL minted after an access check. A public bucket silently defeats all of it |
 | P3 | Verify the bucket is private | `curl -I https://<bucket>.<endpoint>/probe.txt` on an object you uploaded | Must be `403`. A `200` means every candidate recording is world-readable |
 | P4 | Model provider keys | `MISTRAL_API_KEY` (transcription) and `OPENROUTER_API_KEY` (evaluation) on the Convex deployment | The pipeline fails at the first step without them, visibly, in `jobLog` |
+| P4b | **`PURGE_HASH_SALT` on the Convex deployment** | `pnpm exec convex env set PURGE_HASH_SALT "$(openssl rand -hex 32)"`, distinct per deployment | The erasure register stores a hash of the candidate's address, not the address. Unsalted, that hash is reversible by dictionary — the register would hold the data it exists to prove it destroyed. Unset, every erasure path throws `purge_hash_salt_not_configured`, on purpose |
 | P5 | Resend delivery webhook | Point a Resend webhook at `https://<convex-site-url>/resend-webhook`, store `RESEND_WEBHOOK_SECRET` | Without it a bounced invitation is indistinguishable from a candidate who has not opened it |
-| P6a | `MEDIA_ORIGIN` on the **web server** (Vercel project env, or `.env.local` for `pnpm dev`) | The bucket origin signed URLs point at, e.g. `https://interw-media.s3.fr-par.scw.cloud` | The CSP is served by the web server, which never talks to the bucket, so this is the one object-store setting that does not live on the Convex deployment. Unset, `media-src` falls back to `https:` — video still plays, but from any host |
+| P6a | `MEDIA_ORIGIN` on the **web server** (Scalingo app env, or `.env.local` for `pnpm dev`) | The bucket origin signed URLs point at, e.g. `https://interw-media.s3.fr-par.scw.cloud` | The CSP is served by the web server, which never talks to the bucket, so this is the one object-store setting that does not live on the Convex deployment. Unset, `media-src` falls back to `https:` — video still plays, but from any host |
 | P6 | Sentry for the backend | Convex dashboard → Settings → Integrations → Sentry | Convex reports thrown exceptions from actions through its own log stream; there is deliberately no Sentry SDK in the Convex runtime. The code's part of the contract is to never swallow an error, which `pnpm lint` and code review enforce |
 
 ## Level 1 — Build & smoke (automated, 2 min)
@@ -205,6 +206,9 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | SA3 | Toggle `superAdmin` on another user                | Persists, the other user sees `/app/admin`                        |
 | SA4 | Last-SA guard: remove own SA flag when sole SA     | Error "cannot_demote_last_superadmin"                             |
 | SA5 | `purgeExcept` (dev cleanup) — dev only             | Keeps only the specified email, deletes everything else           |
+| SA6 | **Pipeline health** | Counts per step and outcome over 24 h and 7 days. A figure shown as `200+` saturated the scan cap, deliberately — there is no count operator, so a bounded scan is the honest answer |
+| SA7 | **Finished without a report** | Lists interviews the candidate completed that produced no assessment, with how many answers settled. Empty is the normal state |
+| SA8 | **Relaunch** | Puts one named session back through the pipeline and records a `relaunch` row in `jobLog` with the operator's address. Running it twice changes nothing the first run did not. Refused for a session that is not `completed`, and for anyone who is not a super-admin |
 
 ## Level 5 — AI panel (10 min)
 
@@ -234,6 +238,8 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | S7 | `VITE_CONVEX_URL=… VITE_CONVEX_SITE_URL=… pnpm build:app`, then `PORT=8080 pnpm start` | `200` on `/` and `/login`. Built without those vars, the first render fails with `CONVEX_SITE_URL is not set` — they are build-time, not runtime |
 | S8 | Deployed app: `curl -I https://<domain>/`          | `200`, served by the Node server (not a static 404)                |
 | S9 | Scalingo build log                                 | Shows pnpm selected from the lockfile, then `convex deploy` running before the Vite build |
+| S10 | **Import a job ad refuses to reach inwards** | Paste, in turn: `http://169.254.169.254/latest/meta-data/`, `http://[::1]/`, `http://2130706433/`, `http://100.64.0.1/`, `http://printer.local/`, and a URL that 302s to any of them | All refused with `invalid_url`. The request is made by the deployment, not the browser, and its content comes back summarised by a model — so the channel is readable, not just reachable. `convex/lib/safeUrl.test.ts` holds the full table |
+| S11 | **Where the evaluation runs** | Read a `report` request body in the Convex logs | It carries `provider: { data_collection: 'deny', allow_fallbacks: false }`, and the prompt carries the transcript but **not** the candidate's name |
 
 ---
 
@@ -260,9 +266,18 @@ is cheaper to get wrong.
 | IA5 | Criteria and weights | Add three criteria with weights 10 / 10 / 10 | Each shows **34% / 33% / 33%** — never 33/33/33 |
 | IA6 | Publish gate | Try to publish with no question | Refused with "Add at least one question" |
 | IA7 | Import a job ad | Questions → Import from a job ad → paste a real published ad URL | Draft appears with the requested number of questions and criteria summing to 100. **Nothing is saved** until "Add all to the role" |
-| IA8 | Import SSRF guard | Paste `http://127.0.0.1:8080/` and `http://169.254.169.254/` | Both refused as "not a public web address" |
+| IA8 | Import SSRF guard | Paste `http://127.0.0.1:8080/`, `http://169.254.169.254/`, `http://2130706433/` and a URL that 302s to one of them | All refused as "not a public web address". See S10 and `convex/lib/safeUrl.test.ts` for the full table |
 | IA9 | Restrict a role | Share → name one colleague → Save | A different member (non-admin) no longer sees the role in the list, in search, or by URL — and gets **not found**, not "forbidden" |
 | IA10 | Archive | Archive an active role | Becomes read-only; editing is refused; restoring returns it to **Draft**, never straight to Active |
+| IA11 | Archiving needs owner or admin | As a plain member of the org, try to archive a live role | Refused. Archiving closes the link of every candidate mid-interview at once, so it is no longer less protected than deleting an empty role |
+
+### Editing a role that already has candidates
+
+| #  | Scenario | Steps | Expected |
+| -- | -------- | ----- | -------- |
+| IA12 | Deleting a question is refused | Invite one candidate, then try to delete a question | Refused (`project_has_sessions`). Deleting renumbers every following question, and the numbering a candidate is looking at mid-interview would change under them |
+| IA13 | Reordering is refused | Same role, drag a question | Refused for the same reason. Editing a question's **text** is still allowed: that changes what was asked, not which answer belongs to it |
+| IA14 | An answer stays under its own question | On a role whose questions were edited before this change shipped, open a report | Each answer sits under the question that was actually asked. The join is by `questionId`, not by position |
 
 ## Interw B — Candidate journey (20 min, repeat per browser)
 
@@ -295,6 +310,9 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IC1 | Transcription | After C16, watch the candidate page | Pipeline steps appear with timings; transcripts are written per segment |
 | IC2 | Report | Wait for `report · succeeded` | Report appears: verdict, score, per-criterion scores, quotes |
 | IC3 | **Evidence anchoring** | Click a quote's timestamp | The player switches to the right answer and seeks to the moment the quote was actually said — not to 0:00 |
+| IC3b | **A quote that cannot be anchored** | Edit a transcript row so a report's quote no longer appears in it, reload the report | The quote is still shown, with **no** seek button. It must never fall back to the model's own estimate — a citation that lands on the wrong moment costs every other one its credit |
+| IC10 | **A partial report** | Mark one uploaded segment `transcriptionState: 'failed'` before the fan-in completes | A report is still produced from the remaining answers, `reports.partial` is `true`, and exactly one recruiter email goes out. Before, the session froze with no report and no alert |
+| IC11 | **Relaunching a stuck session** | `/app/admin` → Finished without a report → Relaunch | The session re-enters the pipeline: transcripts already taken are kept, answers that failed get another attempt, and a `relaunch` row appears in `jobLog` with the operator's address |
 | IC4 | Idempotent replay | Re-run `internal.pipeline.generateReport` for the same session via the Convex dashboard | Logs `report · skipped`, writes nothing, sends no second email |
 | IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
 | IC6 | Malformed model output | Temporarily point `OPENROUTER_API_KEY` at a model that ignores schemas | The job **fails and retries**; no partial report is written |
@@ -312,15 +330,19 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID4 | Share withholds | On the shared page, search the HTML | No recruiter note, no candidate email, phone, LinkedIn, CV link, or internal role title |
 | ID5 | Revoke | Revoke, reload the shared page | "This link was revoked". Playback URLs stop being issued |
 | ID6 | Expiry | Create a link, set `expiresAt` to the past | "This link has expired" |
+| ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions` on a closed role |
 | ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
 
 ## Interw E — Retention and erasure (10 min)
 
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
-| IE1 | Candidate self-delete | Open `/s/{token}/privacy` → Delete everything | Every object under `orgs/{orgId}/sessions/{sessionId}/` is gone from the bucket; session, segments, transcripts, report and shares are gone; one `purgeLog` row exists carrying a **hash**, not the address |
+| IE1 | Candidate self-delete | Open `/s/{token}/privacy` → Delete everything | Every object under `orgs/{orgId}/sessions/{sessionId}/` is gone from the bucket; session, segments, transcripts, report, shares **and `emailLog` rows** are gone; one `purgeLog` row exists carrying a **salted hash** (P4b), not the address |
 | IE2 | Recruiter delete | Candidate page → Delete this candidate's data | Same outcome, `reason: recruiter_delete` |
-| IE3 | Retention purge | Set a completed session's `purgeAfter` to the past, run `internal.retention.purgeDueSessions` | Media objects deleted; the report and transcript **remain**; `mediaPurgedAt` set; the report page says the recordings were deleted |
+| IE3 | Retention purge | Set a completed session's `purgeAfter` to the past, run `internal.retention.purgeDueSessions` | Media objects deleted; the report and transcript **remain**; `mediaPurgedAt` set and `purgeAfter` **kept**; the report page says the recordings were deleted |
+| IE3b | The purge is not blocked by clockless sessions | Leave 40+ `pending` sessions on the deployment, then run IE3 | The due session is still found. An absent `purgeAfter` sorts before every value in a Convex index, so a range bounded only from above used to spend the whole batch on sessions with no clock at all and purge nothing, silently, forever |
+| IE6 | An abandoned application expires too | Invite a candidate, do not open the link, read the row | `purgeAfter` is set at the invitation, six months out — not only at `finish`. Most invitations are never opened, and those are the records hardest to justify keeping |
+| IE7 | Deleting a role takes its media | Record an intro and a question prompt on a role with no candidates, delete the role | Both objects are gone from the bucket, not just the rows |
 | IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
 | IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
 

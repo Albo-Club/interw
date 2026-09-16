@@ -14,6 +14,9 @@ authComponent.registerRoutes(http, createAuth)
  * by necessity, so the signature is the only thing standing between it and
  * forged bounce reports.
  */
+// access: an inbound webhook has no caller to authenticate. The access check
+// is the Svix signature over RESEND_WEBHOOK_SECRET, verified inside
+// resend.handleResendEventWebhook before any event is trusted.
 http.route({
   path: '/resend-webhook',
   method: 'POST',

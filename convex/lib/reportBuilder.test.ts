@@ -134,7 +134,50 @@ describe('buildReport', () => {
     expect(report.criteriaScores[0].evidence[0]).toMatchObject({
       segmentId: answers[0].segmentId,
       startSeconds: 0,
+      anchored: true,
     })
+  })
+
+  /**
+   * A model paraphrases a hesitant answer — routinely — and produces a quote
+   * the transcript cannot match. The offset it supplied alongside used to be
+   * written as if it were an anchor, so the recruiter clicked and landed on
+   * the candidate saying something else.
+   */
+  it('marks a quote it cannot find as unanchored, with no offset at all', () => {
+    const report = build(
+      output({
+        criteria: [
+          {
+            ...output().criteria[0],
+            evidence: [
+              {
+                answerIndex: 0,
+                quote: 'a sentence the candidate never said',
+                startSeconds: 42,
+              },
+            ],
+          },
+          output().criteria[1],
+        ],
+      }),
+    )
+    expect(report.criteriaScores[0].evidence[0]).toMatchObject({
+      segmentId: answers[0].segmentId,
+      quote: 'a sentence the candidate never said',
+      anchored: false,
+    })
+    expect(report.criteriaScores[0].evidence[0].startSeconds).toBeUndefined()
+  })
+
+  it('anchors nothing when the transcript came back without timings', () => {
+    const untimed: Array<AnswerInput> = answers.map((answer) => ({
+      ...answer,
+      chunks: [],
+    }))
+    const report = buildReport({ output: output(), criteria, answers: untimed })
+    expect(report.criteriaScores[0].evidence[0].anchored).toBe(false)
+    expect(report.criteriaScores[0].evidence[0].startSeconds).toBeUndefined()
   })
 
   it('anchors a quote from a later chunk to that chunk, not the answer start', () => {

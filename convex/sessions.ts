@@ -19,7 +19,10 @@ import {
 } from './_generated/server'
 import { internal } from './_generated/api'
 import { requireOrgMember } from './lib/auth'
-import { requireProjectAccess } from './lib/projectAccess'
+import {
+  requireProjectAccess,
+  requireProjectOwnerOrAdmin,
+} from './lib/projectAccess'
 import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { deleteObjects } from './lib/objectStore'
@@ -35,6 +38,19 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const MAX_BULK_INVITES = 100
 /** Emails per scheduled batch, so one batch stays well inside a transaction. */
 const NOTIFY_BATCH = 20
+
+/**
+ * Retention clock for an application that has not gone anywhere: six months
+ * from the invitation.
+ *
+ * Deliberately shorter than the twelve months an interview gets once it is
+ * finished (`RETENTION_MS` in convex/interview.ts, set by `finish`, which
+ * overwrites this). Most invitations in a hiring funnel are never opened or
+ * are abandoned part-way, and those are the records hardest to justify
+ * keeping: a name, an address, a CV and two half-answers, for a process that
+ * produced no assessment. Without a clock here they were kept forever.
+ */
+const INVITED_RETENTION_MS = 183 * 24 * 60 * 60 * 1000
 
 /**
  * What a recruiter list shows. `accessToken` is absent by construction: the
@@ -112,16 +128,6 @@ export const invite = mutation({
     const org = await ctx.db.get('organizations', project.orgId)
     if (!org) throw new ConvexError('not_found')
 
-    const existing = await ctx.db
-      .query('sessions')
-      .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .collect()
-    const byEmail = new Map(
-      existing
-        .filter((s) => s.status === 'pending' || s.status === 'in_progress')
-        .map((s) => [s.candidateEmail, s]),
-    )
-
     const now = Date.now()
     const results: Array<{ sessionId: Id<'sessions'>; created: boolean }> = []
     const toNotify: Array<Id<'sessions'>> = []
@@ -129,7 +135,20 @@ export const invite = mutation({
 
     for (const raw of candidates) {
       const candidate = normalizeCandidate(raw)
-      const already = byEmail.get(candidate.email)
+      // One indexed lookup per candidate — at most MAX_BULK_INVITES of them —
+      // rather than reading every session of the role. `sessions` is the
+      // table the schema says genuinely reaches the thousands, and an
+      // unbounded `.collect()` on it meant that past a few thousand
+      // candidates no further invitation on that role was possible at all,
+      // single invitations included: they go through this same path.
+      const already = (
+        await ctx.db
+          .query('sessions')
+          .withIndex('by_project_and_email', (q) =>
+            q.eq('projectId', projectId).eq('candidateEmail', candidate.email),
+          )
+          .collect()
+      ).find((s) => s.status === 'pending' || s.status === 'in_progress')
       if (already) {
         results.push({ sessionId: already._id, created: false })
         toNotify.push(already._id)
@@ -147,6 +166,7 @@ export const invite = mutation({
         lastQuestionIndex: 0,
         invitedBy: user._id,
         invitedAt: now,
+        purgeAfter: now + INVITED_RETENTION_MS,
       })
       created += 1
       results.push({ sessionId, created: true })
@@ -220,7 +240,10 @@ export const invitationLink = query({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return { url: invitationUrl(session.accessToken) }
   },
 })
@@ -248,7 +271,10 @@ export const cancel = mutation({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     if (session.status === 'completed') throw new ConvexError('session_closed')
     await ctx.db.patch('sessions', sessionId, { status: 'cancelled' })
     return null
@@ -336,7 +362,10 @@ export const assertCanDelete = internalQuery({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return null
   },
 })

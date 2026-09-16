@@ -148,6 +148,42 @@ describe('shares.view', () => {
     expect(result.state).toBe('active')
   })
 
+  /**
+   * `now` arrives from whoever holds the link. Before this was bounded,
+   * `view({ token, now: 0 })` answered `active` on a link that had expired
+   * weeks earlier, and `sharedMediaUrls` then signed an hour of playback on
+   * the candidate's video. An expiry that the holder can argue with is not an
+   * expiry.
+   */
+  it('stays expired however far into the past the caller claims to be', async () => {
+    await t.run(async (ctx) => {
+      // Expired against the real server clock, not against the fixture's.
+      await ctx.db.patch('reportShares', s.shareId, { expiresAt: 1_000 })
+    })
+
+    for (const now of [0, -1, Number.MIN_SAFE_INTEGER]) {
+      const result = await t.query(api.shares.view, { token: s.token, now })
+      expect(result).toEqual({ state: 'expired', report: null })
+    }
+  })
+
+  it('mints no playback URL for an expired link, whatever `now` says', async () => {
+    await t.run(async (ctx) => {
+      await ctx.db.patch('reportShares', s.shareId, { expiresAt: 1_000 })
+    })
+
+    const urls = await t.action(api.shares.sharedMediaUrls, {
+      token: s.token,
+      now: 0,
+    })
+    expect(urls).toEqual([])
+  })
+
+  it('still lets an honest clock drive the view', async () => {
+    const result = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(result.state).toBe('active')
+  })
+
   it('reports unknown and malformed tokens the same way', async () => {
     for (const token of ['x'.repeat(43), '', 'nope', '../../reports']) {
       const result = await t.query(api.shares.view, { token, now: NOW })

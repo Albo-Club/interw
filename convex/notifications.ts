@@ -55,17 +55,16 @@ export const sendReportReady = internalMutation({
 
     // Idempotent: the pool may retry this job, and a recruiter should not get
     // the same report emailed to them twice.
+    //
+    // Asked of the session's own rows, not of the organisation's last 200
+    // emails. One bulk campaign of 300 invitations used to push the
+    // `report-ready` row out of that window, and the next retry of this job
+    // sent the whole report round again.
     const alreadySent = await ctx.db
       .query('emailLog')
-      .withIndex('by_org_and_created', (q) => q.eq('orgId', session.orgId))
-      .order('desc')
-      .take(200)
-    if (
-      alreadySent.some(
-        (entry) =>
-          entry.sessionId === sessionId && entry.template === 'report-ready',
-      )
-    ) {
+      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+      .collect()
+    if (alreadySent.some((entry) => entry.template === 'report-ready')) {
       return false
     }
 

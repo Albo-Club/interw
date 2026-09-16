@@ -61,6 +61,7 @@ export const forSession = query({
     const transcriptBySegment = new Map(
       transcripts.map((transcript) => [transcript.segmentId, transcript]),
     )
+    const questionById = new Map(questions.map((q) => [q._id, q]))
     const decidedBy = session.recruiterDecisionBy
       ? await ctx.db.get('users', session.recruiterDecisionBy)
       : null
@@ -105,9 +106,8 @@ export const forSession = query({
       answers: segments
         .sort((a, b) => a.questionIndex - b.questionIndex)
         .map((segment) => {
-          const question = questions.find(
-            (q) => q.orderIndex === segment.questionIndex,
-          )
+          // By id, not by index: see convex/pipeline.ts.
+          const question = questionById.get(segment.questionId)
           const transcript = transcriptBySegment.get(segment._id)
           return {
             segmentId: segment._id,

@@ -79,24 +79,31 @@ export function resolveQuoteStart(
 }
 
 /**
- * The offset to use, preferring the transcript over the model's guess, and
- * clamping to the clip so a citation can never seek past the end of a video.
+ * The offset to use, or null when the quote could not be anchored.
+ *
+ * Null rather than the model's own estimate. The estimate reads like an
+ * answer and is not one: a model that paraphrases an answer — which is what it
+ * does when a candidate hesitates — produces a quote the transcript cannot
+ * match and an offset from nowhere in particular. The recruiter clicks, the
+ * video lands on the candidate talking about something else, and every other
+ * citation in the report loses its credit too. A quote with no timestamp is
+ * still worth showing; a wrong timestamp is not.
+ *
+ * Clamped to the clip so an anchored citation can never seek past the end.
  */
 export function chooseStartSeconds({
   chunks,
   quote,
-  modelEstimate,
   durationSeconds,
 }: {
   chunks: ReadonlyArray<TimedChunk>
   quote: string
-  modelEstimate: number | null
   durationSeconds: number | null
-}): number {
+}): number | null {
   const resolved = resolveQuoteStart(chunks, quote)
-  const candidate = resolved ?? Math.max(0, modelEstimate ?? 0)
+  if (resolved === null) return null
   if (durationSeconds !== null && durationSeconds > 0) {
-    return Math.min(candidate, Math.max(0, durationSeconds - 1))
+    return Math.min(resolved, Math.max(0, durationSeconds - 1))
   }
-  return candidate
+  return resolved
 }

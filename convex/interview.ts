@@ -19,8 +19,10 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { sessionEventKindValidator } from './schema'
+import { introModeValidator, sessionEventKindValidator } from './schema'
+import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
+import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
@@ -34,6 +36,8 @@ import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const MAX_SEGMENT_BYTES = 300 * 1024 * 1024
+/** Newest events kept per session. See `logEvent`. */
+const MAX_SESSION_EVENTS = 200
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
 const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
 
@@ -76,8 +80,28 @@ async function requireOpenSession(
 /** The questions, in order, as the candidate may see them. */
 export const questions = query({
   args: { token: v.string(), now: v.number() },
+  // Enforced at the boundary rather than trusted to the projector. See
+  // convex/lib/candidateReturns.ts.
+  returns: v.object({
+    questions: v.array(
+      v.object({
+        ...candidateQuestionReturns.fields,
+        answered: v.boolean(),
+      }),
+    ),
+    resumeAtIndex: v.number(),
+    introMode: introModeValidator,
+    introText: v.union(v.string(), v.null()),
+    hasIntroMedia: v.boolean(),
+  }),
   handler: async (ctx, { token, now }) => {
-    const { session, project } = await requireOpenSession(ctx, token, now)
+    // The candidate's clock keeps the gate reactive; it does not decide it.
+    // See convex/lib/clock.ts.
+    const { session, project } = await requireOpenSession(
+      ctx,
+      token,
+      effectiveNow(now),
+    )
     const rows = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
@@ -86,16 +110,18 @@ export const questions = query({
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', session._id))
       .collect()
+    // By id, not by index: `orderIndex` is renumbered when the trame is
+    // edited, `questionId` is not. See convex/pipeline.ts.
     const answered = new Set(
       segments
         .filter((segment) => segment.uploadState === 'uploaded')
-        .map((segment) => segment.questionIndex),
+        .map((segment) => segment.questionId),
     )
 
     return {
       questions: rows.map((question) => ({
         ...toCandidateQuestionView(question),
-        answered: answered.has(question.orderIndex),
+        answered: answered.has(question._id),
       })),
       resumeAtIndex: session.lastQuestionIndex,
       introMode: project.introMode,
@@ -134,7 +160,7 @@ export const start = mutation({
 export const resolvePromptMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const { project } = await requireOpenSession(ctx, token, now)
+    const { project } = await requireOpenSession(ctx, token, effectiveNow(now))
     const rows = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
@@ -150,19 +176,25 @@ export const resolvePromptMedia = internalQuery({
   },
 })
 
+/**
+ * An action has the server's clock, so it uses it. `now` is still accepted,
+ * and still ignored: an expired role must not be able to sign playback URLs
+ * for whoever kept the link.
+ */
 export const promptMediaUrls = action({
-  args: { token: v.string(), now: v.number() },
+  args: { token: v.string(), now: v.optional(v.number()) },
   handler: async (
     ctx,
-    args,
+    { token },
   ): Promise<{
     intro: string | null
     questions: Array<{ questionId: Id<'questions'>; url: string }>
   }> => {
-    await ctx.runMutation(internal.candidate.consumeWriteLimit, {
-      token: args.token,
+    await ctx.runMutation(internal.candidate.consumeWriteLimit, { token })
+    const target = await ctx.runQuery(internal.interview.resolvePromptMedia, {
+      token,
+      now: Date.now(),
     })
-    const target = await ctx.runQuery(internal.interview.resolvePromptMedia, args)
     return {
       intro: target.introKey ? await presignGet(target.introKey) : null,
       questions: await Promise.all(
@@ -414,6 +446,20 @@ export const logEvent = mutation({
     // is no longer "open" — that is exactly when the trail is worth having.
     const session = await resolveSessionByToken(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
+
+    // Capped per session, oldest first. This endpoint is public, gated only by
+    // the token, and the rate limiter still allows 120 writes a minute — so
+    // the size of this table for one session was chosen by whoever held the
+    // link. It is a support trail, not an audit log: the most recent two
+    // hundred events are the ones that explain what just went wrong.
+    const existing = await ctx.db
+      .query('sessionEvents')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .take(MAX_SESSION_EVENTS + 1)
+    for (const stale of existing.slice(0, existing.length - MAX_SESSION_EVENTS)) {
+      await ctx.db.delete('sessionEvents', stale._id)
+    }
+
     await ctx.db.insert('sessionEvents', {
       orgId: session.orgId,
       sessionId: session._id,

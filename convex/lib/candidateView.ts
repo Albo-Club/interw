@@ -84,7 +84,10 @@ export type CandidateQuestionView = {
   content: string
   hintText: string | null
   maxResponseSeconds: number
-  mediaKind: Doc<'questions'>['mediaKind'] | null
+  // `NonNullable`, not the column's own type: the projector always resolves
+  // the absent case to `null`, and saying so is what lets the `returns`
+  // validator in candidateReturns.ts state the same thing.
+  mediaKind: NonNullable<Doc<'questions'>['mediaKind']> | null
   hasMedia: boolean
 }
 

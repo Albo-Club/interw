@@ -21,7 +21,6 @@ import { consumeLimit } from './rateLimiters'
 const DEFAULT_QUESTION_COUNT = 6
 const DEFAULT_CRITERIA_COUNT = 4
 const MIN_USABLE_TEXT = 400
-const FETCH_TIMEOUT_MS = 15_000
 
 const draftSchema = z.object({
   title: z.string().min(1).max(120),
@@ -58,36 +57,6 @@ export const resolveImportContext = internalQuery({
   },
 })
 
-/**
- * Only http(s), and never a private address: this fetches a URL chosen by a
- * user from inside our infrastructure, which is a server-side request forgery
- * primitive if left open.
- */
-function assertPublicHttpUrl(raw: string): URL {
-  let url: URL
-  try {
-    url = new URL(raw)
-  } catch {
-    throw new ConvexError('invalid_url')
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new ConvexError('invalid_url')
-  }
-  const host = url.hostname.toLowerCase()
-  const isPrivate =
-    host === 'localhost' ||
-    host === '::1' ||
-    host.endsWith('.localhost') ||
-    host.endsWith('.internal') ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  if (isPrivate) throw new ConvexError('invalid_url')
-  return url
-}
-
 export const importFromUrl = action({
   args: {
     projectId: v.id('projects'),
@@ -102,15 +71,13 @@ export const importFromUrl = action({
     )
     await consumeLimit(ctx, 'jobImport', context.actorId)
 
-    const url = assertPublicHttpUrl(args.url)
-    const response = await fetch(url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: { Accept: 'text/html,application/xhtml+xml' },
-    })
-    if (!response.ok) throw new ConvexError('page_unreachable')
-
-    const pageText = htmlToText(await response.text())
+    // Fetching happens in the Node runtime, which is the only place with a
+    // resolver — see convex/jobImportFetch.ts for why that matters here.
+    const html: string = await ctx.runAction(
+      internal.jobImportFetch.fetchJobPage,
+      { url: args.url },
+    )
+    const pageText = htmlToText(html)
     // Below this, the page was almost certainly a JS shell or a consent wall,
     // and a model handed 80 characters will invent an entire role.
     if (pageText.length < MIN_USABLE_TEXT) throw new ConvexError('page_too_thin')

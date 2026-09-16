@@ -29,8 +29,31 @@ const MISTRAL_TRANSCRIPTION_URL =
 const OPENROUTER_COMPLETIONS_URL =
   'https://openrouter.ai/api/v1/chat/completions'
 
-const MAX_ATTEMPTS = 3
+/**
+ * Attempts inside one call. Two, not three: the work pool already retries the
+ * whole job four times with its own backoff, so three here multiplied out to
+ * up to 24 deep-model completions for a single report — each one billed, and
+ * each one holding a slot in a pool of three.
+ */
+const MAX_ATTEMPTS = 2
 const RETRY_BASE_MS = 600
+
+/**
+ * Wall-clock ceilings. Without them a provider that accepts the connection and
+ * never answers holds the action until Convex's own 10-minute limit, times
+ * every attempt, times every model in the chain — three stuck sessions were
+ * enough to block the report pool for hours.
+ */
+const COMPLETION_TIMEOUT_MS = 120_000
+/** Transcription uploads the audio, so it gets more room. */
+const TRANSCRIPTION_TIMEOUT_MS = 300_000
+
+/**
+ * Output ceiling. Unset, the length came from whatever the provider defaults
+ * to; a truncated answer is invalid JSON, which fails validation, which costs
+ * another attempt at full price.
+ */
+const MAX_COMPLETION_TOKENS = 16_000
 
 export type CompletionTier = 'fast' | 'deep'
 
@@ -73,6 +96,9 @@ export type TranscriptionResult = {
   text: string
   words: Array<TranscriptWord>
   model: string
+  /** Seconds of audio the provider reported having processed, when it does.
+   *  Written to `jobLog` so the cost of an interview is measurable. */
+  audioSeconds: number | null
 }
 
 const mistralSegmentSchema = z.object({
@@ -85,6 +111,7 @@ const mistralTranscriptionSchema = z.object({
   text: z.string(),
   model: z.string().optional(),
   segments: z.array(mistralSegmentSchema).optional(),
+  usage: z.object({ total_seconds: z.number() }).optional(),
 })
 
 export type TranscribeOptions = {
@@ -123,6 +150,7 @@ export async function transcribe(
     { Authorization: `Bearer ${apiKey}` },
     form,
     'transcription',
+    TRANSCRIPTION_TIMEOUT_MS,
   )
 
   const parsed = mistralTranscriptionSchema.safeParse(payload)
@@ -134,8 +162,13 @@ export async function transcribe(
 
   const text = parsed.data.text.trim()
   // No segments back (very short clip, or granularity unsupported): keep the
-  // text rather than lose it, and mark the whole clip as one span. Evidence
-  // anchoring degrades to "start of the answer", which is honest.
+  // text, and keep the timings empty.
+  //
+  // This used to fabricate one span covering the whole clip at `{start: 0}`.
+  // It looked harmless and was not: every quote from that answer then
+  // "resolved" to 0:00 and arrived in the report indistinguishable from a
+  // genuine anchor. An empty list is what we actually know, and it makes
+  // those citations honestly unanchored.
   const words: Array<TranscriptWord> =
     parsed.data.segments && parsed.data.segments.length > 0
       ? parsed.data.segments.map((s) => ({
@@ -143,11 +176,14 @@ export async function transcribe(
           end: s.end,
           text: s.text.trim(),
         }))
-      : text
-        ? [{ start: 0, end: 0, text }]
-        : []
+      : []
 
-  return { text, words, model: parsed.data.model ?? TRANSCRIPTION_MODEL }
+  return {
+    text,
+    words,
+    model: parsed.data.model ?? TRANSCRIPTION_MODEL,
+    audioSeconds: parsed.data.usage?.total_seconds ?? null,
+  }
 }
 
 /* ───────────────────────────── Completions ─────────────────────────────── */
@@ -161,6 +197,12 @@ const openRouterResponseSchema = z.object({
     )
     .min(1),
   model: z.string().optional(),
+  usage: z
+    .object({
+      prompt_tokens: z.number().optional(),
+      completion_tokens: z.number().optional(),
+    })
+    .optional(),
 })
 
 export type CompleteOptions<T> = {
@@ -174,7 +216,39 @@ export type CompleteOptions<T> = {
   temperature?: number
 }
 
-export type CompleteResult<T> = { value: T; model: string }
+export type CompleteResult<T> = {
+  value: T
+  model: string
+  /** Tokens the provider billed, when it reports them. Written to `jobLog`
+   *  so the cost of a report is a query rather than a guess. */
+  usage: { promptTokens: number; completionTokens: number } | null
+}
+
+/**
+ * Where the evaluation is allowed to run.
+ *
+ * `data_collection: 'deny'` is the one that matters. OpenRouter otherwise
+ * routes to whatever is cheapest and available, some of which retains and
+ * trains on prompts — and the prompt here is a candidate's interview, in full.
+ * The module header above claims a European provider for the recordings; it
+ * said nothing about where their content went, and neither did the privacy
+ * page. `allow_fallbacks: false` stops a refusal being silently worked around.
+ *
+ * `order` pins the named providers, in preference order, and is left to the
+ * deployment: the slugs are OpenRouter's own and change with its catalogue, so
+ * a wrong one here would fail every evaluation with no way to find out from
+ * this environment. Unset, `data_collection` still decides.
+ */
+function providerRouting(): Record<string, unknown> {
+  const order = process.env.OPENROUTER_PROVIDER_ORDER?.split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  return {
+    data_collection: 'deny',
+    allow_fallbacks: false,
+    ...(order && order.length > 0 ? { order } : {}),
+  }
+}
 
 /**
  * One structured completion, validated.
@@ -205,6 +279,8 @@ export async function complete<T>(
           model,
           messages: options.messages,
           temperature: options.temperature ?? 0.2,
+          max_tokens: MAX_COMPLETION_TOKENS,
+          provider: providerRouting(),
           // `strict: false` on purpose. Strict decoding is implemented
           // differently by every model behind OpenRouter, and several reject
           // perfectly valid JSON Schema keywords outright — which would turn
@@ -221,6 +297,7 @@ export async function complete<T>(
           },
         }),
         `completion(${model})`,
+        COMPLETION_TIMEOUT_MS,
       )
 
       const envelope = openRouterResponseSchema.safeParse(payload)
@@ -235,13 +312,26 @@ export async function complete<T>(
       return {
         value: parseModelJson(content, options.schema, options.schemaName),
         model: envelope.data.model ?? model,
+        usage: envelope.data.usage
+          ? {
+              promptTokens: envelope.data.usage.prompt_tokens ?? 0,
+              completionTokens: envelope.data.usage.completion_tokens ?? 0,
+            }
+          : null,
       }
     } catch (error) {
       lastError = error
     }
   }
+  // The real reason, not just "everything failed". `jobLog` records
+  // `error.message` and nothing else, so a chain summary alone could not tell
+  // a 401 from a spent budget from a truncated answer from a Zod failure —
+  // which is every question worth asking when a report does not arrive.
+  const reason =
+    lastError instanceof Error ? lastError.message : String(lastError ?? '')
   throw new AiError(
-    `completion failed on every model in the chain (${chain.join(' → ')})`,
+    `completion failed on every model in the chain (${chain.join(' → ')})` +
+      (reason ? `: ${reason}` : ''),
     lastError,
   )
 }
@@ -287,11 +377,17 @@ async function postWithRetry(
   headers: Record<string, string>,
   body: BodyInit,
   label: string,
+  timeoutMs: number,
 ): Promise<unknown> {
   let lastError: unknown
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const response = await fetch(url, { method: 'POST', headers, body })
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      })
       if (response.ok) return await response.json()
 
       const detail = (await response.text()).slice(0, 500)

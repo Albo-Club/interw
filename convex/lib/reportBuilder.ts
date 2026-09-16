@@ -78,15 +78,19 @@ export function buildReport({
     startSeconds: number
   }) => {
     const answer = requireIndex(answers, evidence.answerIndex, 'answer')
+    // `evidence.startSeconds` — the model's own guess — is read off the
+    // output and deliberately not used. The transcript anchors the quote or
+    // nothing does.
+    const startSeconds = chooseStartSeconds({
+      chunks: answer.chunks,
+      quote: evidence.quote,
+      durationSeconds: answer.durationSeconds,
+    })
     return {
       segmentId: answer.segmentId,
       quote: evidence.quote,
-      startSeconds: chooseStartSeconds({
-        chunks: answer.chunks,
-        quote: evidence.quote,
-        modelEstimate: evidence.startSeconds,
-        durationSeconds: answer.durationSeconds,
-      }),
+      startSeconds: startSeconds ?? undefined,
+      anchored: startSeconds !== null,
     }
   }
 

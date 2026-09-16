@@ -67,6 +67,15 @@ export const uploadStateValidator = v.union(
   v.literal('failed'),
 )
 
+/** Where one answer got to in the transcription step. Both `done` and
+ *  `failed` are terminal: the fan-in counts them the same way, and only the
+ *  report cares about the difference. */
+export const transcriptionStateValidator = v.union(
+  v.literal('pending'),
+  v.literal('done'),
+  v.literal('failed'),
+)
+
 export const recommendationValidator = v.union(
   v.literal('strong_no'),
   v.literal('no'),
@@ -115,11 +124,15 @@ export const highlightKindValidator = v.union(
   v.literal('watchpoint'),
 )
 
-/** One pipeline step. Mirrors the chain in convex/pipeline.ts. */
+/** One pipeline step. Mirrors the chain in convex/pipeline.ts.
+ *  `relaunch` is not a step but an operator's decision to re-run one, kept in
+ *  the same log so the reason a session moved again is where the rest of its
+ *  history is. */
 export const jobStepValidator = v.union(
   v.literal('transcribe'),
   v.literal('report'),
   v.literal('notify'),
+  v.literal('relaunch'),
 )
 
 export const jobOutcomeValidator = v.union(
@@ -143,14 +156,78 @@ export const sessionEventKindValidator = v.union(
   v.literal('render_error'),
 )
 
-/** A quote anchored to the exact second of the video that backs it. Every
- *  claim the model makes carries one — that is what makes the report an
- *  evaluation rather than an opinion. */
+/**
+ * A quote from an answer, and the second of video it came from when the
+ * transcript could be made to agree.
+ *
+ * `startSeconds` is absent exactly when `anchored` is false, and the pair is
+ * written in one place (`lib/reportBuilder.ts`). Anchoring can fail honestly —
+ * a model paraphrases a hesitant answer, or the provider returned no timed
+ * segments for the clip at all — and the report then shows the quote without
+ * offering to seek to it. The alternative, the model's own estimate, reads
+ * like an answer and is not one: it sends the recruiter to the wrong moment,
+ * and takes the credit of every other citation with it.
+ */
 const evidenceValidator = v.object({
   segmentId: v.id('segments'),
-  startSeconds: v.number(),
+  startSeconds: v.optional(v.number()),
+  anchored: v.boolean(),
   quote: v.string(),
 })
+
+/**
+ * Criterion × question grid. Typed rather than `v.any()`: an untyped blob here
+ * is how a model's malformed output reaches the UI.
+ *
+ * Declared here rather than inline in the table so the share surface's
+ * `returns` validator can reuse it — the fields a share link shows ARE the
+ * fields the table stores, and a second copy would drift from this one.
+ */
+export const fitMatrixValidator = v.object({
+  criteria: v.array(
+    v.object({
+      criterionId: v.id('criteria'),
+      score: v.number(),
+      level: fitLevelValidator,
+      statement: v.string(),
+    }),
+  ),
+  questions: v.array(
+    v.object({
+      questionId: v.id('questions'),
+      questionIndex: v.number(),
+      score: v.number(),
+      summary: v.string(),
+      depth: depthLevelValidator,
+      evidence: v.optional(evidenceValidator),
+    }),
+  ),
+})
+
+/** Computed, not generated — see paraverbalDimensionValidator. */
+export const paraverbalValidator = v.object({
+  dimensions: v.array(
+    v.object({
+      key: paraverbalDimensionValidator,
+      /** 0..10. */
+      score: v.number(),
+      /** The measurement behind the score, e.g. words per minute. */
+      measure: v.number(),
+    }),
+  ),
+  wordsPerMinute: v.number(),
+  totalSpeakingSeconds: v.number(),
+})
+
+/** One scored criterion, with the quotes behind the score. */
+export const criteriaScoresValidator = v.array(
+  v.object({
+    criterionId: v.id('criteria'),
+    score: v.number(),
+    rationale: v.string(),
+    evidence: v.array(evidenceValidator),
+  }),
+)
 
 export default defineSchema({
   users: defineTable({
@@ -311,22 +388,56 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     lastQuestionIndex: v.number(),
     durationSeconds: v.optional(v.number()),
+    /* ── Fan-in state, written only by convex/pipeline.ts ──────────────────
+     * How many answers the pipeline is waiting on, and how many have reached
+     * a TERMINAL outcome — succeeded or failed for good. Materialising the
+     * count is what lets a definitive failure be an outcome rather than a
+     * silence: the old gate asked "does every answer have a transcript?",
+     * which a transcription that had exhausted its retries could never make
+     * true again, so the session froze with no report and no alert.
+     *
+     * `reportJobEnqueuedAt` is the claim. The mutation that completes the
+     * count reads and writes this row, so Convex's OCC picks exactly one of
+     * two answers landing together — which is what stopped two `generateReport`
+     * jobs, and two deep-model bills, per interview.
+     * ------------------------------------------------------------------- */
+    segmentsExpected: v.optional(v.number()),
+    segmentsSettled: v.optional(v.number()),
+    reportJobEnqueuedAt: v.optional(v.number()),
+    /** The report's headline result, copied here once by the queue when the
+     *  report is written. Denormalised because the two screens that need it —
+     *  the dashboard and the candidate table — need it for every row at once,
+     *  and reading `reports` per session made the dashboard a reactive N+1
+     *  that re-ran on every candidate's upload. Never written by a recruiter;
+     *  the report remains the source of truth. */
+    overallScore: v.optional(v.number()),
+    recommendation: v.optional(recommendationValidator),
     recruiterDecision: v.optional(recruiterDecisionValidator),
     recruiterDecisionBy: v.optional(v.id('users')),
     recruiterDecisionAt: v.optional(v.number()),
     recruiterNote: v.optional(v.string()),
     invitedBy: v.id('users'),
     invitedAt: v.number(),
-    /** Retention clock. Set when the interview completes; the purge cron
-     *  deletes media past it and logs the deletion. */
+    /** Retention clock. Set at invitation with a short window and pushed out
+     *  when the interview completes; the purge cron deletes media past it and
+     *  logs the deletion. */
     purgeAfter: v.optional(v.number()),
     mediaPurgedAt: v.optional(v.number()),
   })
     .index('by_token', ['accessToken'])
     .index('by_project', ['projectId'])
+    .index('by_project_and_email', ['projectId', 'candidateEmail'])
+    // Deployment-wide, for the super-admin health screen: "which interviews
+    // finished and never produced a report?" is not a per-organisation
+    // question.
+    .index('by_status_and_completed', ['status', 'completedAt'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
-    .index('by_purge_after', ['purgeAfter'])
+    // `mediaPurgedAt` leads so the range can exclude sessions already purged
+    // without a JS filter. Filtering them afterwards would let them pile up in
+    // the range and saturate the batch all over again — the shape of the bug
+    // this index was changed to fix.
+    .index('by_media_purged_and_purge_after', ['mediaPurgedAt', 'purgeAfter'])
     // Global candidate search. Scoped by orgId in the filter field so a query
     // can never reach past the caller's organisation, index or not.
     .searchIndex('search_candidate', {
@@ -348,6 +459,10 @@ export default defineSchema({
     durationSeconds: v.optional(v.number()),
     uploadState: uploadStateValidator,
     uploadAttempts: v.number(),
+    /** Where this answer got to in the pipeline. `failed` is a terminal state,
+     *  not a missing transcript: it is what lets the fan-in complete and the
+     *  report say which answers it could not read. */
+    transcriptionState: v.optional(transcriptionStateValidator),
     recordedAt: v.number(),
   })
     .index('by_session', ['sessionId', 'questionIndex'])
@@ -377,56 +492,19 @@ export default defineSchema({
     overallScore: v.number(),
     recommendation: recommendationValidator,
     executiveSummary: v.string(),
-    criteriaScores: v.array(
-      v.object({
-        criterionId: v.id('criteria'),
-        score: v.number(),
-        rationale: v.string(),
-        evidence: v.array(evidenceValidator),
-      }),
-    ),
+    criteriaScores: criteriaScoresValidator,
     strengths: v.array(v.string()),
     concerns: v.array(v.string()),
+    /** True when at least one answer could not be transcribed and the report
+     *  was written without it. A report that is missing evidence has to say
+     *  so: the alternative is a confident-looking assessment of five answers
+     *  presented as an assessment of seven. */
+    partial: v.optional(v.boolean()),
     /** Criterion × question grid. Typed rather than `v.any()`: an untyped
      *  blob here is how a model's malformed output reaches the UI. */
-    fitMatrix: v.optional(
-      v.object({
-        criteria: v.array(
-          v.object({
-            criterionId: v.id('criteria'),
-            score: v.number(),
-            level: fitLevelValidator,
-            statement: v.string(),
-          }),
-        ),
-        questions: v.array(
-          v.object({
-            questionId: v.id('questions'),
-            questionIndex: v.number(),
-            score: v.number(),
-            summary: v.string(),
-            depth: depthLevelValidator,
-            evidence: v.optional(evidenceValidator),
-          }),
-        ),
-      }),
-    ),
+    fitMatrix: v.optional(fitMatrixValidator),
     /** Computed, not generated — see paraverbalDimensionValidator. */
-    paraverbal: v.optional(
-      v.object({
-        dimensions: v.array(
-          v.object({
-            key: paraverbalDimensionValidator,
-            /** 0..10. */
-            score: v.number(),
-            /** The measurement behind the score, e.g. words per minute. */
-            measure: v.number(),
-          }),
-        ),
-        wordsPerMinute: v.number(),
-        totalSpeakingSeconds: v.number(),
-      }),
-    ),
+    paraverbal: v.optional(paraverbalValidator),
     highlights: v.optional(
       v.array(
         v.object({
@@ -490,7 +568,11 @@ export default defineSchema({
   })
     .index('by_org_and_created', ['orgId', 'createdAt'])
     .index('by_recipient', ['recipient'])
-    .index('by_provider_id', ['providerId']),
+    .index('by_provider_id', ['providerId'])
+    // Erasure has to be able to find every row that names a candidate, and
+    // the report notification has to be able to ask "did I already send this
+    // one?" exactly rather than by scanning the last 200 emails of the org.
+    .index('by_session', ['sessionId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,
    *  not the address: a deletion register must be able to answer "did you
@@ -523,6 +605,12 @@ export default defineSchema({
     attempt: v.number(),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
+    /** What the step cost, when the provider says. Without these, "what does
+     *  one interview cost?" has no answer at all — which is the question
+     *  under every other question about pricing this product. */
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    audioSeconds: v.optional(v.number()),
     at: v.number(),
   })
     .index('by_session', ['sessionId'])

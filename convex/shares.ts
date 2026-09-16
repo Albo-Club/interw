@@ -19,6 +19,13 @@ import { ConvexError, v } from 'convex/values'
 
 import { action, internalQuery, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
+import {
+  criteriaScoresValidator,
+  fitMatrixValidator,
+  paraverbalValidator,
+  recommendationValidator,
+} from './schema'
+import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
 import { normalizeWeights } from './lib/weights'
@@ -141,10 +148,66 @@ export const revoke = mutation({
 
 /* ─────────────────────────── Public side ───────────────────────────────── */
 
+/**
+ * What a share link is allowed to show.
+ *
+ * Enforced by Convex on the way out, not only by the code above. The list of
+ * what is withheld — the recruiter's private note, the CV, the cover letter,
+ * the phone number, the LinkedIn, the access token — is a decision, and a
+ * decision that only lives in a `.map()` is one field away from being undone
+ * by someone adding "just the email so we can reply".
+ */
+const shareViewReturns = v.object({
+  state: v.union(
+    v.literal('active'),
+    v.literal('expired'),
+    v.literal('revoked'),
+    v.literal('not_found'),
+  ),
+  report: v.union(
+    v.null(),
+    v.object({
+      organisationName: v.string(),
+      jobTitle: v.string(),
+      candidateName: v.string(),
+      completedAt: v.union(v.number(), v.null()),
+      overallScore: v.number(),
+      recommendation: recommendationValidator,
+      executiveSummary: v.string(),
+      strengths: v.array(v.string()),
+      concerns: v.array(v.string()),
+      criteria: v.array(
+        v.object({
+          _id: v.id('criteria'),
+          label: v.string(),
+          weight: v.number(),
+          normalizedWeight: v.number(),
+        }),
+      ),
+      // The same validators the table is defined with: what a share shows of
+      // the report IS what the report holds, and a second copy would drift.
+      criteriaScores: criteriaScoresValidator,
+      fitMatrix: v.union(fitMatrixValidator, v.null()),
+      paraverbal: v.union(paraverbalValidator, v.null()),
+      answers: v.array(
+        v.object({
+          segmentId: v.id('segments'),
+          questionIndex: v.number(),
+          question: v.string(),
+        }),
+      ),
+    }),
+  ),
+})
+
 export const view = query({
   args: { token: v.string(), now: v.number() },
+  returns: shareViewReturns,
   handler: async (ctx, { token, now }) => {
-    const resolved = await resolveShare(ctx, token, now)
+    // `now` is the viewer's clock, and the viewer is whoever holds the link.
+    // It stays, because it is what makes an expiry visible without polling —
+    // but it cannot decide the expiry. See convex/lib/clock.ts.
+    const resolved = await resolveShare(ctx, token, effectiveNow(now))
     if (resolved.state !== 'active') {
       return { state: resolved.state, report: null }
     }
@@ -175,6 +238,8 @@ export const view = query({
         .collect(),
     ])
 
+    const questionById = new Map(questions.map((q) => [q._id, q]))
+
     return {
       state: 'active' as const,
       report: {
@@ -204,9 +269,8 @@ export const view = query({
           .map((segment) => ({
             segmentId: segment._id,
             questionIndex: segment.questionIndex,
-            question:
-              questions.find((q) => q.orderIndex === segment.questionIndex)
-                ?.content ?? '',
+            // By id, not by index: see convex/pipeline.ts.
+            question: questionById.get(segment.questionId)?.content ?? '',
           })),
       },
     }
@@ -231,7 +295,10 @@ export const recordView = mutation({
 export const resolveSharedMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const resolved = await resolveShare(ctx, token, now)
+    // Its only caller is the action below, which passes the server's clock.
+    // Bounded anyway: the guarantee should not rest on every future caller
+    // remembering.
+    const resolved = await resolveShare(ctx, token, effectiveNow(now))
     if (resolved.state !== 'active') return null
     const report = await ctx.db.get('reports', resolved.share.reportId)
     if (!report) return null
@@ -252,14 +319,21 @@ export const resolveSharedMedia = internalQuery({
  * The share token is re-checked here, server-side, before a single URL is
  * signed — a revoked or expired link mints nothing, and the URLs it did mint
  * die within the hour.
+ *
+ * An action has the server's clock and nothing reactive to preserve, so it
+ * uses it. `now` is still accepted, and still ignored: the client that sends
+ * it has no say in whether the link it holds has expired.
  */
 export const sharedMediaUrls = action({
-  args: { token: v.string(), now: v.number() },
+  args: { token: v.string(), now: v.optional(v.number()) },
   handler: async (
     ctx,
-    args,
+    { token },
   ): Promise<Array<{ segmentId: Id<'segments'>; url: string }>> => {
-    const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, args)
+    const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, {
+      token,
+      now: Date.now(),
+    })
     if (!segments) return []
     return await Promise.all(
       segments.map(async (segment) => ({

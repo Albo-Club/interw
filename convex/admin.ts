@@ -1,8 +1,9 @@
 import { ConvexError, v } from 'convex/values'
 import { internalMutation, mutation, query } from './_generated/server'
-import { components } from './_generated/api'
+import { components, internal } from './_generated/api'
 import { requireSuperAdmin } from './lib/auth'
-import type { FunctionReference } from 'convex/server'
+import type { FunctionReference, GenericQueryCtx } from 'convex/server'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 /**
  * One-shot dev cleanup. Run via:
@@ -161,6 +162,146 @@ export const setSuperAdmin = mutation({
     if (!target) throw new ConvexError('not_found')
     if (target.superAdmin === value) return null
     await ctx.db.patch("users", userId, { superAdmin: value })
+    return null
+  },
+})
+
+/* ───────────────────────── Pipeline health ──────────────────────────────── */
+
+/**
+ * Per-bucket scan cap. There is no count operator, so a figure is a bounded
+ * scan or it is nothing. Saturating the cap is reported rather than hidden:
+ * "200+" is a true statement, "200" would not be.
+ */
+const COUNT_CAP = 200
+/** How many finished-but-unreported sessions the screen will name. */
+const STUCK_CAP = 25
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+async function countJobs(
+  ctx: GenericQueryCtx<DataModel>,
+  step: Doc<'jobLog'>['step'],
+  outcome: Doc<'jobLog'>['outcome'],
+  since: number,
+): Promise<{ count: number; capped: boolean }> {
+  const rows = await ctx.db
+    .query('jobLog')
+    .withIndex('by_step_and_outcome', (q) =>
+      q.eq('step', step).eq('outcome', outcome).gte('at', since),
+    )
+    .take(COUNT_CAP)
+  return { count: rows.length, capped: rows.length === COUNT_CAP }
+}
+
+/**
+ * Whether the pipeline is working, for the one person who can do something
+ * about it.
+ *
+ * `jobLog.by_step_and_outcome` was built for exactly this and was read by
+ * nothing: an expired provider key produced four failed transcriptions per
+ * interview, in a table nobody looked at, and the first signal was a recruiter
+ * asking where a report had got to.
+ */
+export const pipelineHealth = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireSuperAdmin(ctx)
+    const now = Date.now()
+    const steps = ['transcribe', 'report', 'notify'] as const
+    const outcomes = ['succeeded', 'failed', 'skipped'] as const
+
+    const windows = await Promise.all(
+      [1, 7].map(async (days) => {
+        const since = now - days * DAY_MS
+        const counts = await Promise.all(
+          steps.map(async (step) => ({
+            step,
+            outcomes: Object.fromEntries(
+              await Promise.all(
+                outcomes.map(async (outcome) => [
+                  outcome,
+                  await countJobs(ctx, step, outcome, since),
+                ]),
+              ),
+            ) as Record<
+              (typeof outcomes)[number],
+              { count: number; capped: boolean }
+            >,
+          })),
+        )
+        return { days, counts }
+      }),
+    )
+
+    // Finished interviews with no assessment. The denormalised headline
+    // answers it without a lookup; the ones that look stuck are confirmed
+    // against `reports`, so sessions completed before that field existed are
+    // not reported as broken.
+    const completed = await ctx.db
+      .query('sessions')
+      .withIndex('by_status_and_completed', (q) => q.eq('status', 'completed'))
+      .order('desc')
+      .take(100)
+    const stuck: Array<{
+      sessionId: Id<'sessions'>
+      candidateName: string
+      completedAt: number | null
+      settled: number
+      expected: number
+    }> = []
+    for (const session of completed) {
+      if (stuck.length >= STUCK_CAP) break
+      if (session.overallScore !== undefined) continue
+      const report = await ctx.db
+        .query('reports')
+        .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+        .unique()
+      if (report) continue
+      stuck.push({
+        sessionId: session._id,
+        candidateName: session.candidateName,
+        completedAt: session.completedAt ?? null,
+        settled: session.segmentsSettled ?? 0,
+        expected: session.segmentsExpected ?? 0,
+      })
+    }
+
+    return { windows, stuck }
+  },
+})
+
+/**
+ * Run a stuck session's pipeline again.
+ *
+ * Not a catch-up script: it is an operator naming one session and saying "go
+ * again", it is written to the same log as everything else that happened to
+ * that session, and it is idempotent — `onSessionCompleted` keeps the
+ * transcripts it already has, gives another real attempt to the answers that
+ * failed for good, and re-enters the fan-in from there.
+ */
+export const relaunchSession = mutation({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }) => {
+    const me = await requireSuperAdmin(ctx)
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) throw new ConvexError('not_found')
+    if (session.status !== 'completed') {
+      throw new ConvexError('session_not_completed')
+    }
+
+    await ctx.db.insert('jobLog', {
+      orgId: session.orgId,
+      sessionId,
+      step: 'relaunch',
+      outcome: 'started',
+      attempt: 1,
+      error: `by ${me.email}`,
+      at: Date.now(),
+    })
+    await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {
+      sessionId,
+    })
     return null
   },
 })

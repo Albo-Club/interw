@@ -97,6 +97,31 @@
       "orgs_other": "{{count}} orgs",
       "isSuperAdmin": "Super-admin",
       "makeSuperAdmin": "Make super-admin"
+    },
+    "pipeline": {
+      "title": "Pipeline health",
+      "description": "What the analysis chain did, and what it left behind. Counts are bounded scans: a figure shown as 200+ saturated the cap.",
+      "window_one": "Last {{count}} day",
+      "window_other": "Last {{count}} days",
+      "step": {
+        "transcribe": "Transcription",
+        "report": "Report",
+        "notify": "Notification"
+      },
+      "outcome": {
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "stuck": {
+        "title": "Finished without a report",
+        "description": "Interviews the candidate completed that produced no assessment. Relaunching keeps the transcripts already taken and gives another attempt to the answers that failed.",
+        "empty": "Nothing stuck.",
+        "progress": "{{settled}} of {{expected}} answers settled",
+        "relaunch": "Relaunch",
+        "relaunched": "Relaunch queued",
+        "failed": "Relaunch failed"
+      }
     }
   }
 }

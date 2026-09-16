@@ -315,7 +315,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IC11 | **Relaunching a stuck session** | `/app/admin` → Finished without a report → Relaunch | The session re-enters the pipeline: transcripts already taken are kept, answers that failed get another attempt, and a `relaunch` row appears in `jobLog` with the operator's address |
 | IC4 | Idempotent replay | Re-run `internal.pipeline.generateReport` for the same session via the Convex dashboard | Logs `report · skipped`, writes nothing, sends no second email |
 | IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
-| IC6 | Malformed model output | Temporarily set `FAST_MODEL` in `convex/lib/ai.ts` to a model that ignores schemas, and push | The job **fails and retries**; no partial report is written |
+| IC6 | Malformed model output | Temporarily set `EVALUATION_MODEL` in `convex/lib/ai.ts` to a model that ignores schemas, and push | The job **fails and retries**; no partial report is written |
 | IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay |
 | IC8 | Recruiter email | Check the inbox of a member of the role's org | "Report ready" with score and recommendation, and the caveat that it is automated |
 | IC9 | Failed upload visible | Mark a segment `failed` by hand, open the report | That answer says the recording never reached us, explicitly as our failure |

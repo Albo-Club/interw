@@ -604,7 +604,6 @@ export const generateReport = internalAction({
         ],
         schema: reportOutputSchema,
         schemaName: 'interview_report',
-        tier: 'deep',
         temperature: 0.2,
       })
 

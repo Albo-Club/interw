@@ -43,15 +43,13 @@ const TRANSCRIPTION_MODEL = 'voxtral-mini-latest'
  * judgement, not a measurement, so two candidates assessed a week apart must
  * not meet different models without someone having chosen that.
  *
- * Both tiers run the same model today. `tier` still says what a call is for —
- * `deep` decides a hiring evaluation, `fast` parses a job posting — and the
- * constants stay separate so splitting them again is one line rather than a
- * refactor. While they are equal, the chain in `complete` collapses to a
- * single entry: falling back from a model to itself only pays twice for the
- * same failure, and the work pool then multiplies that by its own retries.
+ * One model, for every completion this product makes. There used to be a
+ * `tier` argument choosing between a strong model and a cheap one, and a
+ * fallback chain from the first to the second. Both now resolve here, so the
+ * argument bought nothing while still reading as though it did — and a
+ * fallback from a model to itself only pays twice for the same failure.
  */
-const DEEP_MODEL = 'zai-glm-5-3'
-const FAST_MODEL = 'zai-glm-5-3'
+const EVALUATION_MODEL = 'zai-glm-5-3'
 
 const MISTRAL_TRANSCRIPTION_URL =
   'https://api.mistral.ai/v1/audio/transcriptions'
@@ -82,8 +80,6 @@ const TRANSCRIPTION_TIMEOUT_MS = 300_000
  * another attempt at full price.
  */
 const MAX_COMPLETION_TOKENS = 16_000
-
-export type CompletionTier = 'fast' | 'deep'
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -240,7 +236,6 @@ export type CompleteOptions<T> = {
   schema: z.ZodType<T>
   /** A stable name for the schema; providers key strict decoding off it. */
   schemaName: string
-  tier: CompletionTier
   temperature?: number
 }
 
@@ -255,88 +250,67 @@ export type CompleteResult<T> = {
 /**
  * One structured completion, validated.
  *
- * `deep` starts on the strong model and falls back to the fast one only after
- * the strong model has failed every attempt — a fallback that fires on the
- * first hiccup quietly halves report quality.
+ * One model, one call. The retry that matters is the work pool's: it re-runs
+ * the whole job from where it failed, rather than re-asking a model that just
+ * refused. `postWithRetry` below covers only the transport — a 429 or a 5xx on
+ * the way there.
  */
 export async function complete<T>(
   options: CompleteOptions<T>,
 ): Promise<CompleteResult<T>> {
   const apiKey = requireEnv('MISTRAL_API_KEY')
   const jsonSchema = z.toJSONSchema(options.schema, { io: 'output' })
-  const chain =
-    options.tier === 'deep'
-      ? [...new Set([DEEP_MODEL, FAST_MODEL])]
-      : [FAST_MODEL]
 
-  let lastError: unknown
-  for (const model of chain) {
-    try {
-      const payload = await postWithRetry(
-        MISTRAL_COMPLETIONS_URL,
-        {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+  const payload = await postWithRetry(
+    MISTRAL_COMPLETIONS_URL,
+    {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    JSON.stringify({
+      model: EVALUATION_MODEL,
+      messages: options.messages,
+      temperature: options.temperature ?? 0.2,
+      max_tokens: MAX_COMPLETION_TOKENS,
+      // `strict: false` on purpose. Mistral does support strict decoding, but
+      // the schema sent here is generated from Zod and has never been run
+      // against its decoder — and a schema it rejects fails every evaluation
+      // at once, not an occasional one. The schema is still sent, so a model
+      // that honours it does; the guarantee comes from the Zod parse on the
+      // way back, which no provider talks its way past. Worth flipping
+      // deliberately, once verified against a key.
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: options.schemaName,
+          strict: false,
+          schema: jsonSchema,
         },
-        JSON.stringify({
-          model,
-          messages: options.messages,
-          temperature: options.temperature ?? 0.2,
-          max_tokens: MAX_COMPLETION_TOKENS,
-          // `strict: false` on purpose. Mistral does support strict decoding,
-          // but the schema sent here is generated from Zod and has never been
-          // run against its decoder — and a schema it rejects fails every
-          // evaluation at once, not an occasional one. The schema is still
-          // sent, so a model that honours it does; the guarantee comes from
-          // the Zod parse on the way back, which no provider talks its way
-          // past. Worth flipping deliberately, once verified against a key.
-          response_format: {
-            type: 'json_schema',
-            json_schema: {
-              name: options.schemaName,
-              strict: false,
-              schema: jsonSchema,
-            },
-          },
-        }),
-        `completion(${model})`,
-        COMPLETION_TIMEOUT_MS,
-      )
-
-      const envelope = completionResponseSchema.safeParse(payload)
-      if (!envelope.success) {
-        throw new AiError(
-          `completion envelope was not understood: ${envelope.error.message}`,
-        )
-      }
-      const content = envelope.data.choices[0].message.content
-      if (!content) throw new AiError('completion returned an empty message')
-
-      return {
-        value: parseModelJson(content, options.schema, options.schemaName),
-        model: envelope.data.model ?? model,
-        usage: envelope.data.usage
-          ? {
-              promptTokens: envelope.data.usage.prompt_tokens ?? 0,
-              completionTokens: envelope.data.usage.completion_tokens ?? 0,
-            }
-          : null,
-      }
-    } catch (error) {
-      lastError = error
-    }
-  }
-  // The real reason, not just "everything failed". `jobLog` records
-  // `error.message` and nothing else, so a chain summary alone could not tell
-  // a 401 from a spent budget from a truncated answer from a Zod failure —
-  // which is every question worth asking when a report does not arrive.
-  const reason =
-    lastError instanceof Error ? lastError.message : String(lastError ?? '')
-  throw new AiError(
-    `completion failed on every model in the chain (${chain.join(' → ')})` +
-      (reason ? `: ${reason}` : ''),
-    lastError,
+      },
+    }),
+    `completion(${EVALUATION_MODEL})`,
+    COMPLETION_TIMEOUT_MS,
   )
+
+  const envelope = completionResponseSchema.safeParse(payload)
+  if (!envelope.success) {
+    throw new AiError(
+      `completion envelope was not understood: ${envelope.error.message}`,
+    )
+  }
+  const content = envelope.data.choices[0].message.content
+  if (!content) throw new AiError('completion returned an empty message')
+
+  return {
+    value: parseModelJson(content, options.schema, options.schemaName),
+    model: envelope.data.model ?? EVALUATION_MODEL,
+    usage: envelope.data.usage
+      ? {
+          promptTokens: envelope.data.usage.prompt_tokens ?? 0,
+          completionTokens: envelope.data.usage.completion_tokens ?? 0,
+        }
+      : null,
+  }
 }
 
 /**

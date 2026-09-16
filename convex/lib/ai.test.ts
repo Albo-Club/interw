@@ -108,12 +108,11 @@ describe('the completion request', () => {
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     )
 
-  const ask = (tier: 'fast' | 'deep' = 'fast') =>
+  const ask = () =>
     complete({
       messages: [{ role: 'user', content: 'hi' }],
       schema: answerSchema,
       schemaName: 'answer',
-      tier,
     })
 
   beforeEach(() => {
@@ -164,32 +163,26 @@ describe('the completion request', () => {
     expect(calls[0].headers.Authorization).toBe('Bearer test-key')
   })
 
-  it('asks for models Mistral serves, on both tiers', async () => {
+  it('asks for the one model Mistral serves us', async () => {
     const calls: Array<Call> = []
     stubFetch(calls, () => ok('{"verdict":"fine"}'))
 
-    await ask('fast')
-    await ask('deep')
+    await ask()
 
-    for (const call of calls) {
-      expect(String(call.body.model).startsWith('google/')).toBe(false)
-    }
-    // The interview report is the decision; it starts on the strongest model
-    // in the chain, and only falls back after that one has failed outright.
-    expect(calls[1].body.model).toBe('zai-glm-5-3')
+    expect(calls[0].body.model).toBe('zai-glm-5-3')
   })
 
   /**
-   * Both tiers run the same model now, so the fallback has nowhere to go: a
-   * chain of `[X, X]` pays for the same failure twice inside one call, and the
-   * work pool then multiplies that by its own four retries. The chain has to
-   * collapse rather than fall back from a model to itself.
+   * There is no model chain any more, and a failure must not quietly grow one
+   * back: a refusal costs the two transport attempts and stops. The work pool
+   * is what retries the job, four times, and anything multiplied into this
+   * call is multiplied again by that.
    */
-  it('does not burn a second pass on the model it just exhausted', async () => {
+  it('stops at the transport retries rather than re-asking a refusing model', async () => {
     const calls: Array<Call> = []
     stubFetch(calls, () => new Response('upstream boom', { status: 500 }))
 
-    await expect(ask('deep')).rejects.toThrow()
+    await expect(ask()).rejects.toThrow()
 
     expect(new Set(calls.map((c) => String(c.body.model))).size).toBe(1)
     expect(calls).toHaveLength(2)
@@ -222,7 +215,7 @@ describe('the completion request', () => {
    * could not tell a 401 from a spent budget from a failed validation — which
    * is every question worth asking when a report does not arrive.
    */
-  it('carries the last model\u2019s reason into the error it throws', async () => {
+  it('carries the provider\u2019s reason into the error it throws', async () => {
     vi.stubGlobal('fetch', () =>
       Promise.resolve(
         new Response('quota exhausted for this key', { status: 402 }),

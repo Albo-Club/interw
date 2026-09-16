@@ -98,7 +98,6 @@ export const importFromUrl = action({
       ],
       schema: draftSchema,
       schemaName: 'interview_draft',
-      tier: 'fast',
       temperature: 0.4,
     })
     return value

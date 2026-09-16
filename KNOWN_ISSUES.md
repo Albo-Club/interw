@@ -1479,18 +1479,45 @@ rule stands. This is codegen, verified byte-faithful against the tool's own
 output before it was adopted. If you find yourself editing that file in an
 editor, stop.
 
-## `convex-test` is pinned to 0.0.54
+## Bumping `convex` is never one package
 
-0.0.55 and later declare `convex@^1.43.0`. Against the 1.40 this template
-ships, they fail at runtime on the first `t.run()`:
+`convex` 1.41 added a `transactionLimits` option to `runQuery` / `runMutation`,
+widening their signature from `OptionalRestArgs` to `ArgsAndOptions`. A
+`@convex-dev/*` component built against an older peer still declares its own
+`RunMutationCtx` with the narrow signature, so handing it our `ctx` stops
+type-checking:
+
+```
+convex/http.ts(24,50): error TS2345: Argument of type 'GenericActionCtx<any>'
+  is not assignable to parameter of type 'RunMutationCtx'. […]
+  Target allows only 1 element(s) but source may have more.
+```
+
+The error names our file and our `ctx`, and neither is at fault. The fix is to
+bump the component — never to cast the `ctx`, which would hide the next one.
+Here it was `@convex-dev/resend`, which needed 0.2.5+ (`convex@^1.43.0` from
+0.2.7). The same holds for any component whose peer floor sits below the
+`convex` you are moving to, so bump `convex`, run `pnpm typecheck`, and let it
+name the offender before touching anything else.
+
+`convex-test` was pinned to 0.0.54 for the mirror-image reason while the
+project shipped `convex` 1.40: 0.0.55+ declares `convex@^1.43.0` and failed at
+runtime on the first `t.run()` with
 
 ```
 Error: Transaction already committed or rolled back
 ```
 
-which looks like a bug in your test and is not. 0.0.54 works, including with
-the two-argument `ctx.db.get('table', id)` API. Revisit when the template
-bumps `convex` itself; do not bump `convex-test` alone.
+which looks like a bug in your test and is not. Moving `convex` to 1.46
+unblocked it, and it now sits at 0.0.58. Note the range stays effectively
+exact either way: on a `0.0.x` version `^0.0.58` reads `>=0.0.58 <0.0.59`, so
+every further step is a deliberate bump, not a float.
+
+A `convex` bump also rewrites `convex/_generated/server.d.ts` (1.44 added the
+typed `env` export carrying `CONVEX_CLOUD_URL` / `CONVEX_SITE_URL`). Commit it
+with the bump: `pnpm codegen:api:check` only guards `api.d.ts`, so a stale
+`server.d.ts` sails through CI and reappears as a phantom diff for whoever
+next runs `convex dev`.
 
 ## Convex type inference collapses on two specific cycles
 

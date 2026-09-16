@@ -179,6 +179,22 @@ describe('the completion request', () => {
     expect(calls[1].body.model).toBe('zai-glm-5-3')
   })
 
+  /**
+   * Both tiers run the same model now, so the fallback has nowhere to go: a
+   * chain of `[X, X]` pays for the same failure twice inside one call, and the
+   * work pool then multiplies that by its own four retries. The chain has to
+   * collapse rather than fall back from a model to itself.
+   */
+  it('does not burn a second pass on the model it just exhausted', async () => {
+    const calls: Array<Call> = []
+    stubFetch(calls, () => new Response('upstream boom', { status: 500 }))
+
+    await expect(ask('deep')).rejects.toThrow()
+
+    expect(new Set(calls.map((c) => String(c.body.model))).size).toBe(1)
+    expect(calls).toHaveLength(2)
+  })
+
   /** A truncated answer is invalid JSON, which costs another attempt at full
    *  price. Unset, the ceiling was whatever the provider defaulted to. */
   it('caps the output length', async () => {

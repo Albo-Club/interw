@@ -27,15 +27,31 @@
 import { z } from 'zod'
 
 /* Model identifiers live here and nowhere else. */
-const TRANSCRIPTION_MODEL = 'voxtral-mini-latest'
-/** The job-description import, and the fallback under `deep`. */
-const FAST_MODEL = 'mistral-medium-latest'
+
 /**
- * Pinned to an exact version rather than a moving `-latest` alias: `deep`
- * produces a hiring evaluation, and two candidates assessed a week apart
- * should not meet different models without anyone having chosen that.
+ * `-latest` on purpose, and deliberately unlike the evaluation model below.
+ * This alias already resolves to Voxtral Transcribe 2, Mistral's current batch
+ * model. Transcription is mechanical: there is a ground truth — what the
+ * candidate actually said — so a better model means a transcript closer to it,
+ * and an upgrade arriving on its own is a gain. An evaluation has no ground
+ * truth, which is why that one is pinned.
+ */
+const TRANSCRIPTION_MODEL = 'voxtral-mini-latest'
+
+/**
+ * Pinned to an exact version rather than a moving alias: an evaluation is a
+ * judgement, not a measurement, so two candidates assessed a week apart must
+ * not meet different models without someone having chosen that.
+ *
+ * Both tiers run the same model today. `tier` still says what a call is for —
+ * `deep` decides a hiring evaluation, `fast` parses a job posting — and the
+ * constants stay separate so splitting them again is one line rather than a
+ * refactor. While they are equal, the chain in `complete` collapses to a
+ * single entry: falling back from a model to itself only pays twice for the
+ * same failure, and the work pool then multiplies that by its own retries.
  */
 const DEEP_MODEL = 'zai-glm-5-3'
+const FAST_MODEL = 'zai-glm-5-3'
 
 const MISTRAL_TRANSCRIPTION_URL =
   'https://api.mistral.ai/v1/audio/transcriptions'
@@ -249,7 +265,9 @@ export async function complete<T>(
   const apiKey = requireEnv('MISTRAL_API_KEY')
   const jsonSchema = z.toJSONSchema(options.schema, { io: 'output' })
   const chain =
-    options.tier === 'deep' ? [DEEP_MODEL, FAST_MODEL] : [FAST_MODEL]
+    options.tier === 'deep'
+      ? [...new Set([DEEP_MODEL, FAST_MODEL])]
+      : [FAST_MODEL]
 
   let lastError: unknown
   for (const model of chain) {

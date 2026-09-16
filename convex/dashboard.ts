@@ -56,13 +56,16 @@ export const overview = query({
       decision: string | null
     }> = []
 
+    // No per-session `reports` lookup. This is a reactive query: it re-runs
+    // on every write to any session of the organisation — so on every
+    // `markSegmentUploaded` of every candidate mid-interview — and it used to
+    // take up to 400 extra indexed reads with it, for every open tab. The
+    // headline is denormalised onto the session by the queue that writes the
+    // report (see convex/pipeline.ts).
     for (const session of sessions) {
       if (session.status !== 'completed') continue
-      const report = await ctx.db
-        .query('reports')
-        .withIndex('by_session', (q) => q.eq('sessionId', session._id))
-        .unique()
-      if (report && !session.recruiterDecision) awaitingReview += 1
+      const scored = session.overallScore !== undefined
+      if (scored && !session.recruiterDecision) awaitingReview += 1
       if (recent.length < 8 && session.completedAt) {
         recent.push({
           sessionId: session._id,
@@ -71,7 +74,7 @@ export const overview = query({
             projects.find((project) => project._id === session.projectId)
               ?.title ?? '',
           completedAt: session.completedAt,
-          score: report?.overallScore ?? null,
+          score: session.overallScore ?? null,
           decision: session.recruiterDecision ?? null,
         })
       }

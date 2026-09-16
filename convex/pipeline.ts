@@ -517,6 +517,14 @@ export const saveReport = internalMutation({
       model,
       generatedAt: Date.now(),
     })
+    // Copied onto the session in the same transaction, once, by the queue.
+    // The dashboard and the candidate table need the headline for every row
+    // at once; reading `reports` per session made the dashboard a reactive
+    // N+1 that re-ran on every candidate's upload.
+    await ctx.db.patch('sessions', sessionId, {
+      overallScore: report.overallScore,
+      recommendation: report.recommendation,
+    })
     return null
   },
 })

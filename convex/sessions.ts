@@ -125,16 +125,6 @@ export const invite = mutation({
     const org = await ctx.db.get('organizations', project.orgId)
     if (!org) throw new ConvexError('not_found')
 
-    const existing = await ctx.db
-      .query('sessions')
-      .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .collect()
-    const byEmail = new Map(
-      existing
-        .filter((s) => s.status === 'pending' || s.status === 'in_progress')
-        .map((s) => [s.candidateEmail, s]),
-    )
-
     const now = Date.now()
     const results: Array<{ sessionId: Id<'sessions'>; created: boolean }> = []
     const toNotify: Array<Id<'sessions'>> = []
@@ -142,7 +132,20 @@ export const invite = mutation({
 
     for (const raw of candidates) {
       const candidate = normalizeCandidate(raw)
-      const already = byEmail.get(candidate.email)
+      // One indexed lookup per candidate — at most MAX_BULK_INVITES of them —
+      // rather than reading every session of the role. `sessions` is the
+      // table the schema says genuinely reaches the thousands, and an
+      // unbounded `.collect()` on it meant that past a few thousand
+      // candidates no further invitation on that role was possible at all,
+      // single invitations included: they go through this same path.
+      const already = (
+        await ctx.db
+          .query('sessions')
+          .withIndex('by_project_and_email', (q) =>
+            q.eq('projectId', projectId).eq('candidateEmail', candidate.email),
+          )
+          .collect()
+      ).find((s) => s.status === 'pending' || s.status === 'in_progress')
       if (already) {
         results.push({ sessionId: already._id, created: false })
         toNotify.push(already._id)

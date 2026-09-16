@@ -346,6 +346,14 @@ export default defineSchema({
     segmentsExpected: v.optional(v.number()),
     segmentsSettled: v.optional(v.number()),
     reportJobEnqueuedAt: v.optional(v.number()),
+    /** The report's headline result, copied here once by the queue when the
+     *  report is written. Denormalised because the two screens that need it —
+     *  the dashboard and the candidate table — need it for every row at once,
+     *  and reading `reports` per session made the dashboard a reactive N+1
+     *  that re-ran on every candidate's upload. Never written by a recruiter;
+     *  the report remains the source of truth. */
+    overallScore: v.optional(v.number()),
+    recommendation: v.optional(recommendationValidator),
     recruiterDecision: v.optional(recruiterDecisionValidator),
     recruiterDecisionBy: v.optional(v.id('users')),
     recruiterDecisionAt: v.optional(v.number()),

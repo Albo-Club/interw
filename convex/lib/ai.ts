@@ -78,8 +78,16 @@ const TRANSCRIPTION_TIMEOUT_MS = 300_000
  * Output ceiling. Unset, the length came from whatever the provider defaults
  * to; a truncated answer is invalid JSON, which fails validation, which costs
  * another attempt at full price.
+ *
+ * Sized for a reasoning model, which is the whole reason it is not 16k any
+ * more. Measured against `zai-glm-5-3`: a 27-token prompt asking for three
+ * fields spent 2 747 completion tokens, nearly all of it reasoning the caller
+ * never sees. An interview report is a far longer prompt and a far longer
+ * answer, and the ceiling has to cover both halves. It is a ceiling, not a
+ * reservation — an answer that comes in short is billed short — so headroom
+ * costs nothing and a truncation costs the whole job.
  */
-const MAX_COMPLETION_TOKENS = 16_000
+const MAX_COMPLETION_TOKENS = 32_000
 
 export type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -212,11 +220,27 @@ export async function transcribe(
 
 /* ───────────────────────────── Completions ─────────────────────────────── */
 
+/**
+ * A reasoning model answers in blocks rather than in one string: GLM sends a
+ * `thinking` block and then a `text` one, where Mistral's own models — and the
+ * OpenAI-compatible shape everything else follows — send a plain string. Both
+ * are accepted, because the model behind this module is a one-line change.
+ */
+const contentBlockSchema = z.object({
+  type: z.string(),
+  text: z.string().optional(),
+})
+
 const completionResponseSchema = z.object({
   choices: z
     .array(
       z.object({
-        message: z.object({ content: z.string().nullable() }),
+        finish_reason: z.string().optional(),
+        message: z.object({
+          content: z
+            .union([z.string(), z.array(contentBlockSchema)])
+            .nullable(),
+        }),
       }),
     )
     .min(1),
@@ -228,6 +252,24 @@ const completionResponseSchema = z.object({
     })
     .optional(),
 })
+
+/**
+ * The answer, and nothing but.
+ *
+ * Only `text` blocks. Joining every block, or taking the first, would hand the
+ * model's reasoning to `JSON.parse` — and a chain of thought that happens to
+ * contain a JSON-looking fragment would parse into a report nobody wrote.
+ */
+function answerText(
+  content: string | Array<z.infer<typeof contentBlockSchema>> | null,
+): string {
+  if (typeof content === 'string') return content
+  if (!content) return ''
+  return content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('')
+}
 
 export type CompleteOptions<T> = {
   messages: Array<ChatMessage>
@@ -298,8 +340,19 @@ export async function complete<T>(
       `completion envelope was not understood: ${envelope.error.message}`,
     )
   }
-  const content = envelope.data.choices[0].message.content
-  if (!content) throw new AiError('completion returned an empty message')
+  // The provider says outright that it ran out of room. Without this, a cut-off
+  // answer surfaces as "model output was not valid JSON" and sends whoever
+  // reads `jobLog` hunting for a schema bug that is not there.
+  if (envelope.data.choices[0].finish_reason === 'length') {
+    throw new AiError(
+      `${options.schemaName}: model output was truncated at the token ceiling`,
+    )
+  }
+
+  const content = answerText(envelope.data.choices[0].message.content)
+  // Empty covers both an empty string and a reply that is all reasoning and no
+  // answer, which is what a model cut off mid-thought sends.
+  if (!content) throw new AiError('completion returned no answer text')
 
   return {
     value: parseModelJson(content, options.schema, options.schemaName),

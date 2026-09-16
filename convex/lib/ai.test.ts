@@ -98,6 +98,41 @@ describe('the completion request', () => {
     })
   }
 
+  /**
+   * What GLM actually sends back.
+   *
+   * `content` is an array of blocks, not a string: the reasoning arrives in a
+   * `thinking` block and the answer in a `text` one. The decoy JSON inside the
+   * reasoning is the point — concatenating every block, or reading the first,
+   * parses the model's musings instead of its answer.
+   */
+  const okBlocks = (text: string) =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: [
+                {
+                  type: 'thinking',
+                  closed: true,
+                  thinking: [
+                    {
+                      type: 'text',
+                      text: 'Maybe {"verdict":"a stray thought"} — no, let me answer properly.',
+                    },
+                  ],
+                },
+                { type: 'text', text },
+              ],
+            },
+          },
+        ],
+        model: 'zai-glm-5-3',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )
+
   const ok = (content: string, usage?: Record<string, number>) =>
     new Response(
       JSON.stringify({
@@ -186,6 +221,82 @@ describe('the completion request', () => {
 
     expect(new Set(calls.map((c) => String(c.body.model))).size).toBe(1)
     expect(calls).toHaveLength(2)
+  })
+
+  /**
+   * Found by running the real model, not by reading its docs: every stub in
+   * this file sent `content` as a string, which is what the OpenAI-compatible
+   * shape says, and what Mistral's own models send. GLM answers in blocks, and
+   * the envelope parser rejected the whole response — so every evaluation
+   * failed with `completion envelope was not understood`.
+   */
+  it('reads the answer out of a block list, not just a plain string', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(okBlocks('{"verdict":"fine"}')))
+
+    const result = await ask()
+
+    expect(result.value.verdict).toBe('fine')
+  })
+
+  it('still reads a plain string, which is what other models send', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(ok('{"verdict":"fine"}')))
+
+    const result = await ask()
+
+    expect(result.value.verdict).toBe('fine')
+  })
+
+  /**
+   * A reasoning model cut off mid-thought sends the thinking block and no text
+   * block at all. That is not an answer, and must fail as loudly as an empty
+   * one rather than reach `JSON.parse` as an empty string.
+   */
+  it('refuses a reply that carries reasoning and no answer', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: [
+                    { type: 'thinking', thinking: [{ type: 'text', text: '…' }] },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+
+    await expect(ask()).rejects.toThrow(AiError)
+  })
+
+  /**
+   * A cut-off answer used to surface as "model output was not valid JSON",
+   * which sends whoever reads `jobLog` hunting for a schema bug that is not
+   * there. The provider already says so: `finish_reason: 'length'`.
+   */
+  it('names a truncated answer instead of blaming its JSON', async () => {
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: 'length',
+                message: { content: '{"verdict":"fi' },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+
+    await expect(ask()).rejects.toThrow(/truncated/i)
   })
 
   /** A truncated answer is invalid JSON, which costs another attempt at full

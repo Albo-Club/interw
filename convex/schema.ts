@@ -152,12 +152,22 @@ export const sessionEventKindValidator = v.union(
   v.literal('render_error'),
 )
 
-/** A quote anchored to the exact second of the video that backs it. Every
- *  claim the model makes carries one — that is what makes the report an
- *  evaluation rather than an opinion. */
+/**
+ * A quote from an answer, and the second of video it came from when the
+ * transcript could be made to agree.
+ *
+ * `startSeconds` is absent exactly when `anchored` is false, and the pair is
+ * written in one place (`lib/reportBuilder.ts`). Anchoring can fail honestly —
+ * a model paraphrases a hesitant answer, or the provider returned no timed
+ * segments for the clip at all — and the report then shows the quote without
+ * offering to seek to it. The alternative, the model's own estimate, reads
+ * like an answer and is not one: it sends the recruiter to the wrong moment,
+ * and takes the credit of every other citation with it.
+ */
 const evidenceValidator = v.object({
   segmentId: v.id('segments'),
-  startSeconds: v.number(),
+  startSeconds: v.optional(v.number()),
+  anchored: v.boolean(),
   quote: v.string(),
 })
 

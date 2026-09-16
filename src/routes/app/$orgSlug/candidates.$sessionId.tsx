@@ -325,18 +325,24 @@ function CandidateReportPage() {
                               <p className="text-muted-foreground text-sm italic">
                                 “{item.quote}”
                               </p>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  jump(item.segmentId, item.startSeconds)
-                                }
-                                className="text-primary inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-                              >
-                                <Play className="size-3" />
-                                {t('report:criteria.jump', {
-                                  time: formatTimecode(item.startSeconds),
-                                })}
-                              </button>
+                              {/* No offer to seek when the quote could not be
+                                  anchored: a button that lands on the wrong
+                                  moment is worse than no button. */}
+                              {item.anchored &&
+                                item.startSeconds !== undefined && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      jump(item.segmentId, item.startSeconds!)
+                                    }
+                                    className="text-primary inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+                                  >
+                                    <Play className="size-3" />
+                                    {t('report:criteria.jump', {
+                                      time: formatTimecode(item.startSeconds),
+                                    })}
+                                  </button>
+                                )}
                             </li>
                           ))}
                         </ul>
@@ -435,23 +441,27 @@ function CandidateReportPage() {
                             <p className="text-muted-foreground text-sm italic">
                               “{evaluation.evidence.quote}”
                             </p>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                jump(
-                                  evaluation.evidence!.segmentId,
-                                  evaluation.evidence!.startSeconds,
-                                )
-                              }
-                              className="text-primary inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-                            >
-                              <Play className="size-3" />
-                              {t('report:criteria.jump', {
-                                time: formatTimecode(
-                                  evaluation.evidence.startSeconds,
-                                ),
-                              })}
-                            </button>
+                            {evaluation.evidence.anchored &&
+                              evaluation.evidence.startSeconds !==
+                                undefined && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    jump(
+                                      evaluation.evidence!.segmentId,
+                                      evaluation.evidence!.startSeconds!,
+                                    )
+                                  }
+                                  className="text-primary inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+                                >
+                                  <Play className="size-3" />
+                                  {t('report:criteria.jump', {
+                                    time: formatTimecode(
+                                      evaluation.evidence.startSeconds,
+                                    ),
+                                  })}
+                                </button>
+                              )}
                           </div>
                         )}
                         {answer.transcript && (

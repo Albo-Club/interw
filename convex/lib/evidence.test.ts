@@ -68,48 +68,47 @@ describe('resolveQuoteStart', () => {
 })
 
 describe('chooseStartSeconds', () => {
-  it('prefers the transcript over the model estimate', () => {
+  it('uses the transcript when the quote is found', () => {
     expect(
       chooseStartSeconds({
         chunks,
         quote: 'la migration vers Postgres',
-        modelEstimate: 42,
         durationSeconds: 60,
       }),
     ).toBe(4.2)
   })
 
-  it('falls back to the model estimate when nothing matches', () => {
+  // The model's own estimate used to be taken here. It reads like an answer
+  // and is not one: it sends the recruiter to a moment where the candidate is
+  // saying something else, and costs every other citation its credit.
+  it('returns null rather than a guess when nothing matches', () => {
     expect(
       chooseStartSeconds({
         chunks,
         quote: 'something never said',
-        modelEstimate: 7,
         durationSeconds: 60,
       }),
-    ).toBe(7)
+    ).toBeNull()
+  })
+
+  it('returns null when the transcript carries no timings at all', () => {
+    expect(
+      chooseStartSeconds({
+        chunks: [],
+        quote: 'la migration vers Postgres',
+        durationSeconds: 60,
+      }),
+    ).toBeNull()
   })
 
   // Seeking past the end of a clip shows a black frame and reads as a bug.
   it('never points past the end of the clip', () => {
     expect(
       chooseStartSeconds({
-        chunks,
-        quote: 'nothing',
-        modelEstimate: 500,
+        chunks: [{ start: 40, end: 45, text: 'la migration vers Postgres' }],
+        quote: 'la migration vers Postgres',
         durationSeconds: 19,
       }),
     ).toBe(18)
-  })
-
-  it('falls back to zero when there is neither a match nor an estimate', () => {
-    expect(
-      chooseStartSeconds({
-        chunks,
-        quote: 'nothing',
-        modelEstimate: null,
-        durationSeconds: null,
-      }),
-    ).toBe(0)
   })
 })

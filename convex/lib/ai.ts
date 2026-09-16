@@ -134,8 +134,13 @@ export async function transcribe(
 
   const text = parsed.data.text.trim()
   // No segments back (very short clip, or granularity unsupported): keep the
-  // text rather than lose it, and mark the whole clip as one span. Evidence
-  // anchoring degrades to "start of the answer", which is honest.
+  // text, and keep the timings empty.
+  //
+  // This used to fabricate one span covering the whole clip at `{start: 0}`.
+  // It looked harmless and was not: every quote from that answer then
+  // "resolved" to 0:00 and arrived in the report indistinguishable from a
+  // genuine anchor. An empty list is what we actually know, and it makes
+  // those citations honestly unanchored.
   const words: Array<TranscriptWord> =
     parsed.data.segments && parsed.data.segments.length > 0
       ? parsed.data.segments.map((s) => ({
@@ -143,9 +148,7 @@ export async function transcribe(
           end: s.end,
           text: s.text.trim(),
         }))
-      : text
-        ? [{ start: 0, end: 0, text }]
-        : []
+      : []
 
   return { text, words, model: parsed.data.model ?? TRANSCRIPTION_MODEL }
 }

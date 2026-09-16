@@ -19,7 +19,10 @@ import {
 } from './_generated/server'
 import { internal } from './_generated/api'
 import { requireOrgMember } from './lib/auth'
-import { requireProjectAccess } from './lib/projectAccess'
+import {
+  requireProjectAccess,
+  requireProjectOwnerOrAdmin,
+} from './lib/projectAccess'
 import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { deleteObjects } from './lib/objectStore'
@@ -237,7 +240,10 @@ export const invitationLink = query({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return { url: invitationUrl(session.accessToken) }
   },
 })
@@ -265,7 +271,10 @@ export const cancel = mutation({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     if (session.status === 'completed') throw new ConvexError('session_closed')
     await ctx.db.patch('sessions', sessionId, { status: 'cancelled' })
     return null
@@ -353,7 +362,10 @@ export const assertCanDelete = internalQuery({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    await requireProjectAccess(ctx, session.projectId)
+    // Owner or admin, not any member who can see the role: this destroys a
+    // candidate's recordings, their CV and their assessment, irreversibly.
+    // It used to be less protected than deleting an empty role.
+    await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return null
   },
 })

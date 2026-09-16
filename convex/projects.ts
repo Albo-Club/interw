@@ -299,10 +299,20 @@ export const publish = mutation({
   },
 })
 
+/**
+ * Archiving is the most destructive unprivileged action in this module, so it
+ * is no longer unprivileged.
+ *
+ * `evaluateSessionGate` returns `closed` for any project that is not
+ * `active`: archiving cuts the link of every candidate mid-interview, at once,
+ * with no warning and no way for them to finish. It used to need only
+ * `requireProjectAccess` — any member who could see the role — while deleting
+ * an empty role needed owner or admin. The asymmetry was the wrong way round.
+ */
 export const archive = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
-    const { project } = await requireProjectAccess(ctx, projectId)
+    const { project } = await requireProjectOwnerOrAdmin(ctx, projectId)
     if (project.status === 'archived') return null
     await ctx.db.patch('projects', projectId, {
       status: 'archived',

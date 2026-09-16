@@ -17,11 +17,9 @@
  *      and `convex deploy` to push the backend.
  *
  * What it does NOT do:
- *   - Touch Vercel. You still need to:
- *       pnpm dlx vercel@latest link
- *       pnpm dlx vercel@latest env add VITE_CONVEX_URL       production
- *       pnpm dlx vercel@latest env add VITE_CONVEX_SITE_URL  production
- *       pnpm dlx vercel@latest --prod   # rebuild so VITE_* gets inlined
+ *   - Touch the web host. You still need to create the Scalingo app and set
+ *     DEPLOY_CONVEX, CONVEX_DEPLOY_KEY and VITE_CONVEX_SITE_URL on it.
+ *     See README.md "Deploying to production".
  *
  * Why fresh BETTER_AUTH_SECRET: reusing the dev secret in prod means a
  * dev session token would also unlock prod (and vice versa). Always
@@ -149,16 +147,16 @@ async function main() {
   console.log(`
   ✅ Convex prod is provisioned.
 
-  Next (frontend on Vercel):
+  Next (frontend on Scalingo) — see README.md "Deploying to production".
+  Create the app, link the GitHub repo, then set on it:
 
-    pnpm dlx vercel@latest link
-    pnpm dlx vercel@latest env add VITE_CONVEX_URL       production
-    pnpm dlx vercel@latest env add VITE_CONVEX_SITE_URL  production
-    pnpm dlx vercel@latest --prod
+    DEPLOY_CONVEX         true
+    CONVEX_DEPLOY_KEY     <prod deploy key from the Convex dashboard>
+    VITE_CONVEX_SITE_URL  https://<deployment>.convex.site
 
-  VITE_CONVEX_URL must point at the prod deployment (https://*.convex.cloud
-  from the Convex dashboard), NOT your dev one. VITE_CONVEX_SITE_URL is
-  the same URL with .site instead of .cloud.
+  VITE_CONVEX_SITE_URL must point at the PROD deployment (the dashboard URL
+  with .site instead of .cloud), NOT your dev one. VITE_CONVEX_URL is not set
+  by hand: convex deploy --cmd injects it into the build.
 
   Then test a magic link from ${domain}. The link should point at
   ${domain}/api/auth/magic-link/verify (not localhost).

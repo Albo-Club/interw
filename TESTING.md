@@ -231,6 +231,9 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | S4 | Better Auth CORS restricted to `BETTER_AUTH_URL`   | Request from another origin → blocked                             |
 | S5 | Webhooks HMAC: modified payload → rejected         | Manual test with a tampered payload                               |
 | S6 | `pnpm build` + `pnpm start` (local prod)           | The prod bundle runs without warnings                             |
+| S7 | `VITE_CONVEX_URL=… VITE_CONVEX_SITE_URL=… pnpm build:app`, then `PORT=8080 pnpm start` | `200` on `/` and `/login`. Built without those vars, the first render fails with `CONVEX_SITE_URL is not set` — they are build-time, not runtime |
+| S8 | Deployed app: `curl -I https://<domain>/`          | `200`, served by the Node server (not a static 404)                |
+| S9 | Scalingo build log                                 | Shows pnpm selected from the lockfile, then `convex deploy` running before the Vite build |
 
 ---
 

@@ -19,7 +19,8 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { sessionEventKindValidator } from './schema'
+import { introModeValidator, sessionEventKindValidator } from './schema'
+import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate } from './lib/sessionState'
@@ -79,6 +80,20 @@ async function requireOpenSession(
 /** The questions, in order, as the candidate may see them. */
 export const questions = query({
   args: { token: v.string(), now: v.number() },
+  // Enforced at the boundary rather than trusted to the projector. See
+  // convex/lib/candidateReturns.ts.
+  returns: v.object({
+    questions: v.array(
+      v.object({
+        ...candidateQuestionReturns.fields,
+        answered: v.boolean(),
+      }),
+    ),
+    resumeAtIndex: v.number(),
+    introMode: introModeValidator,
+    introText: v.union(v.string(), v.null()),
+    hasIntroMedia: v.boolean(),
+  }),
   handler: async (ctx, { token, now }) => {
     // The candidate's clock keeps the gate reactive; it does not decide it.
     // See convex/lib/clock.ts.

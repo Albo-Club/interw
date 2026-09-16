@@ -19,6 +19,12 @@ import { ConvexError, v } from 'convex/values'
 
 import { action, internalQuery, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
+import {
+  criteriaScoresValidator,
+  fitMatrixValidator,
+  paraverbalValidator,
+  recommendationValidator,
+} from './schema'
 import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
@@ -142,8 +148,61 @@ export const revoke = mutation({
 
 /* ─────────────────────────── Public side ───────────────────────────────── */
 
+/**
+ * What a share link is allowed to show.
+ *
+ * Enforced by Convex on the way out, not only by the code above. The list of
+ * what is withheld — the recruiter's private note, the CV, the cover letter,
+ * the phone number, the LinkedIn, the access token — is a decision, and a
+ * decision that only lives in a `.map()` is one field away from being undone
+ * by someone adding "just the email so we can reply".
+ */
+const shareViewReturns = v.object({
+  state: v.union(
+    v.literal('active'),
+    v.literal('expired'),
+    v.literal('revoked'),
+    v.literal('not_found'),
+  ),
+  report: v.union(
+    v.null(),
+    v.object({
+      organisationName: v.string(),
+      jobTitle: v.string(),
+      candidateName: v.string(),
+      completedAt: v.union(v.number(), v.null()),
+      overallScore: v.number(),
+      recommendation: recommendationValidator,
+      executiveSummary: v.string(),
+      strengths: v.array(v.string()),
+      concerns: v.array(v.string()),
+      criteria: v.array(
+        v.object({
+          _id: v.id('criteria'),
+          label: v.string(),
+          weight: v.number(),
+          normalizedWeight: v.number(),
+        }),
+      ),
+      // The same validators the table is defined with: what a share shows of
+      // the report IS what the report holds, and a second copy would drift.
+      criteriaScores: criteriaScoresValidator,
+      fitMatrix: v.union(fitMatrixValidator, v.null()),
+      paraverbal: v.union(paraverbalValidator, v.null()),
+      answers: v.array(
+        v.object({
+          segmentId: v.id('segments'),
+          questionIndex: v.number(),
+          question: v.string(),
+        }),
+      ),
+    }),
+  ),
+})
+
 export const view = query({
   args: { token: v.string(), now: v.number() },
+  returns: shareViewReturns,
   handler: async (ctx, { token, now }) => {
     // `now` is the viewer's clock, and the viewer is whoever holds the link.
     // It stays, because it is what makes an expiry visible without polling —

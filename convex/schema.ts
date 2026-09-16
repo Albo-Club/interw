@@ -175,6 +175,60 @@ const evidenceValidator = v.object({
   quote: v.string(),
 })
 
+/**
+ * Criterion × question grid. Typed rather than `v.any()`: an untyped blob here
+ * is how a model's malformed output reaches the UI.
+ *
+ * Declared here rather than inline in the table so the share surface's
+ * `returns` validator can reuse it — the fields a share link shows ARE the
+ * fields the table stores, and a second copy would drift from this one.
+ */
+export const fitMatrixValidator = v.object({
+  criteria: v.array(
+    v.object({
+      criterionId: v.id('criteria'),
+      score: v.number(),
+      level: fitLevelValidator,
+      statement: v.string(),
+    }),
+  ),
+  questions: v.array(
+    v.object({
+      questionId: v.id('questions'),
+      questionIndex: v.number(),
+      score: v.number(),
+      summary: v.string(),
+      depth: depthLevelValidator,
+      evidence: v.optional(evidenceValidator),
+    }),
+  ),
+})
+
+/** Computed, not generated — see paraverbalDimensionValidator. */
+export const paraverbalValidator = v.object({
+  dimensions: v.array(
+    v.object({
+      key: paraverbalDimensionValidator,
+      /** 0..10. */
+      score: v.number(),
+      /** The measurement behind the score, e.g. words per minute. */
+      measure: v.number(),
+    }),
+  ),
+  wordsPerMinute: v.number(),
+  totalSpeakingSeconds: v.number(),
+})
+
+/** One scored criterion, with the quotes behind the score. */
+export const criteriaScoresValidator = v.array(
+  v.object({
+    criterionId: v.id('criteria'),
+    score: v.number(),
+    rationale: v.string(),
+    evidence: v.array(evidenceValidator),
+  }),
+)
+
 export default defineSchema({
   users: defineTable({
     betterAuthId: v.string(),
@@ -438,14 +492,7 @@ export default defineSchema({
     overallScore: v.number(),
     recommendation: recommendationValidator,
     executiveSummary: v.string(),
-    criteriaScores: v.array(
-      v.object({
-        criterionId: v.id('criteria'),
-        score: v.number(),
-        rationale: v.string(),
-        evidence: v.array(evidenceValidator),
-      }),
-    ),
+    criteriaScores: criteriaScoresValidator,
     strengths: v.array(v.string()),
     concerns: v.array(v.string()),
     /** True when at least one answer could not be transcribed and the report
@@ -455,44 +502,9 @@ export default defineSchema({
     partial: v.optional(v.boolean()),
     /** Criterion × question grid. Typed rather than `v.any()`: an untyped
      *  blob here is how a model's malformed output reaches the UI. */
-    fitMatrix: v.optional(
-      v.object({
-        criteria: v.array(
-          v.object({
-            criterionId: v.id('criteria'),
-            score: v.number(),
-            level: fitLevelValidator,
-            statement: v.string(),
-          }),
-        ),
-        questions: v.array(
-          v.object({
-            questionId: v.id('questions'),
-            questionIndex: v.number(),
-            score: v.number(),
-            summary: v.string(),
-            depth: depthLevelValidator,
-            evidence: v.optional(evidenceValidator),
-          }),
-        ),
-      }),
-    ),
+    fitMatrix: v.optional(fitMatrixValidator),
     /** Computed, not generated — see paraverbalDimensionValidator. */
-    paraverbal: v.optional(
-      v.object({
-        dimensions: v.array(
-          v.object({
-            key: paraverbalDimensionValidator,
-            /** 0..10. */
-            score: v.number(),
-            /** The measurement behind the score, e.g. words per minute. */
-            measure: v.number(),
-          }),
-        ),
-        wordsPerMinute: v.number(),
-        totalSpeakingSeconds: v.number(),
-      }),
-    ),
+    paraverbal: v.optional(paraverbalValidator),
     highlights: v.optional(
       v.array(
         v.object({

@@ -28,6 +28,7 @@ import type * as jobImportFetch from "../jobImportFetch.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_ai from "../lib/ai.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_candidateReturns from "../lib/candidateReturns.js";
 import type * as lib_candidateView from "../lib/candidateView.js";
 import type * as lib_clock from "../lib/clock.js";
 import type * as lib_evidence from "../lib/evidence.js";
@@ -92,6 +93,7 @@ declare const fullApi: ApiFromModules<{
   "lib/agentScope": typeof lib_agentScope;
   "lib/ai": typeof lib_ai;
   "lib/auth": typeof lib_auth;
+  "lib/candidateReturns": typeof lib_candidateReturns;
   "lib/candidateView": typeof lib_candidateView;
   "lib/clock": typeof lib_clock;
   "lib/evidence": typeof lib_evidence;

@@ -35,6 +35,11 @@ import {
   toCandidateProjectView,
   toCandidateSessionView,
 } from './lib/candidateView'
+import {
+  candidateProjectReturns,
+  candidateSessionReturns,
+  sessionGateReturns,
+} from './lib/candidateReturns'
 import { evaluateSessionGate } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
@@ -88,6 +93,14 @@ async function requireSession(
  */
 export const landing = query({
   args: { token: v.string(), now: v.number() },
+  // The projectors decide what a candidate sees; this makes Convex enforce it
+  // at the boundary. See convex/lib/candidateReturns.ts.
+  returns: v.object({
+    organisationName: v.string(),
+    session: candidateSessionReturns,
+    project: candidateProjectReturns,
+    gate: sessionGateReturns,
+  }),
   handler: async (ctx, { token, now }) => {
     const { session, project } = await requireSession(ctx, token)
     const org = await ctx.db.get('organizations', session.orgId)

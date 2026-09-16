@@ -81,6 +81,9 @@ export const recordJob = internalMutation({
     attempt: v.optional(v.number()),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    audioSeconds: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get('sessions', args.sessionId)
@@ -93,6 +96,9 @@ export const recordJob = internalMutation({
       attempt: args.attempt ?? 1,
       durationMs: args.durationMs,
       error: args.error?.slice(0, 1_000),
+      promptTokens: args.promptTokens,
+      completionTokens: args.completionTokens,
+      audioSeconds: args.audioSeconds,
       at: Date.now(),
     })
     return null
@@ -274,6 +280,7 @@ export const transcribeSegment = internalAction({
         step: 'transcribe',
         outcome: 'succeeded',
         durationMs: Date.now() - started,
+        audioSeconds: result.audioSeconds ?? undefined,
       })
     } catch (error) {
       await ctx.runMutation(internal.pipeline.recordJob, {
@@ -477,7 +484,6 @@ export const reportInputs = internalQuery({
       missingAnswers: uploaded.length - answers.length,
       language: project.language,
       jobTitle: project.jobTitle ?? project.title,
-      candidateName: session.candidateName,
       criteria: normalizeWeights(
         criteria.map((criterion) => ({
           _id: criterion._id,
@@ -580,7 +586,6 @@ export const generateReport = internalAction({
       const { system, user } = reportPrompt({
         language: inputs.language,
         jobTitle: inputs.jobTitle,
-        candidateName: inputs.candidateName,
         criteria: inputs.criteria.map((criterion) => ({
           label: criterion.label,
           description: criterion.description,
@@ -592,7 +597,7 @@ export const generateReport = internalAction({
         })),
       })
 
-      const { value, model } = await complete({
+      const { value, model, usage } = await complete({
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
@@ -628,6 +633,8 @@ export const generateReport = internalAction({
         step: 'report',
         outcome: 'succeeded',
         durationMs: Date.now() - started,
+        promptTokens: usage?.promptTokens,
+        completionTokens: usage?.completionTokens,
         error:
           inputs.missingAnswers > 0
             ? `partial: ${inputs.missingAnswers} answer(s) unreadable`

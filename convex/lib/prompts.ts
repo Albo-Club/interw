@@ -89,10 +89,19 @@ export function jobImportPrompt(input: JobImportPromptInput): {
   }
 }
 
+/**
+ * Note what is NOT here: the candidate's name.
+ *
+ * The evaluation leaves the deployment; the transcript has to, because that
+ * is what is being assessed, but the name does not have to go with it and
+ * nothing in the report needs it — the recruiter knows whose report they
+ * opened. Sending it turned an interview transcript into a named one at a
+ * third-party provider, for no gain. It is also one fewer thing for the model
+ * to draw an inference from that the anti-discrimination clause forbids.
+ */
 export type ReportPromptInput = {
   language: PromptLanguage
   jobTitle: string
-  candidateName: string
   criteria: Array<{ label: string; description: string | null; weight: number }>
   answers: Array<{ question: string; transcript: string }>
 }
@@ -166,7 +175,6 @@ export function reportPrompt(input: ReportPromptInput): {
     ].join('\n'),
     user: [
       `Role: ${input.jobTitle}`,
-      `Candidate: ${input.candidateName}`,
       '',
       'Criteria to score, by index:',
       criteriaBlock,

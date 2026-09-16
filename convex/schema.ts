@@ -585,6 +585,12 @@ export default defineSchema({
     attempt: v.number(),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
+    /** What the step cost, when the provider says. Without these, "what does
+     *  one interview cost?" has no answer at all — which is the question
+     *  under every other question about pricing this product. */
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    audioSeconds: v.optional(v.number()),
     at: v.number(),
   })
     .index('by_session', ['sessionId'])

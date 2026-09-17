@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { htmlToText } from './htmlText'
+import { htmlToText, jobPostingText } from './htmlText'
 
 describe('htmlToText', () => {
   it('drops scripts and styles entirely, content included', () => {
@@ -44,5 +44,74 @@ describe('htmlToText', () => {
 
   it('truncates to the cap', () => {
     expect(htmlToText(`<p>${'a'.repeat(500)}</p>`, 100)).toHaveLength(100)
+  })
+})
+
+describe('jobPostingText', () => {
+  // The shape Welcome to the Jungle and every other client-rendered board
+  // serves: a shell with nothing readable in it, and the whole ad in JSON-LD
+  // so Google for Jobs can index it.
+  const shell = (ld: string) =>
+    `<html><head><script type="application/ld+json">${ld}</script></head>` +
+    `<body><nav>Jobs</nav><div id="root"></div></body></html>`
+
+  it('reads the ad a JS shell only publishes as JSON-LD', () => {
+    const html = shell(
+      JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'JobPosting',
+        title: 'Développeur Full-Stack',
+        hiringOrganization: { '@type': 'Organization', name: 'Doctolib' },
+        description: '<p>Vous rejoindrez</p><ul><li>React</li></ul>',
+      }),
+    )
+    // The stripped markup has nothing in it; the JSON-LD has the ad.
+    expect(htmlToText(html)).not.toContain('React')
+    const text = jobPostingText(html)
+    expect(text).toContain('Développeur Full-Stack')
+    expect(text).toContain('Doctolib')
+    expect(text).toContain('Vous rejoindrez')
+    expect(text).toContain('React')
+    expect(text).not.toContain('<p>')
+  })
+
+  it('finds the posting inside an @graph', () => {
+    const html = shell(
+      JSON.stringify({
+        '@graph': [
+          { '@type': 'WebSite', name: 'Board' },
+          { '@type': 'JobPosting', title: 'Data Analyst', description: 'SQL' },
+        ],
+      }),
+    )
+    expect(jobPostingText(html)).toContain('Data Analyst')
+  })
+
+  it('ignores blocks that are not a posting', () => {
+    const html = shell(
+      JSON.stringify([
+        { '@type': 'BreadcrumbList', name: 'Home' },
+        {
+          '@type': ['JobPosting'],
+          title: 'Product Manager',
+          description: 'Roadmap',
+        },
+      ]),
+    )
+    const text = jobPostingText(html)
+    expect(text).toContain('Product Manager')
+    expect(text).not.toContain('Home')
+  })
+
+  it('skips malformed JSON-LD instead of throwing', () => {
+    // A board shipping broken JSON-LD must not take the import down with it —
+    // the stripped markup is still there to fall back on.
+    expect(jobPostingText(shell('{ not json'))).toBe('')
+  })
+
+  it('returns nothing for a page that carries no posting', () => {
+    expect(jobPostingText('<html><body><p>A blog post</p></body></html>')).toBe(
+      '',
+    )
   })
 })

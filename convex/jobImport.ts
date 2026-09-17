@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { action, internalQuery } from './_generated/server'
 import { internal } from './_generated/api'
 import { complete } from './lib/ai'
-import { htmlToText } from './lib/htmlText'
+import { htmlToText, jobPostingText } from './lib/htmlText'
 import { jobImportPrompt } from './lib/prompts'
 import { requireProjectEditable } from './lib/projectAccess'
 import { consumeLimit } from './rateLimiters'
@@ -77,7 +77,15 @@ export const importFromUrl = action({
       internal.jobImportFetch.fetchJobPage,
       { url: args.url },
     )
-    const pageText = htmlToText(html)
+    // Two readings of the same page, because a board that renders its ads
+    // client-side leaves nothing in the markup but chrome while still
+    // publishing the whole ad as JSON-LD for Google for Jobs. Take whichever
+    // actually carries the ad rather than assuming the page is server
+    // rendered — that assumption is what made Welcome to the Jungle and every
+    // other React job board answer `page_too_thin`.
+    const structured = jobPostingText(html)
+    const visible = htmlToText(html)
+    const pageText = structured.length > visible.length ? structured : visible
     // Below this, the page was almost certainly a JS shell or a consent wall,
     // and a model handed 80 characters will invent an entire role.
     if (pageText.length < MIN_USABLE_TEXT) throw new ConvexError('page_too_thin')

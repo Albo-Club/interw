@@ -50,6 +50,17 @@ export function StepQuestions({
     toast.error(t(key, { defaultValue: t(fallbackKey) }))
   }
 
+  // `questions.create` refuses empty content — a question with no text is not
+  // a question. Seed the example the field shows as its placeholder, the way
+  // StepCriteria seeds a new criterion, so the button opens an editable card
+  // instead of firing `invalid_content` at a recruiter who has typed nothing
+  // yet.
+  const add = () =>
+    void create({
+      projectId: project._id,
+      content: t('projects:questions.fields.contentPlaceholder'),
+    }).catch(notify)
+
   const move = async (index: number, direction: -1 | 1) => {
     const next = [...questions]
     const target = index + direction
@@ -87,13 +98,7 @@ export function StepQuestions({
           title={t('projects:questions.empty.title')}
           body={t('projects:questions.empty.body')}
           action={
-            <Button
-              onClick={() =>
-                void create({ projectId: project._id, content: '' }).catch(
-                  notify,
-                )
-              }
-            >
+            <Button onClick={add}>
               <Plus className="size-4" />
               {t('projects:questions.add')}
             </Button>
@@ -116,12 +121,7 @@ export function StepQuestions({
       )}
 
       {questions.length > 0 && (
-        <Button
-          variant="outline"
-          onClick={() =>
-            void create({ projectId: project._id, content: '' }).catch(notify)
-          }
-        >
+        <Button variant="outline" onClick={add}>
           <Plus className="size-4" />
           {t('projects:questions.add')}
         </Button>

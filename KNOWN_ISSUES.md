@@ -1797,3 +1797,49 @@ And when one does truncate, the provider says so plainly with
 `finish_reason: 'length'` — which `complete()` now checks **before** parsing.
 Without it, a cut-off answer surfaced as "model output was not valid JSON" and
 sent whoever read `jobLog` hunting for a schema bug that was not there.
+
+## A job board's ad lives in its JSON-LD, not in its markup
+
+"Import a job ad" fetched the page, ran `htmlToText` over it, and refused
+anything under 400 characters as `page_too_thin`. That works on a hand-written
+ad on a company site and fails on essentially every real job board — Welcome to
+the Jungle, Indeed, Workday, most ATS career pages — because they render the ad
+in the browser. The served HTML is a nav, a cookie banner and an empty `<div>`.
+
+The ad is still in the response, in a `<script type="application/ld+json">`
+block holding a schema.org `JobPosting`. That block is not optional for them:
+without it the ad is invisible to Google for Jobs, which is where a board's
+traffic comes from. So it is present, complete, and cleaner than the rendered
+page would have been — the ad without the chrome.
+
+`htmlToText` drops every `<script>` as its first act, which is right for its
+job and threw away the only copy of the ad. `jobPostingText` in
+`convex/lib/htmlText.ts` reads the JSON-LD **before** the tags are stripped;
+`jobImport.ts` runs both readings and keeps whichever is longer, because a
+server-rendered ad has no JSON-LD at all and a client-rendered one has nothing
+else.
+
+Two details worth keeping if this is ever touched again:
+
+- The posting can sit inside a `@graph` wrapper or an array alongside a
+  `BreadcrumbList`, and `@type` can itself be an array. Walk the document.
+- `description` is HTML inside a JSON string, so it goes back through the tag
+  stripper. Malformed JSON-LD is skipped silently — there is a second reading
+  to fall back on, and repairing a board's broken markup is how an import
+  invents a role that was never advertised.
+
+### Its neighbour: Node's `fetch` sends no `User-Agent`
+
+Same flow, different failure. `fetch` in the Node runtime sends no
+`User-Agent` header at all, and a good share of job boards refuse an
+unidentified client outright. The recruiter then read "that page could not be
+read, check the link" about a link that was correct.
+
+The fetch now identifies itself (`InterwBot/1.0 (+SITE_URL)`) rather than
+impersonating a browser, and `401 / 403 / 429` gets its own `page_blocked`
+code. Some sites bot-wall everything regardless; the point is that the recruiter
+is told the site said no, instead of being sent hunting for a typo.
+
+Note that `errors.page_unreachable` still offers to let them "paste the text
+instead", which no screen in the wizard does. Either build it or drop the
+promise — it is copy writing a cheque the product does not cash.

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "role-authoring-fixes": {
+      "title": "Adding questions, and importing ads that are not plain pages",
+      "body": "Two fixes to building a role. “Add a question” now opens an editable card instead of refusing with “a question must contain text” before you had a chance to type any. And importing from a job ad works on boards that render their ads in the browser — Welcome to the Jungle, Indeed, ATS career pages — which previously came back as “not enough text on that page”. When a site refuses to be read by anything but a browser, the app now says that, rather than suggesting your link is wrong."
+    },
     "european-ai": {
       "title": "Interview analysis now runs in Europe",
       "body": "Transcription and assessment both run on Mistral, a French provider, on European infrastructure. The assessment step used to pass through a router that picked a provider by price; we constrained it, but the guarantee rested on a setting rather than on where the request actually went. There is now one provider and one destination, and a candidate's interview does not leave it."

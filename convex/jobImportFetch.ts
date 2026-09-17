@@ -38,6 +38,21 @@ const MAX_REDIRECTS = 5
 const MAX_PAGE_BYTES = 2 * 1024 * 1024
 const ALLOWED_CONTENT_TYPES = ['text/html', 'application/xhtml+xml', 'text/plain']
 
+/**
+ * Node's `fetch` sends no `User-Agent` at all, and a good share of job boards
+ * refuse an anonymous client outright — the recruiter then reads "check the
+ * link" about a link that was correct. Identify the product and where to
+ * complain about it rather than impersonating a browser: that clears the sites
+ * that only filter unidentified clients, and the ones that refuse every
+ * non-browser now say so as `page_blocked`.
+ */
+const USER_AGENT = `InterwBot/1.0 (+${
+  process.env.SITE_URL ?? 'https://interw.app'
+})`
+
+/** What a browser asks for. A bare `text/html` earns a 406 from some servers. */
+const ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+
 async function assertResolvesPublicly(url: URL): Promise<void> {
   // A literal address needs no lookup, and `lookup` on one just echoes it.
   if (isPrivateHost(url.hostname)) throw new ConvexError('invalid_url')
@@ -102,7 +117,7 @@ export const fetchJobPage = internalAction({
       const response = await fetch(current, {
         redirect: 'manual',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        headers: { Accept: 'text/html,application/xhtml+xml' },
+        headers: { Accept: ACCEPT, 'User-Agent': USER_AGENT },
       })
 
       if (response.status >= 300 && response.status < 400) {
@@ -120,6 +135,12 @@ export const fetchJobPage = internalAction({
         continue
       }
 
+      // The site answered, and the answer is "not you". Worth its own code:
+      // "that page could not be read, check the link" sends a recruiter
+      // hunting for a typo in a URL that is perfectly good.
+      if ([401, 403, 429].includes(response.status)) {
+        throw new ConvexError('page_blocked')
+      }
       if (!response.ok) throw new ConvexError('page_unreachable')
 
       // The `Accept` header is a request, not a guarantee. A response that is

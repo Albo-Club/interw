@@ -249,6 +249,7 @@
     "project_has_sessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt.",
     "expiry_in_the_past": "Choisissez une date d'expiration dans le futur.",
     "page_unreachable": "Cette page n'a pas pu être lue. Vérifiez le lien, ou collez le texte directement.",
+    "page_blocked": "Ce site d'emploi refuse la lecture automatique. Ouvrez l'offre et ajoutez les questions vous-même.",
     "page_too_thin": "Il n'y avait pas assez de texte sur cette page. Elle nécessite peut-être JavaScript ou l'acceptation des cookies.",
     "invalid_url": "Ce n'est pas une adresse web publique.",
     "unsupported_media_type": "Ce format d'enregistrement n'est pas pris en charge.",

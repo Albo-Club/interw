@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "role-authoring-fixes": {
+      "title": "Ajout de questions, et import d’offres qui ne sont pas de simples pages",
+      "body": "Deux corrections sur la création d’un poste. « Ajouter une question » ouvre désormais une carte modifiable au lieu de refuser avec « une question doit contenir du texte » avant même que vous ayez pu en saisir. Et l’import depuis une offre fonctionne sur les sites qui affichent leurs annonces dans le navigateur — Welcome to the Jungle, Indeed, les pages carrières d’ATS — qui répondaient jusqu’ici « pas assez de texte sur cette page ». Quand un site refuse d’être lu autrement que par un navigateur, l’application le dit, au lieu de laisser penser que votre lien est mauvais."
+    },
     "european-ai": {
       "title": "L\u2019analyse des entretiens tourne d\u00e9sormais en Europe",
       "body": "La transcription et l\u2019\u00e9valuation passent toutes deux par Mistral, fournisseur fran\u00e7ais, sur une infrastructure europ\u00e9enne. L\u2019\u00e9tape d\u2019\u00e9valuation transitait auparavant par un routeur qui choisissait un fournisseur au meilleur prix ; nous l\u2019avions encadr\u00e9, mais la garantie tenait \u00e0 un r\u00e9glage plut\u00f4t qu\u2019\u00e0 la destination r\u00e9elle de la requ\u00eate. Il n\u2019y a d\u00e9sormais qu\u2019un fournisseur et une destination, et l\u2019entretien d\u2019un candidat n\u2019en sort pas."

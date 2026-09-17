@@ -249,6 +249,7 @@
     "project_has_sessions": "This role has candidates, so it cannot be deleted. Archive it instead.",
     "expiry_in_the_past": "Choose an expiry date in the future.",
     "page_unreachable": "That page could not be read. Check the link, or paste the text instead.",
+    "page_blocked": "That job board refuses to be read automatically. Open the ad and add the questions yourself.",
     "page_too_thin": "There was not enough text on that page to work from. It may need JavaScript or accept cookies first.",
     "invalid_url": "That is not a public web address.",
     "unsupported_media_type": "That recording format is not supported.",

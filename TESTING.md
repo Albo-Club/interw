@@ -261,12 +261,14 @@ is cheaper to get wrong.
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
 | IA1 | Create a role | `/app/{org}/projects` → New role → title + language → Create | Lands in the wizard on step 1, status **Draft** |
-| IA2 | Questions | Wizard → Questions → add three, edit the text, reorder with the arrows | Order persists on reload; indices stay contiguous |
+| IA2 | Questions | Wizard → Questions → **Add a question** three times, edit the text, reorder with the arrows | Each click opens an editable card seeded with the example question. `questions.create` refuses empty text, so the button must never send it — a toast saying the question needs text is the bug this row exists for. Order persists on reload; indices stay contiguous |
 | IA3 | Record a question | Questions → Record this question → speak → Stop | Uploads, then shows **Recorded**. Check the object exists in the bucket under `orgs/{orgId}/projects/{projectId}/q-{questionId}.*` |
 | IA4 | Re-record | Record again with a different browser (WebM vs MP4) | The old object is deleted, not orphaned. Exactly one `q-{questionId}.*` remains |
 | IA5 | Criteria and weights | Add three criteria with weights 10 / 10 / 10 | Each shows **34% / 33% / 33%** — never 33/33/33 |
 | IA6 | Publish gate | Try to publish with no question | Refused with "Add at least one question" |
 | IA7 | Import a job ad | Questions → Import from a job ad → paste a real published ad URL | Draft appears with the requested number of questions and criteria summing to 100. **Nothing is saved** until "Add all to the role" |
+| IA7b | Import from a client-rendered board | Same, with an ad from Welcome to the Jungle, Indeed, or an ATS career page | Works. Those pages render the ad in the browser and leave nothing readable in the markup, so the draft comes from the `JobPosting` JSON-LD they publish for Google for Jobs — not from `page_too_thin` |
+| IA7c | A board that refuses to be read | Paste an ad from a site behind a bot wall | Refused with "refuses automatic reading" (`page_blocked`), never "check the link" — the link is fine, the site said no |
 | IA8 | Import SSRF guard | Paste `http://127.0.0.1:8080/`, `http://169.254.169.254/`, `http://2130706433/` and a URL that 302s to one of them | All refused as "not a public web address". See S10 and `convex/lib/safeUrl.test.ts` for the full table |
 | IA9 | Restrict a role | Share → name one colleague → Save | A different member (non-admin) no longer sees the role in the list, in search, or by URL — and gets **not found**, not "forbidden" |
 | IA10 | Archive | Archive an active role | Becomes read-only; editing is refused; restoring returns it to **Draft**, never straight to Active |

@@ -1,11 +1,11 @@
 /**
- * The one place that talks to a model provider.
- *
- * No other module names a model, holds a provider URL, or parses a model's
- * output. One provider, Mistral, for both capabilities:
+ * The one place that names a model, holds a provider URL, or parses a model's
+ * output. One provider, Mistral, for all three capabilities:
  *
  *   transcription → Voxtral.
  *   evaluation    → GLM, which Mistral serves alongside its own models.
+ *   in-app chat   → the same GLM, reached from `convex/agent.ts` through the
+ *                   AI SDK, on the id this file exports.
  *
  * A candidate's recording and its transcript are the most sensitive data this
  * product holds, and the provider being European is part of the design, not a
@@ -48,8 +48,12 @@ const TRANSCRIPTION_MODEL = 'voxtral-mini-latest'
  * fallback chain from the first to the second. Both now resolve here, so the
  * argument bought nothing while still reading as though it did — and a
  * fallback from a model to itself only pays twice for the same failure.
+ *
+ * Exported because the in-app assistant is one of those completions:
+ * `convex/agent.ts` reaches Mistral through the AI SDK rather than `complete`
+ * below — a different library, the same provider and the same id.
  */
-const EVALUATION_MODEL = 'zai-glm-5-3'
+export const COMPLETION_MODEL = 'zai-glm-5-3'
 
 const MISTRAL_TRANSCRIPTION_URL =
   'https://api.mistral.ai/v1/audio/transcriptions'
@@ -310,7 +314,7 @@ export async function complete<T>(
       'Content-Type': 'application/json',
     },
     JSON.stringify({
-      model: EVALUATION_MODEL,
+      model: COMPLETION_MODEL,
       messages: options.messages,
       temperature: options.temperature ?? 0.2,
       max_tokens: MAX_COMPLETION_TOKENS,
@@ -330,7 +334,7 @@ export async function complete<T>(
         },
       },
     }),
-    `completion(${EVALUATION_MODEL})`,
+    `completion(${COMPLETION_MODEL})`,
     COMPLETION_TIMEOUT_MS,
   )
 
@@ -356,7 +360,7 @@ export async function complete<T>(
 
   return {
     value: parseModelJson(content, options.schema, options.schemaName),
-    model: envelope.data.model ?? EVALUATION_MODEL,
+    model: envelope.data.model ?? COMPLETION_MODEL,
     usage: envelope.data.usage
       ? {
           promptTokens: envelope.data.usage.prompt_tokens ?? 0,

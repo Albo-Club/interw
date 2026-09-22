@@ -801,11 +801,34 @@ find . \( -path ./node_modules -o -path ./.output \) -prune -o \
   -type f \( -name '* 2.ts' -o -name '* 2.tsx' \) -print
 ```
 
-## Anthropic model id
+## The chat agent had its own provider, and its own key
 
-`convex/agent.ts` defaults to `claude-haiku-4-5`. Override via the
-`ANTHROPIC_MODEL` Convex env var to pick a different model. Anthropic
-sometimes ships dated aliases (`claude-haiku-4-5-20251001`) for stability.
+`convex/agent.ts` ran on Anthropic (`claude-haiku-4-5`, `ANTHROPIC_API_KEY`,
+overridable via an `ANTHROPIC_MODEL` env var) long after the interview
+pipeline had deliberately consolidated onto one European provider. It read as
+a separate concern — a chat assistant, not an evaluation — which is exactly
+why it survived the consolidation.
+
+It was not a separate concern. The agent's tools (`convex/recruiterTools.ts`)
+read roles, candidates and reports, so a single question about a shortlist
+sends candidate names and the text of their evaluations to the model. That is
+interview data under a different name, and the residency argument in
+`convex/lib/ai.ts` applied to it word for word.
+
+Both now run on Mistral, on the model id exported from `convex/lib/ai.ts`, on
+the one `MISTRAL_API_KEY`. Two consequences worth keeping:
+
+- **No `ANTHROPIC_MODEL`, and no env var replacing it.** An id set from the
+  environment is an id nothing type-checks or reviews. Change the model in
+  `convex/lib/ai.ts` and re-run TESTING.md P4a — both halves of it, since that
+  one id now drives `complete()` and the AI SDK client behind the assistant.
+- **`convex/agent.test.ts` pins the provider.** Nothing in the type system
+  stops `mistral.chat(...)` from becoming another provider's import again —
+  the test is what makes that a failing build rather than a quiet regression.
+
+The generalisable rule: when a product picks a provider for a data-protection
+reason, the check is *which data reaches the model*, not which feature the
+call belongs to. A read-only tool is still an egress path.
 
 ## SITE_URL drift in prod = broken email links
 
@@ -911,9 +934,9 @@ audit.
   `@assistant-ui/react`. No Convex adapter exists for assistant-ui; the brief's
   pick would require ~200 lines of glue. Loss: markdown rendering, attachments,
   tool-call UI, edit/regenerate. Migrate later if polish is needed.
-- **Anthropic model default `claude-haiku-4-5`** — chosen for its cost/latency
-  ratio in an in-app assistant. Override via `ANTHROPIC_MODEL` env var
-  (e.g. `claude-sonnet-4-6` for heavier tasks).
+- **The chat agent runs the pipeline's model**, not a second provider chosen
+  for cost/latency — see "The chat agent had its own provider, and its own
+  key" above.
 - **Rate-limit thresholds** chosen for usable defaults (e.g. invitations 20/h
   burst 5) rather than the brief's tight 3/min example.
 - **Super-admin lacks impersonate** — out of scope for MVP, needs a careful
@@ -1870,6 +1893,32 @@ The general shape: a flag that names a target is a *request*, and an ambient
 credential that names a different target wins. Whenever both exist, trust what
 the tool says it did, never what you asked for.
 
+## A fresh clone has no `origin/HEAD`, and `/security-review` needs it
+
+`git clone` normally writes `refs/remotes/origin/HEAD`, but the checkout a
+Claude Code on the web session starts from does not carry it. Nothing in the
+app notices — until a skill asks git what the default branch is.
+
+The built-in `/security-review` opens by listing the branch's commits with
+`git log --no-decorate origin/HEAD...`. With the ref missing, git answers
+`fatal: ambiguous argument 'origin/HEAD...'` and the skill aborts before
+reading a single line of the diff. The failure mode is the bad one: the agent
+concludes the skill is unavailable and skips the pass that `CLAUDE.md` § 6
+makes mandatory, so the gate has a hole that looks like a clean run.
+
+`git remote set-head origin -a` resolves the default branch from the remote
+and writes the ref. It runs in the `SessionStart` hook of
+`.claude/settings.json`, ahead of `sync:skills:check`. It belongs in the hook
+rather than in a committed file because `origin/HEAD` is a *local* ref — it is
+not repository state, nothing on the remote changes when it is set, and no
+clone inherits it. Every new container therefore needs it re-applied. The
+command is idempotent and costs one `ls-remote`.
+
+Same skill, sibling trap: it reads *commits*, not the working tree. Running it
+before committing reviews an empty diff and reports nothing at all, which
+reads exactly like a clean pass. Hence the order in `CLAUDE.md` § 6 —
+`/simplify` first on the working tree, commit, then `/security-review`.
+
 ## A preview deployment is not a staging environment
 
 Convex preview deployments are **deleted automatically after 5 days** (14 on
@@ -1915,3 +1964,41 @@ Two consequences for this repo:
   branches. Nothing derives it today: wiring per-branch previews means solving
   that first, along with `trustedOrigins` in `convex/auth.ts`, which pins a
   single origin and would reject every branch URL.
+
+## Convex refuses a production deploy key in a Vercel preview build
+
+Staging here is the production deployment of a second Convex project, and the
+obvious wiring is to put that project's production deploy key on the Vercel
+branch that serves staging. The build fails:
+
+```
+✖ Detected a non-production build environment and "CONVEX_DEPLOY_KEY"
+  for a production Convex deployment. This is probably unintentional.
+```
+
+`convex deploy` reads `VERCEL_ENV`. Vercel sets it to `preview` for every
+branch that is not the project's production branch, and Convex refuses the
+pairing — a guard against a feature branch overwriting production, which is
+the right default and is not configurable.
+
+The vocabularies do not line up, and that is the whole difficulty:
+
+| | Vercel | Convex |
+| --- | --- | --- |
+| permanent, real | Production | the project's production deployment |
+| per branch, disposable | Preview | preview deployment (deleted after 5 days) |
+| local | Development | the developer's own `dev` deployment |
+
+Neither has a "staging" slot. On Convex we build one out of a second project.
+On Vercel the slot exists — Custom Environments, which can literally be named
+`staging` — but it is a paid feature; on a plan without it the API reports
+`accountLimit: {total: 0}`.
+
+So within one Vercel project, a staging branch cannot run `convex deploy`.
+Either give staging its own Vercel project whose *production branch* is the
+staging branch — which makes the build a production build, and is what both
+vendors document — or leave `DEPLOY_CONVEX` off that branch, point
+`VITE_CONVEX_URL` at the staging backend by hand, and deploy the backend by
+another route. The second works, at the cost of front end and back end no
+longer shipping together: a push updates the site and not the functions,
+silently.

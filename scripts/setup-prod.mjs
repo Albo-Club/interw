@@ -12,8 +12,8 @@
  *      never mirrored: a prod bucket reachable with the dev key is not a
  *      separate environment.
  *   4. Mirrors what is safe to share (RESEND_*, MISTRAL_API_KEY, the object
- *      store endpoint/region, optional ANTHROPIC_*, SENTRY_DSN and Google
- *      OAuth), sets APP_ENV=production and SITE_URL to the chosen domain,
+ *      store endpoint/region, optional SENTRY_DSN and Google OAuth), sets
+ *      APP_ENV=production and SITE_URL to the chosen domain,
  *      forces RESEND_TEST_MODE=false, and generates a FRESH
  *      BETTER_AUTH_SECRET and PURGE_HASH_SALT.
  *   5. Asks for confirmation, then runs `convex env set --prod` for each
@@ -161,28 +161,11 @@ async function main() {
     OBJECT_STORE_ACCESS_KEY_ID: accessKeyId,
     OBJECT_STORE_SECRET_ACCESS_KEY: secretAccessKey,
   }
-  for (const k of [
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_MODEL',
-    'SENTRY_DSN',
-    'GOOGLE_CLIENT_ID',
-    'GOOGLE_CLIENT_SECRET',
-  ]) {
+  for (const k of ['SENTRY_DSN', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']) {
     const v = dev.get(k)
     if (v) plan[k] = v
   }
   const googleMirrored = !!plan.GOOGLE_CLIENT_ID
-
-  // Two AI paths, two providers: the pipeline runs on MISTRAL_API_KEY, the
-  // recruiter chat agent on Anthropic (convex/agent.ts). Missing the second
-  // does not break an interview, so warn rather than refuse.
-  if (!plan.ANTHROPIC_API_KEY) {
-    console.log(
-      '\n  ⚠️  ANTHROPIC_API_KEY is not set on dev, so it will not be mirrored.\n' +
-        '     The interview pipeline runs on Mistral and is unaffected, but the\n' +
-        '     recruiter chat agent (convex/agent.ts) will fail without it.',
-    )
-  }
 
   console.log('\n  Will set on prod:')
   for (const [k, v] of Object.entries(plan)) {

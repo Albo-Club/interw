@@ -137,7 +137,7 @@ before turning them on.
 Do **not** set `VITE_CONVEX_URL` by hand — `convex deploy` injects it into the
 build. Do **not** set `CONVEX_DEPLOYMENT`; it is a per-developer dev binding.
 
-Everything else — `RESEND_*`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`,
+Everything else — `RESEND_*`, `MISTRAL_API_KEY`,
 `OBJECT_STORE_*` — lives on the **Convex** deployment, not here. `pnpm run setup:prod` put them there.
 
 **4. Point the domain and deploy**

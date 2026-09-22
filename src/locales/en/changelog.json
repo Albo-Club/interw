@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "assistant-in-europe": {
+      "title": "The assistant runs in Europe too",
+      "body": "The assistant that answers your questions about roles and candidates now runs on the same French provider as interview transcription and assessment. It reads reports in order to answer you, so what you ask it about a candidate is interview data like any other — and it belongs under the same guarantee: one provider, one destination, and nothing about a candidate leaving it."
+    },
     "role-authoring-fixes": {
       "title": "Adding questions, and importing ads that are not plain pages",
       "body": "Two fixes to building a role. “Add a question” now opens an editable card instead of refusing with “a question must contain text” before you had a chance to type any. And importing from a job ad works on boards that render their ads in the browser — Welcome to the Jungle, Indeed, ATS career pages — which previously came back as “not enough text on that page”. When a site refuses to be read by anything but a browser, the app now says that, rather than suggesting your link is wrong."

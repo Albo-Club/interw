@@ -195,6 +195,7 @@ describe('the completion request', () => {
     await ask()
 
     expect(process.env.OPENROUTER_API_KEY).toBeUndefined()
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(calls[0].headers.Authorization).toBe('Bearer test-key')
   })
 

@@ -27,6 +27,26 @@ Before implementing:
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
+**Sober and elegant, not just short.** The rules above subtract; this one says
+what to aim for. Minimal is the line count — simple is how much the next
+reader has to hold in their head. Aim for both, and where they disagree pick
+the version that is obvious on first read.
+
+- Reach for the plainest construct that does the job: a function over a class,
+  a plain object over a registry, an early return over a nested branch, the
+  language over a dependency.
+- Elegance is fewer moving parts, never a cleverer trick. Code that needs a
+  comment to explain *how* it works should be rewritten — comments are for
+  *why*.
+- The most elegant change is often a deletion. Before adding a layer, check
+  whether removing one solves the same problem.
+- Write it the way this codebase already writes it. Consistency is part of
+  simplicity: a locally-brilliant pattern nobody else uses costs more than the
+  boring one everybody reads without thinking.
+
+The `/simplify` pass in § 6 checks this after the fact. It is a safety net,
+not a licence to write the sprawl first and clean up later.
+
 ## 3. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
@@ -124,12 +144,15 @@ duplicate the skills and double the update machinery). See `KNOWN_ISSUES.md`
 
 **Mandatory, self-initiated, on every PR — no exception for "small" diffs.**
 Once the change is complete and `pnpm typecheck` / `pnpm lint` / `pnpm test`
-are green, but **before** pushing the final commit and opening the PR, run in
-this order:
+are green, and **before** the branch is pushed, in this order:
 
-1. `/simplify` — quality pass on the diff: reuse, simplification, efficiency,
-   altitude. It applies its fixes, so re-run the checks above afterwards.
-2. `/security-review` — security pass on the branch's pending changes.
+1. `/simplify`, on the uncommitted working tree — quality pass: reuse,
+   simplification, efficiency, altitude. It applies its fixes, so re-run the
+   checks above afterwards, then commit.
+2. `/security-review`, **after** committing. It reads the branch's commits
+   against `origin/HEAD`, so on an uncommitted tree it reviews an empty diff
+   and reports nothing — indistinguishable from a clean pass. Anything it
+   turns up goes in a follow-up commit, then push.
 
 Then act on the findings: fix them, or state in the PR body why a finding is
 not applicable. Never open the PR with an unaddressed finding left silent.
@@ -175,7 +198,7 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `magicLink()` + `convex()`. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend (default model `claude-haiku-4-5`, override via `ANTHROPIC_MODEL`) + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider abstracted via `getModel()` in `convex/agent.ts`. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
+- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
 - **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
 - **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
 
@@ -607,6 +630,13 @@ verification is in `TESTING.md`.
   is a fallback; an unmatched quote returns null rather than a guess.
 - Prompts live in `convex/lib/prompts.ts`, in English, parameterised by the
   interview language. Model ids live in `convex/lib/ai.ts` and nowhere else.
+- **One provider, one key.** Never add a second model provider, a second API
+  key or an env var naming a model — including for a feature that looks
+  unrelated to the pipeline. The chat agent kept its own Anthropic key on
+  exactly that reasoning, while its read-only tools shipped candidate names
+  and report text to it. What decides the provider is which data reaches the
+  model, not which feature the call belongs to. See `KNOWN_ISSUES.md` § "The
+  chat agent had its own provider, and its own key".
 
 ## The candidate surface
 

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "assistant-in-europe": {
+      "title": "L’assistant aussi tourne en Europe",
+      "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."
+    },
     "role-authoring-fixes": {
       "title": "Ajout de questions, et import d’offres qui ne sont pas de simples pages",
       "body": "Deux corrections sur la création d’un poste. « Ajouter une question » ouvre désormais une carte modifiable au lieu de refuser avec « une question doit contenir du texte » avant même que vous ayez pu en saisir. Et l’import depuis une offre fonctionne sur les sites qui affichent leurs annonces dans le navigateur — Welcome to the Jungle, Indeed, les pages carrières d’ATS — qui répondaient jusqu’ici « pas assez de texte sur cette page ». Quand un site refuse d’être lu autrement que par un navigateur, l’application le dit, au lieu de laisser penser que votre lien est mauvais."

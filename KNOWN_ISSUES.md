@@ -1844,6 +1844,32 @@ Note that `errors.page_unreachable` still offers to let them "paste the text
 instead", which no screen in the wizard does. Either build it or drop the
 promise — it is copy writing a cheque the product does not cash.
 
+## A deploy key silently overrides `--prod`
+
+`convex env set --prod X y` does **not** write to production when
+`CONVEX_DEPLOY_KEY` is present in the environment. The CLI prints one line —
+`Ignoring --prod, --preview-name, or --deployment-name flags and using
+deployment from CONVEX_DEPLOY_KEY` — and then writes to whatever deployment
+that key points at. Exit code 0. Same for `convex env list --prod`, which is
+how this was found: it returned the dev variables.
+
+This matters because the key is injected automatically in environments you did
+not configure by hand — a Claude Code cloud sandbox, a CI job, anything that
+provisions a dev deployment for you. Running `pnpm setup:prod` there used to
+stamp `APP_ENV=production`, the production `SITE_URL` and a freshly rotated
+`BETTER_AUTH_SECRET` onto **dev**: every dev session invalidated, and every
+magic link sent from dev pointing at the production domain. Nothing in the
+output said so.
+
+`scripts/setup-prod.mjs` now refuses to start when `CONVEX_DEPLOY_KEY` is set.
+Reach for `env -u CONVEX_DEPLOY_KEY pnpm setup:prod`, and apply the same
+reflex to any one-off `convex env set --prod` you type by hand: check the shell
+first, or read the deployment name the CLI echoes back before believing it.
+
+The general shape: a flag that names a target is a *request*, and an ambient
+credential that names a different target wins. Whenever both exist, trust what
+the tool says it did, never what you asked for.
+
 ## A fresh clone has no `origin/HEAD`, and `/security-review` needs it
 
 `git clone` normally writes `refs/remotes/origin/HEAD`, but the checkout a

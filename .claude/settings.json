@@ -9,6 +9,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "git remote set-head origin -a",
+            "timeout": 10000
+          },
+          {
+            "type": "command",
             "command": "pnpm run sync:skills:check",
             "timeout": 10000
           }

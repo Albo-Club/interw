@@ -27,6 +27,26 @@ Before implementing:
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
+**Sober and elegant, not just short.** The rules above subtract; this one says
+what to aim for. Minimal is the line count — simple is how much the next
+reader has to hold in their head. Aim for both, and where they disagree pick
+the version that is obvious on first read.
+
+- Reach for the plainest construct that does the job: a function over a class,
+  a plain object over a registry, an early return over a nested branch, the
+  language over a dependency.
+- Elegance is fewer moving parts, never a cleverer trick. Code that needs a
+  comment to explain *how* it works should be rewritten — comments are for
+  *why*.
+- The most elegant change is often a deletion. Before adding a layer, check
+  whether removing one solves the same problem.
+- Write it the way this codebase already writes it. Consistency is part of
+  simplicity: a locally-brilliant pattern nobody else uses costs more than the
+  boring one everybody reads without thinking.
+
+The `/simplify` pass in § 6 checks this after the fact. It is a safety net,
+not a licence to write the sprawl first and clean up later.
+
 ## 3. Surgical Changes
 
 **Touch only what you must. Clean up only your own mess.**
@@ -124,12 +144,15 @@ duplicate the skills and double the update machinery). See `KNOWN_ISSUES.md`
 
 **Mandatory, self-initiated, on every PR — no exception for "small" diffs.**
 Once the change is complete and `pnpm typecheck` / `pnpm lint` / `pnpm test`
-are green, but **before** pushing the final commit and opening the PR, run in
-this order:
+are green, and **before** the branch is pushed, in this order:
 
-1. `/simplify` — quality pass on the diff: reuse, simplification, efficiency,
-   altitude. It applies its fixes, so re-run the checks above afterwards.
-2. `/security-review` — security pass on the branch's pending changes.
+1. `/simplify`, on the uncommitted working tree — quality pass: reuse,
+   simplification, efficiency, altitude. It applies its fixes, so re-run the
+   checks above afterwards, then commit.
+2. `/security-review`, **after** committing. It reads the branch's commits
+   against `origin/HEAD`, so on an uncommitted tree it reviews an empty diff
+   and reports nothing — indistinguishable from a clean pass. Anything it
+   turns up goes in a follow-up commit, then push.
 
 Then act on the findings: fix them, or state in the PR body why a finding is
 not applicable. Never open the PR with an unaddressed finding left silent.

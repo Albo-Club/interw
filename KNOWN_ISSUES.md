@@ -1843,3 +1843,29 @@ is told the site said no, instead of being sent hunting for a typo.
 Note that `errors.page_unreachable` still offers to let them "paste the text
 instead", which no screen in the wizard does. Either build it or drop the
 promise — it is copy writing a cheque the product does not cash.
+
+## A fresh clone has no `origin/HEAD`, and `/security-review` needs it
+
+`git clone` normally writes `refs/remotes/origin/HEAD`, but the checkout a
+Claude Code on the web session starts from does not carry it. Nothing in the
+app notices — until a skill asks git what the default branch is.
+
+The built-in `/security-review` opens by listing the branch's commits with
+`git log --no-decorate origin/HEAD...`. With the ref missing, git answers
+`fatal: ambiguous argument 'origin/HEAD...'` and the skill aborts before
+reading a single line of the diff. The failure mode is the bad one: the agent
+concludes the skill is unavailable and skips the pass that `CLAUDE.md` § 6
+makes mandatory, so the gate has a hole that looks like a clean run.
+
+`git remote set-head origin -a` resolves the default branch from the remote
+and writes the ref. It runs in the `SessionStart` hook of
+`.claude/settings.json`, ahead of `sync:skills:check`. It belongs in the hook
+rather than in a committed file because `origin/HEAD` is a *local* ref — it is
+not repository state, nothing on the remote changes when it is set, and no
+clone inherits it. Every new container therefore needs it re-applied. The
+command is idempotent and costs one `ls-remote`.
+
+Same skill, sibling trap: it reads *commits*, not the working tree. Running it
+before committing reviews an empty diff and reports nothing at all, which
+reads exactly like a clean pass. Hence the order in `CLAUDE.md` § 6 —
+`/simplify` first on the working tree, commit, then `/security-review`.

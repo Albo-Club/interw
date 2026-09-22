@@ -1870,10 +1870,26 @@ The general shape: a flag that names a target is a *request*, and an ambient
 credential that names a different target wins. Whenever both exist, trust what
 the tool says it did, never what you asked for.
 
+## A preview deployment is not a staging environment
+
+Convex preview deployments are **deleted automatically after 5 days** (14 on
+Professional and above), data included. They are per-branch scratch backends,
+and nothing else: a demo you want to show next week, a trial account left with
+a client, a set of recordings you expect to find again — none of that survives
+in one.
+
+A permanent environment needs a permanent deployment, and Convex gives exactly
+one per project: its production. So a staging environment is a **second Convex
+project**, whose production deployment is the staging backend — which is what
+the Convex docs recommend for this. The asymmetry with the web host is worth
+holding onto: a Vercel deployment is stateless, so building one per branch
+costs nothing and throwing it away loses nothing; a Convex deployment *is* the
+database.
+
 ## A preview deployment starts with no environment variables
 
-Convex preview deployments — one backend per branch, on the free plan — do
-**not** inherit the production deployment's environment variables. Each one
+Convex preview deployments — one backend per branch — do **not** inherit the
+production deployment's environment variables. Each one
 starts from the defaults registered for the `preview` deployment *type*:
 
 ```bash

@@ -758,6 +758,21 @@ see § "Better Auth is boxed into `>=1.6.22 <1.7.0`".
 actually fly. Symptom of the wrong setting: "Test mode is enabled, but
 email address is not a valid resend test address".
 
+**On sign-up that symptom is invisible.** Better Auth sends the verification
+email as a *background task*, so the rejection never reaches the browser: the
+account is created, the page says "check your inbox", and the only trace is a
+`Failed to run background task` line in the Convex logs. Staging shipped that
+way — the deployment had been created fresh, and a new deployment starts with
+no environment variables at all. Only the manual "resend the email" endpoint
+surfaces it, as a 500.
+
+`convex/email.ts` now refuses to load when test mode is on and `SITE_URL`
+resolves to a public host. The discriminator is `SITE_URL` rather than
+`APP_ENV` on purpose: that staging deployment ran with `APP_ENV=development`
+and a public address in front of it, so an `APP_ENV` guard would have stayed
+silent exactly where it was needed. A deployment answering on a public host
+has real people signing up on it, whatever it calls its environment.
+
 ## Resend: two integrations (runtime Convex vs Claude Code plugin)
 
 There are **two unrelated Resend setups** in this repo and they read the

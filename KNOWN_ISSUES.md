@@ -1957,13 +1957,16 @@ Two consequences for this repo:
   deployment, the `preview` defaults, and each developer's `dev` deployment.
   Forget the second and previews fail at the first job, on a branch, where
   nobody is watching.
-- The frontend cannot hardcode a Convex URL for previews. `convex deploy`
-  creates the branch's backend and injects `VITE_CONVEX_URL` into the build,
-  but `VITE_CONVEX_SITE_URL` — which `src/routes/api/auth/$.ts` needs — has no
-  such mechanism, and one Vercel Preview scope holds one value for all
-  branches. Nothing derives it today: wiring per-branch previews means solving
-  that first, along with `trustedOrigins` in `convex/auth.ts`, which pins a
-  single origin and would reject every branch URL.
+- The frontend does not need to hardcode a Convex URL. `convex deploy --cmd`
+  creates the branch's backend and sets **both** `VITE_CONVEX_URL` and
+  `VITE_CONVEX_SITE_URL` for the wrapped command — the build log says
+  `Running 'pnpm build:app' with environment variables "VITE_CONVEX_URL" and
+  "VITE_CONVEX_SITE_URL" set`. So the explicit `VITE_CONVEX_SITE_URL` in a
+  Vercel project is only needed where the build does *not* run `convex deploy`.
+- What per-branch previews would still need is `trustedOrigins` in
+  `convex/auth.ts`, which pins the single `SITE_URL` and would reject every
+  branch URL at sign-in. A preview would build cleanly and fail at the login
+  form.
 
 ## Convex refuses a production deploy key in a Vercel preview build
 

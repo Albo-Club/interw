@@ -2,9 +2,20 @@ import '@tanstack/react-start'
 import { createFileRoute } from '@tanstack/react-router'
 import { convexBetterAuthReactStart } from '@convex-dev/better-auth/react-start'
 
+const convexUrl = import.meta.env.VITE_CONVEX_URL
+
+// Preview deployments get a fresh Convex backend per branch, and `convex
+// deploy` injects only VITE_CONVEX_URL into the build. Deriving the `.site`
+// host from it — the substitution `.env.example` already documents — is what
+// lets one set of Vercel variables serve every branch. The explicit variable
+// still wins where it is set, which is how Production and local dev work.
+const convexSiteUrl =
+  import.meta.env.VITE_CONVEX_SITE_URL ||
+  convexUrl?.replace(/\.cloud$/, '.site')
+
 const ba = convexBetterAuthReactStart({
-  convexUrl: import.meta.env.VITE_CONVEX_URL,
-  convexSiteUrl: import.meta.env.VITE_CONVEX_SITE_URL,
+  convexUrl,
+  convexSiteUrl,
 })
 
 // The Convex Better Auth adapter calls `fetch(upstream, { body: req.body,

@@ -6,28 +6,26 @@ export const RESEND_FROM = process.env.RESEND_FROM!
 
 const testMode = process.env.RESEND_TEST_MODE !== 'false'
 
-/** The public host this deployment serves, or null when it has none. */
+/** The host this deployment answers on — '' when it has none, which `isPrivateHost` reads as private. */
 const siteHost = (() => {
   try {
     return new URL(process.env.SITE_URL ?? '').hostname
   } catch {
-    return null
+    return ''
   }
 })()
 
 /**
- * Test mode rejects every recipient outside `*@resend.dev`, and Better Auth
- * sends the sign-up verification email as a background task — so the rejection
- * never reaches the browser: the account is created, the page says "check your
- * inbox", and nothing leaves. Refuse to load instead, the way the `SITE_URL`
- * guard in convex/auth.ts does.
+ * Test mode silently loses the sign-up verification email — Better Auth sends
+ * it as a background task, so the rejection never reaches the browser. Refuse
+ * to load instead, the way the `SITE_URL` guard in convex/auth.ts does; see
+ * KNOWN_ISSUES.md § "Resend test-mode trap".
  *
- * The discriminator is `SITE_URL`, not `APP_ENV`, deliberately: the deployment
+ * `SITE_URL` is the discriminator rather than `APP_ENV` because the deployment
  * that lost those emails ran with `APP_ENV=development` and a public address in
- * front of it. A deployment that answers on a public host has real people
- * signing up on it, whatever it calls its environment.
+ * front of it.
  */
-if (testMode && siteHost && !isPrivateHost(siteHost)) {
+if (testMode && !isPrivateHost(siteHost)) {
   throw new Error(
     `[interw] RESEND_TEST_MODE is not "false" while SITE_URL is ` +
       `"${process.env.SITE_URL}". Every email would be rejected as a non-test ` +

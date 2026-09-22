@@ -12,7 +12,6 @@ async function loadEmailModule(env: Record<string, string>) {
 
 afterEach(() => {
   vi.unstubAllEnvs()
-  vi.resetModules()
 })
 
 describe('Resend test mode', () => {
@@ -31,6 +30,13 @@ describe('Resend test mode', () => {
         SITE_URL: 'http://localhost:3000',
         RESEND_TEST_MODE: 'true',
       }),
+    ).resolves.toBeDefined()
+  })
+
+  it('stays inert when the deployment has no site URL', async () => {
+    // What keeps the test suite and `convex dev` before `pnpm setup` alive.
+    await expect(
+      loadEmailModule({ SITE_URL: '', RESEND_TEST_MODE: 'true' }),
     ).resolves.toBeDefined()
   })
 

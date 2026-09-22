@@ -157,15 +157,6 @@ are green, and **before** the branch is pushed, in this order:
 Then act on the findings: fix them, or state in the PR body why a finding is
 not applicable. Never open the PR with an unaddressed finding left silent.
 
-**Enforced by git, not by trust.** `.githooks/pre-push` refuses to push a
-commit that has not been recorded as reviewed; once both passes are clean,
-record it with `pnpm review:ok`. The gate lives in git rather than in a Claude
-Code hook so that it holds for any agent and for a human at a terminal alike,
-and the marker is bound to the commit sha — passes run before later commits do
-not vouch for them. `git push --no-verify` bypasses it, which is there for a
-revert or a typo fix; reaching for it on real work is the one move that makes
-this whole section decorative.
-
 The two passes are complementary, not interchangeable. `/simplify` does not
 hunt for bugs or vulnerabilities; `/security-review` does not judge whether
 200 lines could have been 50. Skipping one because the other came back clean

@@ -14,11 +14,6 @@
           },
           {
             "type": "command",
-            "command": "git config core.hooksPath .githooks",
-            "timeout": 10000
-          },
-          {
-            "type": "command",
             "command": "pnpm run sync:skills:check",
             "timeout": 10000
           }

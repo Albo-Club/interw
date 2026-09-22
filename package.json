@@ -9,8 +9,6 @@
     "pnpm": "10.x"
   },
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks || true",
-    "review:ok": "git rev-parse HEAD > \"$(git rev-parse --git-path review-passed)\"",
     "dev": "concurrently -k -n vite,convex -c blue,magenta \"pnpm dev:vite\" \"pnpm dev:convex\"",
     "dev:vite": "vite dev",
     "dev:convex": "convex dev",

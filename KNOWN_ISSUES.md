@@ -377,7 +377,7 @@ by hand for a normal release — the Scalingo deployment is the source of truth.
 | --- | --- | --- |
 | `DEPLOY_CONVEX` | `true` | Arms the Convex deploy inside `pnpm build`. |
 | `CONVEX_DEPLOY_KEY` | from the Convex dashboard | Project → Settings → URL & Deploy Key → "Generate Production Deploy Key". |
-| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` | Build-time inlined; the CLI does **not** provide this one. Optional since `src/routes/api/auth/$.ts` derives it from `VITE_CONVEX_URL` — set it only to override, as Production does. |
+| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` | Build-time inlined; the CLI does **not** provide this one. |
 | `VITE_SENTRY_DSN` | optional | Build-time inlined. |
 
 App env vars **are** available during Scalingo's build phase, which is what
@@ -1909,7 +1909,9 @@ Two consequences for this repo:
   Forget the second and previews fail at the first job, on a branch, where
   nobody is watching.
 - The frontend cannot hardcode a Convex URL for previews. `convex deploy`
-  creates the branch's backend and injects `VITE_CONVEX_URL` into the build;
-  `VITE_CONVEX_SITE_URL` is derived from it in `src/routes/api/auth/$.ts`
-  rather than set per branch, which is what lets one set of Vercel Preview
-  variables serve every branch.
+  creates the branch's backend and injects `VITE_CONVEX_URL` into the build,
+  but `VITE_CONVEX_SITE_URL` — which `src/routes/api/auth/$.ts` needs — has no
+  such mechanism, and one Vercel Preview scope holds one value for all
+  branches. Nothing derives it today: wiring per-branch previews means solving
+  that first, along with `trustedOrigins` in `convex/auth.ts`, which pins a
+  single origin and would reject every branch URL.

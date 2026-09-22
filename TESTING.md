@@ -11,7 +11,7 @@ Prerequisites:
   - `BETTER_AUTH_SECRET`
   - `SITE_URL` (`http://localhost:3000` locally)
   - `RESEND_API_KEY` + `RESEND_FROM` + `RESEND_TEST_MODE=true` in dev
-  - `ANTHROPIC_API_KEY` (default model: `claude-haiku-4-5`)
+  - `MISTRAL_API_KEY` (transcription, evaluation and the AI chat agent)
 - `.env.local` filled in (`VITE_CONVEX_URL`, `CONVEX_DEPLOYMENT`)
 - 2 browsers (or 1 browser + 1 incognito window) ready for multi-tenant tests
 
@@ -26,8 +26,9 @@ undone later.
 | P2 | Private S3-compatible bucket | Scaleway Object Storage, region `fr-par`, bucket **not** public. Set `OBJECT_STORE_*` on the Convex deployment (see `.env.example`) | Every object is served through a signed URL minted after an access check. A public bucket silently defeats all of it |
 | P2a | **CORS on the bucket** | `PutBucketCors` with `AllowedOrigins` = the exact web origins (`http://localhost:3000`, the Vercel preview/prod hosts), `AllowedMethods` PUT + GET, `AllowedHeaders` `Content-Type` + `Content-Length`, `MaxAgeSeconds` 3600 — then read it back from the bucket | The browser PUTs the recording straight to the bucket with a signed URL, so every upload starts with a CORS preflight. No rule, no preflight, no upload — and the failure surfaces as a generic network error in the candidate's browser, days before anyone looks. One rule per bucket: dev and prod are separate buckets and neither inherits the other's |
 | P3 | Verify the bucket is private | `curl -I https://<bucket>.<endpoint>/probe.txt` on an object you uploaded | Must be `403`. A `200` means every candidate recording is world-readable |
-| P4 | Model provider key | `MISTRAL_API_KEY` on the Convex deployment — one key for both transcription and evaluation | The pipeline fails at the first step without it, visibly, in `jobLog`. There is deliberately no second provider key: see `.env.example` § "AI provider" |
-| P4a | **The evaluation model actually answers** | Push a throwaway `internalAction` calling `complete()` to the dev deployment and run it with `npx convex run` | Every stub in the unit suite is hand-written, so none of them can discover that a provider disagrees with its documented response shape — which is exactly how a block-shaped `content` reached production. Do this once whenever the model id in `convex/lib/ai.ts` changes. See `KNOWN_ISSUES.md` § "A reasoning model does not answer in a string" |
+| P4 | Model provider key | `MISTRAL_API_KEY` on the Convex deployment — one key for transcription, evaluation and the AI chat agent | The pipeline fails at the first step without it, visibly, in `jobLog`, and the chat agent returns 500. There is deliberately no second provider key: see `.env.example` § "AI provider" |
+| P4b | **Retire the chat agent's old key** | On every deployment that ever ran `pnpm setup`: `pnpm exec convex env remove ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` (add `--prod` for production) | The code stopped reading them, which is not the same as them being gone: a credential nothing calls is a credential nobody rotates or notices, and it stays valid and billable until someone removes it |
+| P4a | **The model actually answers, on both paths** | Push a throwaway `internalAction` calling `complete()` to the dev deployment and run it with `npx convex run`, **then** run level 5 C3 (ask the assistant a question that needs a tool) | Every stub in the unit suite is hand-written, so none of them can discover that a provider disagrees with its documented response shape — which is exactly how a block-shaped `content` reached production. The id in `convex/lib/ai.ts` now drives two clients: the hand-rolled one in `complete()` and `@ai-sdk/mistral` in `convex/agent.ts`, which also needs tool calling and streaming. Do both halves whenever that id changes. See `KNOWN_ISSUES.md` § "A reasoning model does not answer in a string" |
 | P4b | **`PURGE_HASH_SALT` on the Convex deployment** | `pnpm exec convex env set PURGE_HASH_SALT "$(openssl rand -hex 32)"`, distinct per deployment | The erasure register stores a hash of the candidate's address, not the address. Unsalted, that hash is reversible by dictionary — the register would hold the data it exists to prove it destroyed. Unset, every erasure path throws `purge_hash_salt_not_configured`, on purpose |
 | P5 | Resend delivery webhook | Point a Resend webhook at `https://<convex-site-url>/resend-webhook`, store `RESEND_WEBHOOK_SECRET` | Without it a bounced invitation is indistinguishable from a candidate who has not opened it |
 | P6a | `MEDIA_ORIGIN` on the **web server** (Scalingo app env, or `.env.local` for `pnpm dev`) | The bucket origin signed URLs point at, e.g. `https://interw-media.s3.fr-par.scw.cloud` | The CSP is served by the web server, which never talks to the bucket, so this is the one object-store setting that does not live on the Convex deployment. Unset, `media-src` falls back to `https:` — video still plays, but from any host |
@@ -45,7 +46,7 @@ undone later.
 | B5 | Prod cookies  | `pnpm test:cookies`      | `interw.session_token` has Secure+HttpOnly+SameSite=Lax+Max-Age≈604800 |
 | B6 | Skills intact | `pnpm sync:skills:verify` | `Vendored skills match skills-lock.json.` (exit 0) — offline, covers the `SKILL.md` files **and** their `references`, plus `.claude/skills/` symlinks with no lock entry (`~ <name>: .claude/skills link with no lock entry`, exit 2 — repair with `pnpm sync:skills`) |
 | B6b | Skills up-to-date | `pnpm sync:skills:check` | `Skills up to date with upstream.` (exit 0) — network. Two distinct failures, both exit 2: `~ N skills drifted` (upstream changed) and `✗ … N skills could not be checked` (404 or network — the skill is tracked by nothing) |
-| B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder, para-verbal metrics, locale parity, and cross-organisation isolation under `convex-test` |
+| B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder, para-verbal metrics, locale parity, cross-organisation isolation under `convex-test`, and that the chat agent still resolves to the pipeline's provider and model |
 | B8 | Convex codegen committed | `pnpm codegen:api:check` | `convex/_generated/api.d.ts is up to date.` Fails when a Convex module was added without committing its codegen — CI has no deployment, so `npx convex dev` cannot do it there |
 | B9 | Access audit | `pnpm audit:access:check` | Exit 0. Fails on any **public** Convex function with no access check. Run `pnpm audit:access` to print the full matrix; deliberate exceptions are declared with a `// access: <reason>` comment above the export and are listed in the output |
 
@@ -365,8 +366,8 @@ Alice (SA), Bob (member), an "acme" org, and a role with 3 questions. Write it i
 - Auth fails → check `BETTER_AUTH_SECRET` + `SITE_URL` on the Convex env.
 - Emails not received → valid `RESEND_API_KEY` + `RESEND_TEST_MODE=false` to
   actually deliver.
-- AI not streaming → `ANTHROPIC_API_KEY` + check `convex/agent.ts` (default
-  model `claude-haiku-4-5`).
+- AI not streaming → `MISTRAL_API_KEY` + check `convex/agent.ts` (same
+  provider and model as the pipeline, from `convex/lib/ai.ts`).
 - Upload gives 403 → the presigned URL signs `content-type` **and**
   `content-length`. The client must send both exactly as issued; `fetch` does
   this automatically for a `Blob`, a hand-rolled request may not.

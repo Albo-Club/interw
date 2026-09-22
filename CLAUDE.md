@@ -198,7 +198,7 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `magicLink()` + `convex()`. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend (default model `claude-haiku-4-5`, override via `ANTHROPIC_MODEL`) + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider abstracted via `getModel()` in `convex/agent.ts`. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
+- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
 - **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
 - **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
 
@@ -630,6 +630,13 @@ verification is in `TESTING.md`.
   is a fallback; an unmatched quote returns null rather than a guess.
 - Prompts live in `convex/lib/prompts.ts`, in English, parameterised by the
   interview language. Model ids live in `convex/lib/ai.ts` and nowhere else.
+- **One provider, one key.** Never add a second model provider, a second API
+  key or an env var naming a model — including for a feature that looks
+  unrelated to the pipeline. The chat agent kept its own Anthropic key on
+  exactly that reasoning, while its read-only tools shipped candidate names
+  and report text to it. What decides the provider is which data reaches the
+  model, not which feature the call belongs to. See `KNOWN_ISSUES.md` § "The
+  chat agent had its own provider, and its own key".
 
 ## The candidate surface
 

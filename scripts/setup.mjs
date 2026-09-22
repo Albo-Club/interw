@@ -14,7 +14,7 @@
  *      exits on its own — no manual Ctrl-C).
  *   4. Computes VITE_CONVEX_SITE_URL from VITE_CONVEX_URL (deterministic
  *      .cloud → .site swap) and writes it to .env.local if missing.
- *   5. Prompts for ANTHROPIC_API_KEY, RESEND_API_KEY, RESEND_FROM (with
+ *   5. Prompts for MISTRAL_API_KEY, RESEND_API_KEY, RESEND_FROM (with
  *      direct dashboard URLs printed inline so the user knows where to look).
  *   6. Generates a fresh BETTER_AUTH_SECRET.
  *   7. Confirms the plan with the user (secrets masked), then applies all
@@ -235,25 +235,18 @@ async function promptSecrets() {
 
   const plan = {}
 
-  // Anthropic
-  if (cx.ANTHROPIC_API_KEY) {
-    ok(`ANTHROPIC_API_KEY already set (${mask(cx.ANTHROPIC_API_KEY)})`)
+  // Mistral — one key for transcription, evaluation and the chat agent.
+  if (cx.MISTRAL_API_KEY) {
+    ok(`MISTRAL_API_KEY already set (${mask(cx.MISTRAL_API_KEY)})`)
   } else {
     console.log(
-      `\n  ${C.bold}Anthropic API key${C.reset} — for the AI chat agent.\n  ${C.cyan}→ Get yours: https://console.anthropic.com/settings/keys${C.reset}`,
+      `\n  ${C.bold}Mistral API key${C.reset} — transcribes and evaluates interviews, and runs the AI chat agent.\n  ${C.cyan}→ Get yours: https://console.mistral.ai/api-keys${C.reset}`,
     )
     let key = ''
     while (!key) {
-      const raw = (await ask('  ANTHROPIC_API_KEY: ')).trim()
-      if (!raw) continue
-      if (!raw.startsWith('sk-ant-')) {
-        warn('Expected format: sk-ant-… (try again, or paste anyway)')
-        const confirm = (await ask('  Use it anyway? [y/N] ')).trim().toLowerCase()
-        if (confirm !== 'y' && confirm !== 'yes') continue
-      }
-      key = raw
+      key = (await ask('  MISTRAL_API_KEY: ')).trim()
     }
-    plan.ANTHROPIC_API_KEY = key
+    plan.MISTRAL_API_KEY = key
   }
 
   // Resend

@@ -120,6 +120,28 @@ re-vendor them into `skills-lock.json` / `.agents/skills/` (it would
 duplicate the skills and double the update machinery). See `KNOWN_ISSUES.md`
 § "Resend: two integrations".
 
+## 6. Two review passes before every PR
+
+**Mandatory, self-initiated, on every PR — no exception for "small" diffs.**
+Once the change is complete and `pnpm typecheck` / `pnpm lint` / `pnpm test`
+are green, but **before** pushing the final commit and opening the PR, run in
+this order:
+
+1. `/simplify` — quality pass on the diff: reuse, simplification, efficiency,
+   altitude. It applies its fixes, so re-run the checks above afterwards.
+2. `/security-review` — security pass on the branch's pending changes.
+
+Then act on the findings: fix them, or state in the PR body why a finding is
+not applicable. Never open the PR with an unaddressed finding left silent.
+
+The two passes are complementary, not interchangeable. `/simplify` does not
+hunt for bugs or vulnerabilities; `/security-review` does not judge whether
+200 lines could have been 50. Skipping one because the other came back clean
+defeats the point.
+
+If a skill is unavailable in the current session, say so explicitly in the PR
+body rather than claiming the pass ran.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

@@ -801,11 +801,34 @@ find . \( -path ./node_modules -o -path ./.output \) -prune -o \
   -type f \( -name '* 2.ts' -o -name '* 2.tsx' \) -print
 ```
 
-## Anthropic model id
+## The chat agent had its own provider, and its own key
 
-`convex/agent.ts` defaults to `claude-haiku-4-5`. Override via the
-`ANTHROPIC_MODEL` Convex env var to pick a different model. Anthropic
-sometimes ships dated aliases (`claude-haiku-4-5-20251001`) for stability.
+`convex/agent.ts` ran on Anthropic (`claude-haiku-4-5`, `ANTHROPIC_API_KEY`,
+overridable via an `ANTHROPIC_MODEL` env var) long after the interview
+pipeline had deliberately consolidated onto one European provider. It read as
+a separate concern — a chat assistant, not an evaluation — which is exactly
+why it survived the consolidation.
+
+It was not a separate concern. The agent's tools (`convex/recruiterTools.ts`)
+read roles, candidates and reports, so a single question about a shortlist
+sends candidate names and the text of their evaluations to the model. That is
+interview data under a different name, and the residency argument in
+`convex/lib/ai.ts` applied to it word for word.
+
+Both now run on Mistral, on the model id exported from `convex/lib/ai.ts`, on
+the one `MISTRAL_API_KEY`. Two consequences worth keeping:
+
+- **No `ANTHROPIC_MODEL`, and no env var replacing it.** An id set from the
+  environment is an id nothing type-checks or reviews. Change the model in
+  `convex/lib/ai.ts` and re-run TESTING.md P4a — both halves of it, since that
+  one id now drives `complete()` and the AI SDK client behind the assistant.
+- **`convex/agent.test.ts` pins the provider.** Nothing in the type system
+  stops `mistral.chat(...)` from becoming another provider's import again —
+  the test is what makes that a failing build rather than a quiet regression.
+
+The generalisable rule: when a product picks a provider for a data-protection
+reason, the check is *which data reaches the model*, not which feature the
+call belongs to. A read-only tool is still an egress path.
 
 ## SITE_URL drift in prod = broken email links
 
@@ -911,9 +934,9 @@ audit.
   `@assistant-ui/react`. No Convex adapter exists for assistant-ui; the brief's
   pick would require ~200 lines of glue. Loss: markdown rendering, attachments,
   tool-call UI, edit/regenerate. Migrate later if polish is needed.
-- **Anthropic model default `claude-haiku-4-5`** — chosen for its cost/latency
-  ratio in an in-app assistant. Override via `ANTHROPIC_MODEL` env var
-  (e.g. `claude-sonnet-4-6` for heavier tasks).
+- **The chat agent runs the pipeline's model**, not a second provider chosen
+  for cost/latency — see "The chat agent had its own provider, and its own
+  key" above.
 - **Rate-limit thresholds** chosen for usable defaults (e.g. invitations 20/h
   burst 5) rather than the brief's tight 3/min example.
 - **Super-admin lacks impersonate** — out of scope for MVP, needs a careful

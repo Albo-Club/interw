@@ -1,19 +1,22 @@
-import { anthropic } from '@ai-sdk/anthropic'
+import { mistral } from '@ai-sdk/mistral'
 import { Agent, stepCountIs } from '@convex-dev/agent'
 
 import { components } from './_generated/api'
 import { recruiterTools } from './recruiterTools'
+import { COMPLETION_MODEL } from './lib/ai'
 import { BASE_INSTRUCTIONS } from './lib/instructions'
 
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5'
-
-export function getModel() {
-  return anthropic.chat(ANTHROPIC_MODEL)
-}
+/**
+ * The AI SDK reads `MISTRAL_API_KEY` and Mistral's base URL on its own, so the
+ * assistant shares the interview pipeline's provider, model and key with
+ * nothing here to configure. Why it is not its own provider any more:
+ * `KNOWN_ISSUES.md` § "The chat agent had its own provider, and its own key".
+ */
+export const chatModel = mistral.chat(COMPLETION_MODEL)
 
 export const chatAgent = new Agent(components.agent, {
   name: 'interw',
-  languageModel: getModel(),
+  languageModel: chatModel,
   // Per-message system prompt (route/org context) is layered on top at
   // stream time via `buildInstructions` in convex/chat.ts.
   instructions: BASE_INSTRUCTIONS,

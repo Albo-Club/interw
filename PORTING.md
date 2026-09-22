@@ -230,10 +230,10 @@ whatever is installed locally.
 ## Step 2 — the decision that depends on THIS repo; do not guess it
 
 Which pnpm major to pin. Do not assume 10 because the template says 10.
-  - Check where this project deploys. Scalingo's Node buildpack picks the
-    package manager from the lockfile directly; Vercel supports pnpm 6-10 only
-    and needs the experimental ENABLE_EXPERIMENTAL_COREPACK=1 project env var
-    for anything newer. Other hosts differ.
+  - Check where this project deploys. Vercel supports pnpm 6-10 only, picks
+    the major from the lockfile, and honours the exact `packageManager` pin
+    only with the experimental ENABLE_EXPERIMENTAL_COREPACK=1 project env
+    var. Other hosts differ.
   - Pin the newest major your host supports natively. Get the exact version
     from `npm view pnpm dist-tags`.
   - If and only if you land on 11: also move `pnpm.overrides` into

@@ -1918,3 +1918,90 @@ Same skill, sibling trap: it reads *commits*, not the working tree. Running it
 before committing reviews an empty diff and reports nothing at all, which
 reads exactly like a clean pass. Hence the order in `CLAUDE.md` § 6 —
 `/simplify` first on the working tree, commit, then `/security-review`.
+
+## A preview deployment is not a staging environment
+
+Convex preview deployments are **deleted automatically after 5 days** (14 on
+Professional and above), data included. They are per-branch scratch backends,
+and nothing else: a demo you want to show next week, a trial account left with
+a client, a set of recordings you expect to find again — none of that survives
+in one.
+
+A permanent environment needs a permanent deployment, and Convex gives exactly
+one per project: its production. So a staging environment is a **second Convex
+project**, whose production deployment is the staging backend — which is what
+the Convex docs recommend for this. The asymmetry with the web host is worth
+holding onto: a Vercel deployment is stateless, so building one per branch
+costs nothing and throwing it away loses nothing; a Convex deployment *is* the
+database.
+
+## A preview deployment starts with no environment variables
+
+Convex preview deployments — one backend per branch — do **not** inherit the
+production deployment's environment variables. Each one
+starts from the defaults registered for the `preview` deployment *type*:
+
+```bash
+npx convex env default set --type preview OBJECT_STORE_BUCKET interw-video-dev
+npx convex env default list --type preview
+```
+
+This is a feature, not a gap, and the reason matters: if previews inherited
+production, every branch would mint signed URLs against the production bucket,
+and a throwaway branch could read and delete real candidate recordings. The
+defaults are where "what the dev environment is" gets written down once.
+
+Two consequences for this repo:
+
+- A new required variable is a **three-place** change: the production
+  deployment, the `preview` defaults, and each developer's `dev` deployment.
+  Forget the second and previews fail at the first job, on a branch, where
+  nobody is watching.
+- The frontend does not need to hardcode a Convex URL. `convex deploy --cmd`
+  creates the branch's backend and sets **both** `VITE_CONVEX_URL` and
+  `VITE_CONVEX_SITE_URL` for the wrapped command — the build log says
+  `Running 'pnpm build:app' with environment variables "VITE_CONVEX_URL" and
+  "VITE_CONVEX_SITE_URL" set`. So the explicit `VITE_CONVEX_SITE_URL` in a
+  Vercel project is only needed where the build does *not* run `convex deploy`.
+- What per-branch previews would still need is `trustedOrigins` in
+  `convex/auth.ts`, which pins the single `SITE_URL` and would reject every
+  branch URL at sign-in. A preview would build cleanly and fail at the login
+  form.
+
+## Convex refuses a production deploy key in a Vercel preview build
+
+Staging here is the production deployment of a second Convex project, and the
+obvious wiring is to put that project's production deploy key on the Vercel
+branch that serves staging. The build fails:
+
+```
+✖ Detected a non-production build environment and "CONVEX_DEPLOY_KEY"
+  for a production Convex deployment. This is probably unintentional.
+```
+
+`convex deploy` reads `VERCEL_ENV`. Vercel sets it to `preview` for every
+branch that is not the project's production branch, and Convex refuses the
+pairing — a guard against a feature branch overwriting production, which is
+the right default and is not configurable.
+
+The vocabularies do not line up, and that is the whole difficulty:
+
+| | Vercel | Convex |
+| --- | --- | --- |
+| permanent, real | Production | the project's production deployment |
+| per branch, disposable | Preview | preview deployment (deleted after 5 days) |
+| local | Development | the developer's own `dev` deployment |
+
+Neither has a "staging" slot. On Convex we build one out of a second project.
+On Vercel the slot exists — Custom Environments, which can literally be named
+`staging` — but it is a paid feature; on a plan without it the API reports
+`accountLimit: {total: 0}`.
+
+So within one Vercel project, a staging branch cannot run `convex deploy`.
+Either give staging its own Vercel project whose *production branch* is the
+staging branch — which makes the build a production build, and is what both
+vendors document — or leave `DEPLOY_CONVEX` off that branch, point
+`VITE_CONVEX_URL` at the staging backend by hand, and deploy the backend by
+another route. The second works, at the cost of front end and back end no
+longer shipping together: a push updates the site and not the functions,
+silently.

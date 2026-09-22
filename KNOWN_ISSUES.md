@@ -1869,3 +1869,38 @@ Same skill, sibling trap: it reads *commits*, not the working tree. Running it
 before committing reviews an empty diff and reports nothing at all, which
 reads exactly like a clean pass. Hence the order in `CLAUDE.md` § 6 —
 `/simplify` first on the working tree, commit, then `/security-review`.
+
+## The § 6 gate is a git hook, because git hooks outlive the agent
+
+`CLAUDE.md` § 6 is a rule an agent reads, and a rule an agent reads is a rule
+an agent can forget — after a context compaction, or forty minutes into a
+session. The enforcement therefore sits in `.githooks/pre-push`, which git runs
+whoever pushes: a local Claude Code session, a cloud one, another agent
+entirely, or a human in a terminal. Nothing about it is Claude-specific, which
+is the point — a `PreToolUse` hook in `.claude/settings.json` would only ever
+fire for one client.
+
+Two details that are easy to get wrong:
+
+**Git hooks are not cloned.** `.git/hooks/` is local state and never travels
+with the repository, so a committed hook does nothing on its own. `core.hooksPath`
+points git at the committed `.githooks/` directory instead, and the `prepare`
+script sets it on `pnpm install` — the one command everybody runs, agent or
+human. (This is the mechanism husky ships; we need one line of it, not the
+dependency.)
+
+**`prepare` also runs on a production install**, where there may be no `.git`
+at all and `git config` would fail — taking the whole install, and the deploy,
+down with it. Hence the `|| true`. A repository that cannot be cloned is not a
+repository that needs the hook.
+
+The same `git config` line is repeated in the `SessionStart` hook of
+`.claude/settings.json`, and that repetition is deliberate: a container can
+start from a cached image without ever running an install, and then `prepare`
+never fires and the gate is silently inactive. Two activation paths, one
+mechanism — the hook in `.githooks/` stays the single source of behaviour, and
+neither path is required for the other to work.
+
+The marker (`.git/review-passed`, uncommitted by construction) holds the sha
+that was reviewed, not a boolean. A new commit invalidates it, so "I ran the
+passes, then kept coding" stops being a way through.

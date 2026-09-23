@@ -88,83 +88,104 @@ opened its onboarding PR.
 Skills freshness needs nothing: the `skills-drift` job in `ci.yml` goes
 red when upstream skills move — run `pnpm run sync:skills`, review, commit.
 
-## Deploying to production
+## Deploying: staging and production
 
-The web tier runs on [Scalingo](https://scalingo.com) — French SAS,
-datacenters in France only, ISO 27001 + HDS. Convex stays where you created it
-(EU West / Ireland); object storage stays on Scaleway `fr-par`. Nothing in the
-app is host-specific: the build emits a plain Node server
-(`.output/server/index.mjs`) and `pnpm start` runs it, so these steps port to
-any European Node host.
+Two environments, each a complete and independent stack. Nothing is shared
+between them but the code:
 
-**1. Provision the Convex production deployment**
+| | Branch | Vercel project | Convex project (its prod deployment) | Bucket |
+| --- | --- | --- | --- | --- |
+| **staging** | `main` | `interw-staging` | `interw-staging` | dev bucket |
+| **production** | `production` | `interw` | `interw` | prod bucket |
+
+A merged PR lands on `main` and deploys staging by itself. Releasing is
+moving `production` up to `main`; rolling back is moving it back:
+
+```bash
+git fetch origin && git push origin origin/main:production   # release what staging runs
+git push --force origin <good-sha>:production                # roll back
+```
+
+Each push to one of those branches runs `pnpm build`, which deploys the Convex
+backend and builds the frontend in lockstep. Rolling back force-pushes
+`production`, so that branch must stay force-pushable by maintainers. Why staging is a second pair of projects
+rather than a branch of one: `KNOWN_ISSUES.md` § "A preview deployment is not
+a staging environment" and the two sections after it.
+
+The steps below are the same for both environments — run them once for
+`interw-staging`, once for `interw`.
+
+**1. Provision the Convex deployment**
+
+Link the checkout to the right Convex project (`pnpm exec convex dev
+--configure existing`), then:
 
 ```bash
 pnpm run setup:prod
 ```
 
-It mirrors your dev secrets onto prod, generates a fresh
-`BETTER_AUTH_SECRET`, and sets `SITE_URL` + `BETTER_AUTH_URL` to the domain
-you give it. Use the domain you will actually serve, not the
-`*.osc-fr1.scalingo.io` placeholder — Better Auth builds magic-link URLs from
-it.
+It mirrors your dev secrets onto that project's production deployment,
+generates a fresh `BETTER_AUTH_SECRET` and `PURGE_HASH_SALT`, sets
+`APP_ENV=production` — staging included, it is served over HTTPS — and sets
+`SITE_URL` to the domain you give it. Use the domain you will actually serve:
+Better Auth builds magic-link URLs from it and accepts no other origin. For
+production, give it the **prod** bucket and a key pair scoped to that bucket
+only; staging keeps the dev bucket.
 
-**2. Create the app and link the repo**
+**2. Configure the Vercel project**
 
-In the Scalingo dashboard: **Create an app**, pick a region, then under
-**Code → GitHub** link this repository and enable **auto-deploy** on `main`.
-Two regions are available, both in France:
+The project is linked to this GitHub repository, framework preset *TanStack
+Start*, function region `cdg1` (Paris). Under **Settings → Git**:
 
-| Region | Provider | For |
+| Setting | `interw-staging` | `interw` |
 | --- | --- | --- |
-| `osc-fr1` | 3DS Outscale, Paris | The default. ISO 27001 + HDS. |
-| `osc-secnum-fr1` | 3DS Outscale `cloudgouv`, Paris | SecNumCloud-qualified. Pick it at creation if you will sell to the public sector — the region cannot be changed afterwards. |
+| Production branch | `main` | `production` |
+| Ignored build step | `[ "$VERCEL_GIT_COMMIT_REF" != "main" ]` | `[ "$VERCEL_GIT_COMMIT_REF" != "production" ]` |
 
-Leave **review apps** off for now: they clone the parent app's environment,
-deploy key included, and would push pull-request branches at production
-Convex. See `KNOWN_ISSUES.md` § "Review apps inherit the parent's environment"
-before turning them on.
+The ignored build step is what keeps pull requests from building. Don't turn
+previews on without reading `KNOWN_ISSUES.md` § "Vercel previews must never
+carry a deploy key".
 
-**3. Set the environment variables**
+**3. Set the environment variables** — scope *Production* only:
 
 | Variable | Value |
 | --- | --- |
 | `DEPLOY_CONVEX` | `true` |
-| `CONVEX_DEPLOY_KEY` | Convex dashboard → Settings → URL & Deploy Key → **Generate Production Deploy Key** |
-| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` (the prod `.cloud` URL, with `.site`) |
+| `CONVEX_DEPLOY_KEY` | Convex dashboard → that project → Settings → URL & Deploy Key → **Generate Production Deploy Key** |
+| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` |
+| `MEDIA_ORIGIN` | The bucket origin, e.g. `https://<bucket>.s3.fr-par.scw.cloud` |
 | `VITE_SENTRY_DSN` | optional, front-end DSN |
 
 Do **not** set `VITE_CONVEX_URL` by hand — `convex deploy` injects it into the
 build. Do **not** set `CONVEX_DEPLOYMENT`; it is a per-developer dev binding.
 
-Everything else — `RESEND_*`, `MISTRAL_API_KEY`,
-`OBJECT_STORE_*` — lives on the **Convex** deployment, not here. `pnpm run setup:prod` put them there.
+Everything else — `RESEND_*`, `MISTRAL_API_KEY`, `OBJECT_STORE_*` — lives on
+the **Convex** deployment, not here. `pnpm run setup:prod` put it there.
 
 **4. Point the domain and deploy**
 
-Add your domain under **Settings → Domains**, update the DNS record Scalingo
-shows you, then push to `main`. From then on a merged PR deploys itself:
-Scalingo installs with pnpm (selected from `pnpm-lock.yaml`), runs
-`pnpm build`, which deploys the Convex backend and builds the frontend in
-lockstep, then starts the web process from `scripts.start`.
+Add the domain under **Settings → Domains**, add it to the bucket's CORS
+`AllowedOrigins` (TESTING.md P2a), then push the branch.
 
 **5. Verify**
 
 Run the Level 6 rows in [TESTING.md](TESTING.md), then send yourself a magic
 link from the live domain — it must point at
 `https://<your-domain>/api/auth/magic-link/verify`, not `localhost`. If you
-use Google sign-in, register the production redirect URI
-`https://<your-domain>/api/auth/callback/google` on the same OAuth client.
+use Google sign-in, register `https://<your-domain>/api/auth/callback/google`
+for each environment on the OAuth client.
 
-> **Sovereignty note.** `osc-secnum-fr1` qualifies the *web tier*, which
-> persists nothing — though it renders reports server-side, so candidate data
-> does cross it in memory. Transcription and evaluation both run on Mistral;
-> the evaluation model is Z.ai's GLM, whose weights are Chinese but whose
-> inference runs on Mistral's infrastructure under its regional controls, so
-> no interview leaves it. Candidate transcripts and evaluations are *stored*
-> in Convex — a US company, EU region — which is now the largest remaining
-> exposure. If sovereignty is the goal rather than the label, the order of
-> work is the database first, the host second.
+> **Sovereignty note.** Vercel is a US company; its functions run in `cdg1`
+> (Paris). The web tier persists nothing — though it renders reports
+> server-side, so candidate data does cross it in memory. Transcription and
+> evaluation both run on Mistral; the evaluation model is Z.ai's GLM, whose
+> weights are Chinese but whose inference runs on Mistral's infrastructure
+> under its regional controls, so no interview leaves it. Candidate
+> transcripts and evaluations are *stored* in Convex — a US company, EU
+> region — which is the largest exposure. If sovereignty becomes the goal
+> rather than the label, the order of work is the database first, the host
+> second — the web tier moves without a code change (`KNOWN_ISSUES.md`
+> § "Nitro picks its preset from the build host").
 
 ## Staying up to date with the starter
 

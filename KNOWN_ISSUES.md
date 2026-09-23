@@ -355,10 +355,11 @@ Two design notes:
   regress a legitimate flow — but it also means the return-URL is not preserved
   when the `/app` guard bounces you to `/login` (a UX gap, not a security one).
 
-## Production deploy is wired into the Scalingo build
+## Deploys are wired into the Vercel build
 
-Scalingo's Node buildpack installs with pnpm (it picks the package manager
-from `pnpm-lock.yaml`), then runs the `build` script, which branches on
+One Vercel project per environment (setup and env vars: README § "Deploying:
+staging and production"). Vercel installs with the pnpm named in
+`packageManager`, then runs the `build` script, which branches on
 `DEPLOY_CONVEX`:
 
 ```
@@ -367,62 +368,41 @@ DEPLOY_CONVEX=true  →  npx convex deploy --cmd-url-env-var-name VITE_CONVEX_UR
 otherwise           →  pnpm build:app          (vite build && tsc --noEmit)
 ```
 
-So every `main` push that lands on Scalingo **also** deploys Convex functions
+So every push to an environment's branch **also** deploys Convex functions
 and schema in lockstep. You should never run `pnpm exec convex deploy --prod`
-by hand for a normal release — the Scalingo deployment is the source of truth.
+by hand for a normal release — the Vercel deployment is the source of truth.
 
-**Required Scalingo env vars** (Dashboard → the app → Environment):
-
-| Variable | Value | Why |
-| --- | --- | --- |
-| `DEPLOY_CONVEX` | `true` | Arms the Convex deploy inside `pnpm build`. |
-| `CONVEX_DEPLOY_KEY` | from the Convex dashboard | Project → Settings → URL & Deploy Key → "Generate Production Deploy Key". |
-| `VITE_CONVEX_SITE_URL` | `https://<deployment>.convex.site` | Build-time inlined; the CLI does **not** provide this one. |
-| `VITE_SENTRY_DSN` | optional | Build-time inlined. |
-
-App env vars **are** available during Scalingo's build phase, which is what
-makes the `VITE_*` inlining work. `PORT` is the exception: it is injected at
-runtime only, which is fine because Nitro reads it when the server starts, not
-when it is built.
-
-`VITE_CONVEX_URL` is deliberately **absent** from that table: `convex deploy`
+`VITE_CONVEX_URL` is deliberately **absent** from the README's env table: `convex deploy`
 injects it into the `--cmd` sub-process itself, which is what
-`--cmd-url-env-var-name` names. Setting it by hand on the app would shadow the
-value the CLI just resolved.
+`--cmd-url-env-var-name` names. Setting it by hand on the project would shadow
+the value the CLI just resolved.
 
-**Why the guard is one condition, not two.** The Vercel-era script required
-both `$VERCEL` and `$CONVEX_DEPLOY_KEY`, and fell back to a plain build when
-the key was missing — which shipped a frontend against an un-deployed backend
-and announced it in a log line nobody reads. Now `DEPLOY_CONVEX=true` alone
-arms it, and a missing or invalid key fails `convex deploy`, so the deployment
-goes red instead of drifting quietly.
+**Why the guard is one condition, not two.** An earlier script also required
+`$CONVEX_DEPLOY_KEY` and fell back to a plain build without it — which shipped
+a frontend against an un-deployed backend and said so in a log line nobody
+reads. Now `DEPLOY_CONVEX=true` alone arms it, and a missing or invalid key
+fails `convex deploy`, so the deployment goes red instead of drifting
+quietly. It is host-neutral on purpose, not keyed off `$VERCEL`.
 
-`DEPLOY_CONVEX` is host-neutral on purpose rather than keyed off a
-platform-set variable: moving regions, or moving off Scalingo entirely, is
-then a matter of setting the same variable there.
+### Vercel previews must never carry a deploy key
 
-### Review apps inherit the parent's environment — including the deploy key
+Each project's **Ignored Build Step** (README step 2) skips every branch but
+its own, so a pull request builds nothing. That is deliberate:
 
-Scalingo review apps are opt-in, and when you enable them they **clone the
-parent app's environment variables**. A review app would therefore inherit
-`DEPLOY_CONVEX=true` **and** the production `CONVEX_DEPLOY_KEY`, and every
-opened pull request would push that branch's functions and schema straight at
-**production Convex**. A schema change on a draft PR is enough to take prod
-down.
+- A preview build scoped with the production `CONVEX_DEPLOY_KEY` would push
+  the branch's functions and schema at that environment's backend — a schema
+  change on a draft PR is enough to take it down. Convex refuses the pairing
+  (§ "Convex refuses a production deploy key in a Vercel preview build"),
+  but only because `VERCEL_ENV` says `preview`; the key
+  staying out of the Preview scope is what actually keeps it safe.
+- A preview **without** a deploy key builds a frontend against the current
+  backend — fine for UI-only work, silently wrong for a PR that depends on
+  un-deployed schema.
+- Per-branch Convex backends need a *preview* deploy key, `preview` env
+  defaults, and a `trustedOrigins` that accepts branch URLs — see § "A
+  preview deployment starts with no environment variables". None of it is wired.
 
-Before enabling review apps, add a `scalingo.json` at the repo root — its
-configuration takes precedence over the parent app's:
-
-```json
-{ "env": { "DEPLOY_CONVEX": { "value": "false" } } }
-```
-
-That leaves review apps building the frontend only, against the current prod
-backend — fine for UI-only PRs, and still **not** safe for a PR that depends
-on un-deployed schema. Preview-isolated Convex needs a Convex *preview* deploy
-key plus an explicit `--preview-name`: `convex deploy` derives a preview name
-from the git branch only on Vercel, Netlify, Cloudflare Pages and GitHub CI,
-and Scalingo is not in that list.
+Previews stay off until that last point is wired.
 
 **When you DO need the manual command**:
 
@@ -430,16 +410,18 @@ and Scalingo is not in that list.
   deployment with hot reload).
 - Emergency hotfix where the host is broken: `pnpm exec convex deploy --prod`
   works but is a footgun (frontend still pointing at old code). Prefer
-  reverting the bad commit and letting the platform redeploy.
+  moving the environment's branch back to a good commit and letting the
+  platform redeploy.
 
 ### Node version is not pinned the way pnpm is
 
-`engines.node` is `">=22"`, a range, not a pin. CI runs Node 22; Scalingo's
-buildpack defaults to the latest v24 LTS. That divergence has been harmless so
-far, and the range is deliberate (this template is forked). If a build ever
-fails on the platform but passes in CI, check the Node major in the build log
-first, and pin `engines.node` to a single major in one deliberate PR rather
-than guessing at the symptom.
+`engines.node` is `">=22"`, a range, not a pin. CI runs Node 22; Vercel
+reads the range, overrides the project's own "22.x" setting, and builds on
+the latest major it offers (24 today — the build log warns about it). That
+divergence has been harmless so far, and the range is deliberate (this
+template is forked). If a build ever fails on the platform but passes in CI,
+check the Node major in the build log first, and pin `engines.node` to a
+single major in one deliberate PR rather than guessing at the symptom.
 
 ## pnpm.overrides
 
@@ -514,11 +496,11 @@ clean — moving `overrides` into `pnpm-workspace.yaml` and using `allowBuilds`
 produces a byte-identical lockfile, verified. We don't, because of the
 deployment target:
 
-- **The host has to resolve the pinned pnpm.** Scalingo's Node buildpack
-  selects the package manager from `pnpm-lock.yaml`, with no Corepack opt-in
-  — unlike Vercel's experimental `ENABLE_EXPERIMENTAL_COREPACK=1`. That
-  removes the old blocker; it does not by itself clear pnpm 11, which still
-  has to be confirmed as resolvable on the platform before anyone bumps.
+- **The host has to resolve the pinned pnpm.** Vercel reads the
+  `packageManager` pin with no Corepack opt-in (the build log names the pnpm
+  it picked; neither project sets `ENABLE_EXPERIMENTAL_COREPACK`).
+  That does not by itself clear pnpm 11, which still has to be confirmed as
+  resolvable on the platform before anyone bumps.
 - **`overrides` must stay in `package.json`.** Settings in
   `pnpm-workspace.yaml` are a pnpm 10+ feature, so any host that resolves our
   `lockfileVersion: 9.0` to pnpm 9 ignores overrides declared in the workspace
@@ -901,22 +883,22 @@ pnpm rebuild esbuild   # ensures esbuild's native binary is fetched
 `pnpm rebuild esbuild` is required because pnpm 10 skips lifecycle scripts
 by default, so esbuild's `install.js` doesn't download the platform binary.
 
-## The build target is Nitro's `node-server` preset
+## Nitro picks its preset from the build host
 
-Leaving Vercel removed a class of trouble rather than adding one. With no
-`vercel.json` and no Vercel auto-detection, Nitro settles on its default
-`node-server` preset and emits `.output/server/index.mjs` — which is exactly
-what `pnpm start` already ran. Two things are worth knowing:
+No `vercel.json` and no preset in `vite.config.ts`: Nitro auto-detects.
 
-1. `.output/server/` is self-contained. Dependencies are bundled into
-   `.output/server/_libs/`, and nothing in the output imports a bare
-   specifier. The runtime needs Node and `.output`, not `node_modules` — which
-   is why Scalingo pruning devDependencies after the build is harmless.
-2. The server reads `process.env.PORT` (Nitro's `NITRO_PORT` also works), and
-   Scalingo injects `PORT` at runtime, so the port lines up with no
-   configuration. Scalingo resolves the web process from the `Procfile` first
-   and falls back to `scripts.start`; we ship no `Procfile` and rely on
-   `start`.
+- **On Vercel** it selects the `vercel` preset — the build log says
+  `[nitro:vercel] Using nodejs24.x runtime` — and emits `.vercel/output`, the
+  Build Output API. `pnpm start` is never run there.
+- **Everywhere else** (local, CI, any other Node host) it settles on the
+  default `node-server` preset and emits `.output/server/index.mjs`, which is
+  what `pnpm start` runs. `.output/server/` is self-contained — dependencies
+  are bundled into `.output/server/_libs/` — and the server reads
+  `process.env.PORT`. This is the escape hatch: the web tier leaves Vercel by
+  building elsewhere, with no code change.
+
+So a local `pnpm build` does not reproduce the artefact Vercel serves. When a
+bug only shows up deployed, read the Vercel build log before bisecting code.
 
 Confirm a build is servable without deploying anything:
 

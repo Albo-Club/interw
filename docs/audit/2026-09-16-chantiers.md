@@ -14,7 +14,7 @@ Mergé sur `main` :
 - **#2** — l'audit et ses annexes (`docs/audit/`).
 - **#3** — hébergement web déplacé de Vercel vers Scalingo. `pnpm build`
   déploie Convex en lockstep quand `DEPLOY_CONVEX=true` ; voir
-  `KNOWN_ISSUES.md` § « Production deploy is wired into the Scalingo build ».
+  `KNOWN_ISSUES.md` § « Deploys are wired into the Vercel build » (réécrit par #21).
 - **#4** — chantier 1 : B1 et B2 (en-têtes, désormais dans
   `src/lib/security-headers.ts` avec test), B10 (`items` supprimé, landing
   réécrite, titre d'onglet, changelog corrigé), smoke test étendu à `/s/` et
@@ -28,29 +28,24 @@ Mergé sur `main` :
   `KNOWN_ISSUES.md` § « A reasoning model does not answer in a string ».
 
 Restent ouverts : B3 à B9 et tous les constats élevés des six annexes, plus le
-chantier 6 ci-dessous (ce que la campagne a elle-même produit). Deux mentions
-de Vercel ont survécu à #3 et sont à corriger au passage du chantier qui
-touche ces fichiers : `.env.example:71` et `TESTING.md` ligne P6a.
+chantier 6 ci-dessous (ce que la campagne a elle-même produit).
 
-## Environnements : dev et prod, rien d'autre
+## Environnements : dev, staging, prod
 
-| | Convex | Web (Scalingo, `osc-fr1`) | Bucket Scaleway | Qui pousse le backend |
-|---|---|---|---|---|
-| **dev** | déploiement dev du projet | app `interw-dev`, `DEPLOY_CONVEX=false`, `VITE_*` du dev | `interw-dev` | la session Claude Code, via `convex dev` |
-| **prod** | déploiement prod | app `interw`, `DEPLOY_CONVEX=true`, clé prod | `interw-prod` | `main`, via le build Scalingo |
+Le front est sur Vercel depuis #21 ; chaque environnement a **son** déploiement
+Convex, donc son `SITE_URL`. Réglages : `README.md` § « Deploying: staging and
+production ».
 
-`interw-dev` ne sert que le front : c'est l'URL que vous ouvrez sur votre
-téléphone pour tester la branche d'un chantier avant de merger. Vous y
-déployez la branche à la main (`git push scalingo-dev <branche>:main`). Le
-backend qu'elle appelle est celui que la session a poussé avec `convex dev`.
-Deux chantiers en parallèle sur le même Convex dev s'écraseraient : d'où
-l'ordre strict.
+| | Vercel | Convex | `SITE_URL` | Bucket | Qui pousse le backend |
+|---|---|---|---|---|---|
+| **dev** | aucun (`pnpm dev`) | dev `tremendous-eel-855` | `http://localhost:3000` | dev | la session Claude Code, via `convex dev` |
+| **staging** | `interw-staging`, branche `main` | `combative-peacock-986` (le déploiement prod du projet `interw-staging`) | `https://interw-staging.vercel.app` | dev | un merge sur `main`, via le build Vercel |
+| **prod** | `interw`, branche `production` | prod du projet `interw` (à créer / confirmer) | `https://interw.com` | prod | un push sur `production`, via le build Vercel |
 
-> ⚠️ **Vercel est revenu, en plus de Scalingo.** Le dépôt n'en garde aucune
-> trace — pas de `vercel.json`, tout est côté dashboard — et le `README.md` ne
-> documente que Scalingo. `interw.vercel.app` sert aujourd'hui le front de dev
-> et **c'est l'origine sur laquelle on s'authentifie**. Une preview par branche
-> est déployée à chaque PR. À documenter au chantier 5.
+Les PR ne construisent rien (étape de build ignorée sur les deux projets) :
+une branche de chantier se teste en local, contre le Convex dev. Deux
+chantiers en parallèle sur le même Convex dev s'écraseraient : d'où l'ordre
+strict.
 
 Variables de l'environnement Claude Code cloud « Interw » (dev uniquement,
 jamais une clé prod) :
@@ -72,10 +67,10 @@ variables, « defaults for dev deployments »), héritées par le déploiement d
 
 ```
 APP_ENV=development
-SITE_URL=https://interw.vercel.app     l'origine RÉELLE depuis laquelle on se connecte
+SITE_URL=http://localhost:3000         l'origine RÉELLE depuis laquelle on se connecte
 BETTER_AUTH_SECRET=<généré, distinct de la prod>
 RESEND_API_KEY / RESEND_FROM / RESEND_TEST_MODE=false
-MISTRAL_API_KEY / ANTHROPIC_API_KEY                    (clés dev, plafonnées)
+MISTRAL_API_KEY                                        (clé dev, plafonnée ; plus d'ANTHROPIC_* depuis #17)
 PURGE_HASH_SALT=<openssl rand -hex 32, distinct par déploiement>
 OBJECT_STORE_ENDPOINT=https://s3.fr-par.scw.cloud
 OBJECT_STORE_REGION=fr-par
@@ -85,14 +80,10 @@ OBJECT_STORE_ACCESS_KEY_ID / OBJECT_STORE_SECRET_ACCESS_KEY   (paire dev)
 
 Trois pièges dans ce bloc, chacun payé une fois :
 
-- **`SITE_URL` est l'unique origine acceptée.** `convex/auth.ts:49` fait
-  `trustedOrigins: [siteUrl]`, et `siteUrl` est lu **au chargement du module** —
-  donc `npx convex dev --once` après chaque changement, sinon un isolate chaud
-  garde l'ancienne valeur. Une inscription depuis une autre origine est rejetée
-  en `Invalid origin` **avant** tout envoi d'e-mail : le symptôme est « je n'ai
-  pas reçu le mail », la cause n'a rien à voir avec l'e-mail. Corollaire : une
-  seule origine à la fois, donc `localhost:3000` et les previews par branche ne
-  peuvent pas s'authentifier tant que `SITE_URL` pointe ailleurs.
+- **`SITE_URL` est l'unique origine acceptée**, et elle est lue au chargement
+  du module. Symptôme d'une origine non déclarée : « je n'ai pas reçu le
+  mail ». Voir `KNOWN_ISSUES.md` § « `trustedOrigins` holds one origin per
+  deployment ».
 - **`RESEND_TEST_MODE` doit valoir exactement la chaîne `false`.**
   `convex/email.ts` fait `testMode: process.env.RESEND_TEST_MODE !== 'false'` :
   `0`, `no`, vide ou absent laissent le mode test **actif**, et une vraie
@@ -104,8 +95,7 @@ Trois pièges dans ce bloc, chacun payé une fois :
 Règle CORS du bucket `interw-dev` (sans elle, tout envoi candidat échoue) :
 
 ```json
-[{"AllowedOrigins":["http://localhost:3000","https://interw.vercel.app",
-                    "https://interw-dev.osc-fr1.scalingo.io"],
+[{"AllowedOrigins":["http://localhost:3000","https://interw-staging.vercel.app"],
   "AllowedMethods":["PUT","GET"],"AllowedHeaders":["Content-Type","Content-Length"],
   "MaxAgeSeconds":3600}]
 ```
@@ -379,7 +369,7 @@ Périmètre : `.github/workflows/**`, `package.json` (scripts et overrides),
    depuis revenu pour le front de dev et les previews. Les deux hébergeurs sont
    réels, donc **nommer les deux** plutôt que substituer l'un à l'autre, et
    documenter lequel sert quoi. Même remarque pour le `README.md`, qui ne
-   connaît que Scalingo.
+   connaît que Scalingo. *Caduc : #21 a retiré Scalingo, Vercel seul.*
 5. Dépendances : retirer `convex-helpers`, `tsx`, `@radix-ui/react-label`
    non importés ; règles Renovate manquantes (`react-router-with-query`,
    `nitro`, `recharts`).
@@ -419,7 +409,9 @@ Périmètre de fichiers : `convex/lib/ai.ts`, `convex/auth.ts`, `convex/email.ts
    peuvent s'authentifier — ce qui rend le développement local et le test d'une
    PR mutuellement exclusifs. Une liste alimentée par une variable
    additionnelle lève le blocage ; `baseURL` reste une valeur unique et doit
-   être documenté comme telle.
+   être documenté comme telle. *Avec un `SITE_URL` par déploiement, le blocage
+   ne mord plus que si deux origines visent le même déploiement — voir
+   `KNOWN_ISSUES.md` § « `trustedOrigins` holds one origin per deployment ».*
 5. **Resend est américain.** C'est le dernier maillon hors UE facile à déplacer
    (Scaleway TEM, déjà fournisseur du bucket, ou Brevo). Coût réel :
    `@convex-dev/resend` est un *composant* Convex, donc c'est un remplacement de
@@ -430,8 +422,8 @@ Périmètre de fichiers : `convex/lib/ai.ts`, `convex/auth.ts`, `convex/email.ts
    rendrait `convex/lib/evidence.ts` plus précis sur les citations courtes.
 7. **Affirmations périmées** : `CLAUDE.md:157` dit « File storage : Convex
    native, 20 MB cap » alors que `convex/lib/objectStore.ts` existe précisément
-   pour dire le contraire sur les médias candidats ; `README.md` ne documente
-   que Scalingo alors que Vercel sert le front de dev et les previews.
+   pour dire le contraire sur les médias candidats. (`README.md` et Scalingo :
+   réglé par #21.)
 
 ---
 

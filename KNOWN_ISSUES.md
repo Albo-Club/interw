@@ -847,6 +847,25 @@ pnpm exec convex env set --prod APP_ENV production
 pnpm exec convex env set --prod SITE_URL "https://your-domain"
 ```
 
+## `trustedOrigins` holds one origin per deployment
+
+`convex/auth.ts` sets `trustedOrigins: [siteUrl]`. With each environment on
+its **own** Convex deployment and `SITE_URL` (README § "Deploying: staging and
+production"), that is not a limitation. It bites only when **two origins must
+talk to the same deployment** — `localhost:3000` and a Vercel URL both on dev,
+or a branch preview on staging: the second origin loads, then fails at sign-in.
+
+The failure is misleading. A sign-up from an undeclared origin is rejected
+with `Invalid origin` **before** any email is sent, so what people report is
+"I never got the verification email". That has already cost an outage chased
+on the email side. Check the request's `Origin` against the deployment's
+`SITE_URL` first.
+
+`siteUrl` is read **at module load**, so a warm isolate keeps the old value
+until the functions are redeployed: `npx convex dev --once` on dev,
+`npx convex deploy` with that environment's deploy key, from a checkout of
+its branch, on staging and prod.
+
 ## Never put `CONVEX_DEPLOYMENT` on the hosting platform
 
 `CONVEX_DEPLOYMENT` is a per-developer binding to your own dev deployment,
@@ -1960,10 +1979,9 @@ Two consequences for this repo:
   `Running 'pnpm build:app' with environment variables "VITE_CONVEX_URL" and
   "VITE_CONVEX_SITE_URL" set`. So the explicit `VITE_CONVEX_SITE_URL` in a
   Vercel project is only needed where the build does *not* run `convex deploy`.
-- What per-branch previews would still need is `trustedOrigins` in
-  `convex/auth.ts`, which pins the single `SITE_URL` and would reject every
-  branch URL at sign-in. A preview would build cleanly and fail at the login
-  form.
+- What per-branch previews would still need is a `trustedOrigins` that
+  accepts branch URLs — see § "`trustedOrigins` holds one origin per
+  deployment".
 
 ## Convex refuses a production deploy key in a Vercel preview build
 

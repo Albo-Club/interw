@@ -525,8 +525,8 @@ export const remove = mutation({
   needs the URL parser".
 - ❌ Touching the pnpm version pin. `packageManager` in `package.json` is the
   single source of truth, read by Corepack, by `pnpm/action-setup@v4` (which
-  is why CI passes **no** `version:`) and by Scalingo's Node buildpack, which
-  selects pnpm from the lockfile. Never re-pin a version in `ci.yml`, never hand-edit the sha512
+  is why CI passes **no** `version:`) and by Vercel, which selects pnpm from
+  it at build time. Never re-pin a version in `ci.yml`, never hand-edit the sha512
   hash (use `corepack use pnpm@<version>`), and never bump to a major the
   deployment target doesn't resolve. Same family: don't move `pnpm.overrides`
   out of `package.json` — `pnpm-workspace.yaml` settings are invisible to

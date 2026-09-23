@@ -20,9 +20,10 @@
  *      and `convex deploy` to push the backend.
  *
  * What it does NOT do:
- *   - Touch the web host. The front end lives on Vercel: one project, with
- *     DEPLOY_CONVEX, CONVEX_DEPLOY_KEY, VITE_CONVEX_SITE_URL and MEDIA_ORIGIN
- *     set per environment. See README.md "Deploying to production".
+ *   - Touch the web host. The front end lives on Vercel: one project per
+ *     environment (staging, production), each with DEPLOY_CONVEX,
+ *     CONVEX_DEPLOY_KEY, VITE_CONVEX_SITE_URL and MEDIA_ORIGIN. See
+ *     README.md "Deploying: staging and production".
  *   - Set RESEND_WEBHOOK_SECRET. Each Resend webhook has its own secret, so
  *     there is nothing to mirror — create the prod webhook and set it by hand.
  *   - Configure CORS on the prod bucket. Without it every candidate upload
@@ -199,8 +200,8 @@ async function main() {
   console.log(`
   ✅ Convex prod is provisioned.
 
-  Next (frontend on Vercel) — see README.md "Deploying to production".
-  One project, two environments. On the Production scope set:
+  Next (frontend on Vercel) — see README.md "Deploying: staging and production".
+  One Vercel project per environment. On its Production scope, set:
 
     DEPLOY_CONVEX         true
     CONVEX_DEPLOY_KEY     <prod deploy key from the Convex dashboard>
@@ -211,9 +212,8 @@ async function main() {
   with .site instead of .cloud), NOT your dev one. VITE_CONVEX_URL is not set
   by hand on Production: convex deploy --cmd injects it into the build.
 
-  On Preview/Development, point the same four at dev — and there
-  VITE_CONVEX_URL *must* be set by hand, because without DEPLOY_CONVEX the
-  build never runs convex deploy and nothing injects it.
+  Its production branch is main (staging) or production (prod), and its
+  ignored build step skips every other branch: no preview builds.
 
   Then test a magic link from ${domain}. The link should point at
   ${domain}/api/auth/magic-link/verify (not localhost).

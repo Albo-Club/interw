@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "sturdier-interview": {
+      "title": "Un entretien plus solide pour vos candidats",
+      "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

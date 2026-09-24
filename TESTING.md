@@ -295,19 +295,26 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IB1 | Invitation | Role → Candidates → Invite → one name + address | Email arrives; the link is `/s/{token}` |
 | IB2 | Bulk invite | Paste 5 lines mixing `Name, email`, `Name <email>`, a bare address and one unreadable line | Shows "4 candidates ready" and the unreadable line **before** sending |
 | IB3 | Duplicate invite | Paste the same list twice | No second session; the existing link is re-sent |
-| IB4 | Welcome screen | Open the link | Greeting, role, question count, duration, what is needed. No app navigation anywhere on the page |
+| IB4 | Welcome screen | Open the link | Greeting, role, question count, duration, and a **What you'll need** block (camera and microphone, a quiet place, keep the page open). The only secondary link is **Your data**, in the footer. No app navigation anywhere on the page |
+| IB4b | Role language | Create a role in French, open its link in a browser set to English | The whole candidate surface is in French — welcome, check, interview, thank-you page and data page. It follows the role, not the browser |
 | IB5 | Consent | Try to continue without ticking the box | Blocked. After ticking, `consentAcceptedAt` is set |
 | IB6 | CV upload | Upload a PDF, then a `.txt` renamed to `.pdf` | First succeeds; second is refused on content type |
 | IB7 | Device check | Deny camera permission | Explains how to allow it in the address bar — never a blank screen |
+| IB7b | Camera busy or missing | Hold the camera in another app (a Teams or Meet call), or unplug the webcam, then open the check screen | The preview says **Audio only**; the interview records the voice alone with the same notice, and each answer saves with an audio object and no video. "Allow it in the address bar" is the wrong advice here and must not appear |
+| IB7c | Chosen devices are used | On the check screen pick a second microphone, then continue | The interview URL carries `?mic=…`, and the recording is from the microphone picked — not the system default |
 | IB8 | In-app browser | Open the link from the LinkedIn or Gmail mobile app | Warns that recording often fails there and suggests opening in Safari/Chrome |
 | IB9 | Mic meter | Speak, then stay silent | Meter moves and reads "picking you up"; silence reads "can't hear anything" — and the **Start anyway** button is still available |
-| IB10 | Record an answer | Start my answer → speak → I've finished my answer | Both an audio and a video object appear under `orgs/{orgId}/sessions/{sessionId}/q0.*` |
+| IB10 | Record an answer | Start my answer → speak → I've finished my answer | The preview shows the candidate **throughout** the recording, never a black box — portrait on a phone held upright. Saving shows a percentage. Both an audio and a video object appear under `orgs/{orgId}/sessions/{sessionId}/q0.*` |
 | IB11 | Time limit | Set a question to 30 s, then say nothing and wait | Countdown appears at 30 s remaining; recording stops on its own; the answer is saved |
 | IB12 | **Network cut mid-answer** | Start an answer, disable the network, finish the answer | Shows "your last answer didn't save" with **Try again** and **Skip**. Re-enable the network → Try again → it uploads |
+| IB12b | Video lost, answer kept | Throttle the network so the video upload fails after the audio one succeeded | The answer is saved and the next question shows "its video didn't get through — only the sound did". `sessionEvents` has an `upload_failed` row whose detail starts with `video:` |
+| IB12c | Leaving mid-answer | Start an answer, switch to another app or tab (or unplug the headset), come back | Recording stopped when the page was hidden; what was said is saved, and the screen says so |
 | IB13 | Resume | Close the tab after two answers, reopen the link | Resumes at question 3; the first two show as answered |
+| IB13b | Resume after a skip | Q1 answered, Q2 fails to send → **Skip**, Q3 answered; close and reopen | The welcome screen says question **2**, the interview opens question 2, and after it moves to question 4 — question 3 is never offered again (`reserveSegment` refuses it with `already_answered`) |
 | IB14 | Expiry | Set the role's expiry to yesterday, reopen the link | "This interview has closed" — never a dead end or a raw error |
-| IB15 | Unknown token | Open `/s/aaaa…` (43 chars) and `/s/short` | Both give the **same** "This link doesn't work" |
-| IB16 | Finish | Complete the interview | Lands on the thank-you page; session is `completed`; `jobLog` shows `transcribe · started` |
+| IB15 | Unknown token | Open `/s/aaaa…` (43 chars) and `/s/short` | Both give the **same** "This link doesn't work" — the candidate notice, never the back office's error card or a "Go home" to the landing page. Reloading `/s/{token}/interview` after finishing says "You've already completed this interview" |
+| IB16 | Finish | Complete the interview | After the last question, a **Before you finish** screen lists any question without a saved answer, with a way back to it. Finish → thank-you page; session is `completed`; `jobLog` shows `transcribe · started`; the candidate receives **Your interview has been sent**, in the role's language, with a **See or delete my data** link to `/s/{token}/privacy`, logged in `emailLog` as `candidate-completed` |
+| IB16b | Finish fails | Cut the network, then press **Finish the interview** | The error shows on the same screen, next to the button, and pressing it again once online completes the interview |
 
 ## Interw C — Pipeline and report (15 min)
 
@@ -343,7 +350,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
-| IE1 | Candidate self-delete | Open `/s/{token}/privacy` → Delete everything | Every object under `orgs/{orgId}/sessions/{sessionId}/` is gone from the bucket; session, segments, transcripts, report, shares **and `emailLog` rows** are gone; one `purgeLog` row exists carrying a **salted hash** (P4b), not the address |
+| IE1 | Candidate self-delete | Open `/s/{token}/privacy` → Delete everything | Every object under `orgs/{orgId}/sessions/{sessionId}/` is gone from the bucket; session, segments, transcripts, report, shares **and `emailLog` rows** are gone; one `purgeLog` row exists carrying a **salted hash** (P4b), not the address. The page ends on **Your data has been deleted** — never an error screen |
 | IE2 | Recruiter delete | Candidate page → Delete this candidate's data | Same outcome, `reason: recruiter_delete` |
 | IE3 | Retention purge | Set a completed session's `purgeAfter` to the past, run `internal.retention.purgeDueSessions` | Media objects deleted; the report and transcript **remain**; `mediaPurgedAt` set and `purgeAfter` **kept**; the report page says the recordings were deleted |
 | IE3b | The purge is not blocked by clockless sessions | Leave 40+ `pending` sessions on the deployment, then run IE3 | The due session is still found. An absent `purgeAfter` sorts before every value in a Convex index, so a range bounded only from above used to spend the whole batch on sessions with no clock at all and purge nothing, silently, forever |

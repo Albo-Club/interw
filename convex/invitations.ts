@@ -71,6 +71,19 @@ async function hasVerifiedEmail(ctx: QueryCtx): Promise<boolean> {
   return baUser?.emailVerified === true
 }
 
+/** Delete an invitation with its send log: the sends name the invitee. */
+async function deleteInvitation(
+  ctx: MutationCtx,
+  invitationId: Id<'invitations'>,
+) {
+  const sends = await ctx.db
+    .query('emailLog')
+    .withIndex('by_invitation', (q) => q.eq('invitationId', invitationId))
+    .collect()
+  for (const send of sends) await ctx.db.delete('emailLog', send._id)
+  await ctx.db.delete('invitations', invitationId)
+}
+
 /**
  * Send the invitation email and log it with the provider id. The log row is
  * what Resend's delivery webhook (`emailEvents.record`) updates, so a bounce
@@ -150,7 +163,7 @@ export const create = mutation({
       }
       // An expired invitation is history, not a pending one: it must not
       // block inviting the same person again.
-      await ctx.db.delete('invitations', existing._id)
+      await deleteInvitation(ctx, existing._id)
     }
 
     const invId = await ctx.db.insert('invitations', {
@@ -420,7 +433,7 @@ export const revoke = mutation({
     if (!inv) throw new ConvexError('not_found')
     await requireOrgRole(ctx, inv.orgId, 'admin')
     if (inv.acceptedAt) throw new ConvexError('already_accepted')
-    await ctx.db.delete("invitations", invitationId)
+    await deleteInvitation(ctx, invitationId)
     return null
   },
 })

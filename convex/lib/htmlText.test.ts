@@ -45,6 +45,35 @@ describe('htmlToText', () => {
   it('truncates to the cap', () => {
     expect(htmlToText(`<p>${'a'.repeat(500)}</p>`, 100)).toHaveLength(100)
   })
+
+  // A numeric reference past U+10FFFF, or to a lone surrogate, is not a
+  // character. String.fromCodePoint threw a RangeError on the first, which
+  // failed the import outright; HTML decodes both to U+FFFD.
+  it('decodes an out-of-range character reference to U+FFFD', () => {
+    expect(htmlToText('<p>Job &#1114112; ad</p>')).toBe('Job \uFFFD ad')
+    expect(htmlToText('<p>Job &#x110000; ad</p>')).toBe('Job \uFFFD ad')
+    expect(htmlToText('<p>Job &#xD800; ad</p>')).toBe('Job \uFFFD ad')
+    expect(htmlToText('<p>Job &#99999999999999999999; ad</p>')).toBe(
+      'Job \uFFFD ad',
+    )
+  })
+
+  // Fingerprint: convex/lib/htmlText.ts:htmlToText:quadratic-regex-over-uncapped-body
+  // A page that is nothing but tag openers with no closer made every pass
+  // scan to the end of the input from every opener: 7 s at 128 KiB, ~30 min
+  // at the 2 MiB the fetcher accepts. Linear work puts each of these at a few
+  // milliseconds; the bound is two orders of magnitude above that so a slow
+  // CI runner cannot flake it, and still far below what a quadratic pass
+  // costs at this size (tens of seconds).
+  it.each(['<', '<p ', '<script>', '<script ', '<!--', '</script'])(
+    'stays linear on a run of unclosed %s',
+    (unit) => {
+      const html = unit.repeat(Math.ceil((256 * 1024) / unit.length))
+      const started = performance.now()
+      htmlToText(html)
+      expect(performance.now() - started).toBeLessThan(1_000)
+    },
+  )
 })
 
 describe('jobPostingText', () => {
@@ -113,5 +142,15 @@ describe('jobPostingText', () => {
     expect(jobPostingText('<html><body><p>A blog post</p></body></html>')).toBe(
       '',
     )
+  })
+
+  // Same fingerprint as above: the JSON-LD matcher had the same shape, with a
+  // smaller constant — hence the larger input (~5 s before the fix).
+  it('stays linear on a run of unclosed JSON-LD openers', () => {
+    const unit = '<script type="application/ld+json">'
+    const html = unit.repeat(Math.ceil((1024 * 1024) / unit.length))
+    const started = performance.now()
+    jobPostingText(html)
+    expect(performance.now() - started).toBeLessThan(1_000)
   })
 })

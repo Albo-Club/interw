@@ -38,6 +38,7 @@ function ProjectDetailPage() {
   const [sharing, setSharing] = useState(false)
   const [inviting, setInviting] = useState(false)
 
+  const me = useConvexQuery(api.users.me)
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
   const data = useConvexQuery(
     api.projects.getBySlug,
@@ -72,6 +73,14 @@ function ProjectDetailPage() {
 
   const { project, questions, criteria } = data
   const expired = project.expiresAt !== null && project.expiresAt < Date.now()
+  // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
+  // spares a member an action the server would refuse.
+  const ready = me?.kind === 'ready' ? me : null
+  const myRole = ready?.orgs.find((o) => o.slug === orgSlug)?.role
+  const canManage =
+    myRole === 'admin' ||
+    myRole === 'owner' ||
+    project.createdBy === ready?.user._id
 
   return (
     <main className="flex-1 space-y-6 p-6">
@@ -98,10 +107,12 @@ function ProjectDetailPage() {
               {t('projects:detail.invite')}
             </Button>
           )}
-          <Button variant="outline" onClick={() => setSharing(true)}>
-            <Share2 className="size-4" />
-            {t('projects:detail.share')}
-          </Button>
+          {canManage && (
+            <Button variant="outline" onClick={() => setSharing(true)}>
+              <Share2 className="size-4" />
+              {t('projects:detail.share')}
+            </Button>
+          )}
           {project.status !== 'archived' && (
             <Button variant="outline" asChild>
               <Link
@@ -119,7 +130,7 @@ function ProjectDetailPage() {
               {t('projects:detail.publish')}
             </Button>
           )}
-          {project.status === 'active' && (
+          {canManage && project.status === 'active' && (
             <Button
               variant="outline"
               onClick={() => void run(archive({ projectId: project._id }))}
@@ -127,7 +138,7 @@ function ProjectDetailPage() {
               {t('projects:detail.archive')}
             </Button>
           )}
-          {project.status === 'archived' && (
+          {canManage && project.status === 'archived' && (
             <Button
               onClick={async () => {
                 await run(restore({ projectId: project._id }))

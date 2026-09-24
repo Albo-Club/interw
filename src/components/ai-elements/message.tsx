@@ -10,6 +10,7 @@ import {
   useMemo,
   useState,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Streamdown } from 'streamdown'
 import type { UIMessage } from 'ai'
 import type { ComponentProps, HTMLAttributes, ReactElement } from 'react'
@@ -317,6 +318,22 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>
 
+// Assistant output is model output, and the model reads candidate transcripts
+// through `readReport`: an image in it is a request the recruiter's browser
+// would make on render, to a URL the model chose — query string included. No
+// image is ever loaded; its alt text stands in for it. Passed after
+// `{...props}` so no caller can bring images back.
+const ImageNotShown = ({ alt }: ComponentProps<'img'>) => {
+  const { t } = useTranslation('chat')
+  return (
+    <span className="text-muted-foreground italic">
+      {alt ? t('imageNotShownAlt', { alt }) : t('imageNotShown')}
+    </span>
+  )
+}
+
+const responseComponents = { img: ImageNotShown }
+
 // Streamdown plugins (@streamdown/code|math|mermaid|cjk) deliberately
 // removed: Shiki + KaTeX + Mermaid would add MBs to the bundle for a finance
 // chat. Re-trim after any reinstall from the registry — see KNOWN_ISSUES.md
@@ -329,6 +346,7 @@ export const MessageResponse = memo(
         className,
       )}
       {...props}
+      components={responseComponents}
     />
   ),
   (prevProps, nextProps) =>

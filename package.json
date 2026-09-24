@@ -33,6 +33,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "node scripts/e2e-smoke.mjs",
+    "test:e2e": "playwright test",
     "test:cookies": "bash scripts/test-cookies.sh",
     "sync:skills:update": "node scripts/sync-skills.mjs --update"
   },
@@ -82,6 +83,7 @@
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^2.0.0",
     "@edge-runtime/vm": "^5.0.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/eslint-config": "^0.4.0",
     "@types/node": "^25.9.1",

@@ -272,6 +272,14 @@ export const pipelineHealth = query({
 })
 
 /**
+ * How long a report claim is trusted to mean "a job is running". The job
+ * releases it when it ends; this bound only frees a claim whose job ended
+ * without doing so. Four attempts of two two-minute calls, plus backoff, fit
+ * well inside it.
+ */
+const REPORT_CLAIM_TTL_MS = 60 * 60 * 1000
+
+/**
  * Run a stuck session's pipeline again.
  *
  * Not a catch-up script: it is an operator naming one session and saying "go
@@ -289,6 +297,16 @@ export const relaunchSession = mutation({
     if (session.status !== 'completed') {
       throw new ConvexError('session_not_completed')
     }
+    // A report job holds the claim until it ends. Relaunching under it would
+    // reset the claim and queue a second, paid completion beside the first.
+    const claim = session.reportJobEnqueuedAt
+    if (claim !== undefined && Date.now() - claim < REPORT_CLAIM_TTL_MS) {
+      const report = await ctx.db
+        .query('reports')
+        .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+        .unique()
+      if (!report) throw new ConvexError('report_in_progress')
+    }
 
     await ctx.db.insert('jobLog', {
       orgId: session.orgId,
@@ -296,7 +314,8 @@ export const relaunchSession = mutation({
       step: 'relaunch',
       outcome: 'started',
       attempt: 1,
-      error: `by ${me.email}`,
+      // The id, not the address: recruiters read this log back.
+      actorId: me._id,
       at: Date.now(),
     })
     await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {

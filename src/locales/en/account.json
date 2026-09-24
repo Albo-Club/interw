@@ -15,6 +15,7 @@
     "hourAgo": "{{count}}h ago",
     "dayAgo": "{{count}}d ago"
   },
+  "reauthAction": "Sign in again",
   "activeSessions": {
     "title": "Active sessions",
     "description": "Devices currently signed in to your account. Revoke any that you don't recognize."
@@ -33,16 +34,21 @@
     "unknownDevice": "Unknown device",
     "genericBrowser": "Browser",
     "unknownOs": "Unknown OS",
-    "deviceLabel": "{{browser}} on {{os}}"
+    "deviceLabel": "{{browser}} on {{os}}",
+    "reauth": "For your security, the list of devices needs a sign-in from the last hour."
   },
   "linked": {
+    "password": "Password",
+    "google": "Google",
     "connected": "Connected",
-    "connectMore": "Connect more methods",
-    "comingSoon": "Coming soon",
+    "notConnected": "Not connected",
+    "notSet": "Not set — add one below",
     "connect": "Connect",
     "disconnect": "Disconnect",
-    "emailPassword": "Email & password",
-    "magicLink": "Magic link"
+    "disconnected": "Google disconnected",
+    "connectFailed": "Couldn't connect Google. Use the Google account with this email address, and try again.",
+    "onlyMethod": "Your only sign-in method — set a password before disconnecting it.",
+    "reauth": "For your security, sign in again before disconnecting — your session is more than an hour old."
   },
   "page": {
     "title": "Your profile",
@@ -70,20 +76,21 @@
     "title": "Email",
     "description": "We'll send a confirmation link to your current address.",
     "newEmail": "New email",
-    "hint": "Your current email stays active until you click the confirmation link.",
+    "hint": "Two steps: approve from your current inbox, then confirm from the new one. Your current email stays active until then.",
     "send": "Send confirmation email",
     "alreadyYours": "That is already your email",
-    "confirmationSent": "Confirmation sent to {{email}}. Click the link to apply the change — it expires in 1 hour."
-  },
-  "magic": {
-    "title": "Magic link",
-    "description": "Get a one-tap sign-in link in your inbox.",
-    "send": "Email me a magic link",
-    "sent": "Magic link sent to {{email}}"
+    "confirmationSent": "Step 1 of 2: we sent an approval link to {{email}}. It expires in 1 hour.",
+    "pendingTitle": "Email change in progress",
+    "pendingApprove": "Step 1 of 2 — open the link we sent to <strong>{{email}}</strong> to approve the switch to <strong>{{newEmail}}</strong>.",
+    "pendingVerify": "Step 2 of 2 — open the link we sent to <strong>{{newEmail}}</strong> to confirm it. Your email changes then.",
+    "pendingExpiry": "Links expire after 1 hour. If yours has, request the change again.",
+    "approved": "Change approved. Now confirm from the link we sent to {{email}}.",
+    "changed": "Done — your email is now {{email}}.",
+    "linkFailed": "That link is invalid or has expired. Request the change again."
   },
   "connected": {
-    "title": "Connected accounts",
-    "description": "Methods that can sign you in. Add a social provider for a faster sign-in option."
+    "title": "Sign-in methods",
+    "description": "Ways you can sign in to this account."
   },
   "password": {
     "title": "Password",
@@ -92,7 +99,18 @@
     "new": "New password",
     "hint": "Avoid passwords you've used elsewhere. The meter below shows real-time strength.",
     "change": "Change password",
-    "changed": "Password changed. Other sessions have been signed out."
+    "changed": "Password changed. Other sessions have been signed out.",
+    "setTitle": "Set a password",
+    "setDescription": "Your account has no password yet. Add one to sign in with your email and password.",
+    "set": "Set password",
+    "added": "Password set. You can now sign in with it.",
+    "errors": {
+      "session_not_fresh": "For your security, sign in again before setting a password — your session is more than an hour old.",
+      "password_already_set": "This account already has a password.",
+      "password_too_short": "Use at least 12 characters.",
+      "password_too_long": "Use at most 128 characters.",
+      "unknown": "Could not set the password. Try again."
+    }
   },
   "signout": {
     "title": "Sign out",
@@ -106,6 +124,31 @@
     "dialogTitle": "Delete your account?",
     "dialogDescription": "We'll send a confirmation link to <strong>{{email}}</strong>. Click it to permanently delete your account. If you change your mind, ignore the email and nothing happens.",
     "confirm": "Send confirmation",
-    "confirmationSent": "Confirmation sent to {{email}}. Click the link within 1 hour to permanently delete."
+    "confirmationSent": "Confirmation sent to {{email}}. Click the link within 1 hour to permanently delete.",
+    "blockedTitle": "Make someone else an owner first",
+    "blocked": "You're the only owner of the organizations below. An organization can't be left without an owner: make another member an owner of each one, then come back.",
+    "manageMembers": "Manage members of {{name}}"
+  },
+  "deletion": {
+    "metaTitle": "Account deletion — interw",
+    "home": "Back to home",
+    "profile": "Go to your profile",
+    "deleted": {
+      "title": "Your account was deleted",
+      "body": "Your profile and your organization memberships are gone. Thank you for using interw."
+    },
+    "signin": {
+      "title": "Sign in to confirm the deletion",
+      "body": "For your safety, this link only works where you're signed in to the account being deleted. Sign in and we'll bring you straight back to finish.",
+      "action": "Sign in to continue"
+    },
+    "invalid": {
+      "title": "This link can't be used",
+      "body": "It has expired or was already used. Request a new one from your profile."
+    },
+    "blocked": {
+      "title": "Your account wasn't deleted",
+      "body": "You're the only owner of at least one organization. Make another member an owner, then request the deletion again."
+    }
   }
 }

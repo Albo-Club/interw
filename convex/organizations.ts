@@ -162,7 +162,7 @@ export const updateGeneral = mutation({
   },
 })
 
-async function countOwners(
+export async function countOwners(
   ctx: GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>,
   orgId: Id<'organizations'>,
 ): Promise<number> {

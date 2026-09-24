@@ -1,40 +1,30 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
-import { ConvexError } from 'convex/values'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './_generated/api'
+import { internal } from './_generated/api'
 import schema from './schema'
 
-// Better Auth resolves the caller through its own component, which
-// `convex-test` does not run; this stands in for "who is calling" only.
+// Better Auth runs in its own component, which `convex-test` does not load.
 vi.mock('./auth', () => ({
-  authComponent: {
-    safeGetAuthUser: async (ctx: {
-      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
-    }) => {
-      const identity = await ctx.auth.getUserIdentity()
-      return identity ? { _id: identity.subject } : null
-    },
-    getAuthUser: async (ctx: {
-      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
-    }) => {
-      const identity = await ctx.auth.getUserIdentity()
-      if (!identity) throw new Error('Unauthenticated')
-      return { _id: identity.subject }
-    },
-    registerRoutes: () => {},
-  },
+  authComponent: { registerRoutes: () => {} },
   createAuth: () => ({}),
 }))
 
-const sent = vi.hoisted(() => ({ count: 0 }))
+const sent = vi.hoisted(() => ({
+  count: 0,
+  last: null as null | { to: string; subject: string; html: string },
+}))
 vi.mock('./email', () => ({
   RESEND_FROM: 'interw <no-reply@example.test>',
   resend: {
-    sendEmail: () => {
+    sendEmail: (
+      _ctx: unknown,
+      mail: { to: string; subject: string; html: string },
+    ) => {
       sent.count += 1
+      sent.last = mail
       return Promise.resolve('provider-id-stub')
     },
   },
@@ -42,15 +32,13 @@ vi.mock('./email', () => ({
 
 const modules = import.meta.glob('./**/*.ts')
 
-describe('notifications.notifyPasswordChanged', () => {
+describe('notifications.passwordChanged', () => {
   beforeEach(() => {
     sent.count = 0
+    sent.last = null
   })
 
-  // Fingerprint: convex/notifications.ts:notifyPasswordChanged:no-rate-limit
-  // A public mutation that sends one email per call, bound to no actual
-  // password change: without a bucket, any signed-in user could loop it.
-  it('stops sending past the per-user budget', async () => {
+  async function withUser() {
     const t = convexTest(schema, modules)
     registerRateLimiter(t, 'rateLimiter')
     await t.run(async (ctx) => {
@@ -61,28 +49,50 @@ describe('notifications.notifyPasswordChanged', () => {
         createdAt: 0,
       })
     })
-    const asUser = t.withIdentity({ subject: 'ba_1' })
+    return t
+  }
 
-    const outcomes: Array<string> = []
+  it('mails the account holder, with a way to review their sessions', async () => {
+    const t = await withUser()
+    expect(
+      await t.mutation(internal.notifications.passwordChanged, {
+        betterAuthId: 'ba_1',
+      }),
+    ).toBe(true)
+    expect(sent.last?.to).toBe('r@acme.test')
+    expect(sent.last?.html).toContain('/app/me?tab=sessions')
+
+    await t.mutation(internal.notifications.passwordChanged, {
+      betterAuthId: 'ba_1',
+      added: true,
+    })
+    expect(sent.last?.subject).toContain('A password was added')
+  })
+
+  it('sends nothing for an account that no longer exists', async () => {
+    const t = await withUser()
+    expect(
+      await t.mutation(internal.notifications.passwordChanged, {
+        betterAuthId: 'ba_gone',
+      }),
+    ).toBe(false)
+    expect(sent.count).toBe(0)
+  })
+
+  // A burst of changes must not become a burst of emails — and since the
+  // change itself is already committed, going over budget must not throw.
+  it('stops sending past the per-user budget, without failing', async () => {
+    const t = await withUser()
+    const outcomes: Array<boolean> = []
     for (let i = 0; i < 10; i++) {
-      try {
-        await asUser.mutation(api.notifications.notifyPasswordChanged, {})
-        outcomes.push('sent')
-      } catch (error) {
-        expect(error).toBeInstanceOf(ConvexError)
-        expect((error as ConvexError<{ code: string; limit: string }>).data)
-          .toMatchObject({
-            code: 'rate_limited',
-            limit: 'passwordChangedNotify',
-          })
-        outcomes.push('limited')
-      }
+      outcomes.push(
+        await t.mutation(internal.notifications.passwordChanged, {
+          betterAuthId: 'ba_1',
+        }),
+      )
     }
-
-    // A real password change is rare; a burst of two covers a user who
-    // changes it twice in a row, and nothing beyond that is sent.
-    expect(outcomes.slice(0, 2)).toEqual(['sent', 'sent'])
-    expect(outcomes.slice(2).every((o) => o === 'limited')).toBe(true)
+    expect(outcomes.slice(0, 2)).toEqual([true, true])
+    expect(outcomes.slice(2).every((o) => !o)).toBe(true)
     expect(sent.count).toBe(2)
   })
 })

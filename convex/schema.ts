@@ -257,6 +257,21 @@ export default defineSchema({
   userPrefs: defineTable({
     userId: v.id('users'),
     lastOrgSlug: v.optional(v.string()),
+    // Where the last email change stands. Better Auth keeps nothing
+    // queryable between its steps: `approve` (link mailed to the current
+    // address), `verify` (link mailed to the new one), `done`. `at` is when
+    // the step began — its link expires an hour later.
+    emailChange: v.optional(
+      v.object({
+        newEmail: v.string(),
+        step: v.union(
+          v.literal('approve'),
+          v.literal('verify'),
+          v.literal('done'),
+        ),
+        at: v.number(),
+      }),
+    ),
   }).index('by_user', ['userId']),
 
   organizations: defineTable({

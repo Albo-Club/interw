@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "clearer-account-settings": {
+      "title": "Des réglages de compte plus clairs",
+      "body": "Votre profil suit désormais un changement d’e-mail étape par étape, affiche vos vraies méthodes de connexion et vous permet de définir un mot de passe si votre compte n’en a pas. Un lien de suppression de compte ouvert sur un autre appareil mène maintenant à une page claire, et un compte ne peut plus laisser une organisation sans propriétaire. Nous avons aussi renforcé les avis de sécurité : un e-mail vous prévient désormais aussi après une réinitialisation de mot de passe."
+    },
     "sturdier-interview": {
       "title": "Un entretien plus solide pour vos candidats",
       "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."

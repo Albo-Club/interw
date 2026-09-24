@@ -9,6 +9,14 @@
       "title": "Deleting a candidate reaches every copy",
       "body": "We hardened candidate data deletion: when a candidate’s data is erased, the copies kept by our email and assistant services go too — assistant conversations that read it immediately, email copies automatically within 30 days at most."
     },
+    "assistant-images-and-role-actions": {
+      "title": "Safer assistant replies, clearer role actions",
+      "body": "We hardened the assistant: images in its replies are no longer loaded, only described. And a role’s Share, Archive and Restore actions are now offered only to the people who can use them."
+    },
+    "abuse-hardening": {
+      "title": "Hardened against misuse",
+      "body": "We hardened the AI assistant, job-ad import, account notifications and shared report links against misuse, so they stay fast and fair for everyone."
+    },
     "assistant-in-europe": {
       "title": "The assistant runs in Europe too",
       "body": "The assistant that answers your questions about roles and candidates now runs on the same French provider as interview transcription and assessment. It reads reports in order to answer you, so what you ask it about a candidate is interview data like any other — and it belongs under the same guarantee: one provider, one destination, and nothing about a candidate leaving it."

@@ -9,6 +9,14 @@
       "title": "Supprimer un candidat efface chaque copie",
       "body": "Nous avons renforcé la suppression des données candidats : lorsqu’elles sont effacées, les copies conservées par nos services d’e-mail et d’assistant disparaissent aussi — immédiatement pour les conversations de l’assistant qui les ont lues, automatiquement sous 30 jours au plus pour les e-mails."
     },
+    "assistant-images-and-role-actions": {
+      "title": "Des réponses de l’assistant plus sûres, des actions plus claires",
+      "body": "Nous avons renforcé l’assistant : les images de ses réponses ne sont plus chargées, seulement décrites. Et les actions Partager, Archiver et Restaurer d’un poste ne sont plus proposées qu’aux personnes autorisées à les utiliser."
+    },
+    "abuse-hardening": {
+      "title": "Renforcé contre les usages abusifs",
+      "body": "Nous avons renforcé l’assistant IA, l’import d’offres d’emploi, les notifications de compte et les liens de partage de rapports contre les usages abusifs, pour qu’ils restent rapides et équitables pour tous."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

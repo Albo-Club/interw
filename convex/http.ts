@@ -1,6 +1,5 @@
 import { httpRouter } from 'convex/server'
 import { authComponent, createAuth } from './auth'
-import { streamOverHttp } from './chat'
 import { resend } from './email'
 import { httpAction } from './_generated/server'
 
@@ -23,12 +22,6 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     return await resend.handleResendEventWebhook(ctx, req)
   }),
-})
-
-http.route({
-  path: '/api/chat',
-  method: 'POST',
-  handler: streamOverHttp,
 })
 
 export default http

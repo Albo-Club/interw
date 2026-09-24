@@ -37,6 +37,7 @@ function ProjectsPage() {
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [sharing, setSharing] = useState<ProjectRow | null>(null)
 
+  const me = useConvexQuery(api.users.me)
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
   const projects = useConvexQuery(
     api.projects.list,
@@ -67,9 +68,21 @@ function ProjectsPage() {
   )
   const onShare = useCallback((project: ProjectRow) => setSharing(project), [])
 
-  const visible = (projects ?? []).filter((project) =>
-    filter === 'all' ? project.status !== 'archived' : project.status === filter,
-  )
+  // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
+  // spares a member an action the server would refuse.
+  const ready = me?.kind === 'ready' ? me : null
+  const myRole = ready?.orgs.find((o) => o.slug === orgSlug)?.role
+  const managesAll = myRole === 'admin' || myRole === 'owner'
+  const visible = (projects ?? [])
+    .filter((project) =>
+      filter === 'all'
+        ? project.status !== 'archived'
+        : project.status === filter,
+    )
+    .map((project) => ({
+      ...project,
+      canManage: managesAll || project.createdBy === ready?.user._id,
+    }))
   const hasAnyProject = (projects ?? []).length > 0
 
   return (

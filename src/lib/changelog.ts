@@ -3,6 +3,7 @@
 // add the entry here AND in src/locales/{en,fr}/changelog.json.
 export const CHANGELOG_ENTRIES = [
   { id: 'candidate-interview-hardening', date: '2026-09-24' },
+  { id: 'team-access-hardening', date: '2026-09-24' },
   { id: 'assistant-images-and-role-actions', date: '2026-09-24' },
   { id: 'abuse-hardening', date: '2026-09-24' },
   { id: 'assistant-in-europe', date: '2026-09-22' },

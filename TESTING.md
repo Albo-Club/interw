@@ -190,6 +190,7 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | U2 | Avatar > 20 MB                                          | Rejected (Convex cap)                                             |
 | U3 | `/app/acme/settings/general` → upload org logo          | Logo visible in top bar and member list                           |
 | U4 | Replace an existing logo                                | Old one replaced, no orphan (check `_storage`)                    |
+| U5 | As a plain member, call `files:setMyAvatar` with the org's logo id, or a colleague's avatar id | Refused `not_found`; the logo and the colleague's avatar are untouched. `organizations:bySlug` returns no `logoStorageId` |
 
 ## Level 4 — Account lifecycle (8 min)
 
@@ -343,6 +344,9 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions` on a closed role |
 | ID6c | Unresolved tokens never reach the limiter | Call `shares:recordView` with 40 random tokens | Each returns `null`; the share's `viewCount` is unchanged and no rate-limiter row is written for them — the bucket is keyed on the resolved share |
 | ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
+| ID8 | **Removal ends access** | Share a restricted role with member B, have B create another role, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed, and after re-invite does **not** see the restricted role (its share row went with the membership) |
+| ID9 | Restore is admin-tier | As a plain member who did not create it, restore an archived role | Refused (`insufficient_role`), stays archived. Owner, admin and the role's creator succeed — same tier as Archive |
+| ID10 | Deliverability respects restricted roles | As a member not named on a restricted role, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
 
 ## Interw E — Retention and erasure (10 min)
 

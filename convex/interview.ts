@@ -28,7 +28,7 @@ import {
   evaluateSessionGate,
   nextQuestionIndex,
 } from './lib/sessionState'
-import { looksLikeToken } from './lib/tokens'
+import { generateToken, looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
   presignGet,
@@ -537,3 +537,106 @@ export const finish = mutation({
 
 /** 12 months after completion, media is purged. See convex/retention.ts. */
 export const RETENTION_MS = 365 * 24 * 60 * 60 * 1000
+
+/* ───────────────────────────── End-to-end seed ─────────────────────────── */
+
+/** Resend's test sink: accepted and discarded, so a test run mails nobody. */
+const E2E_EMAIL = 'delivered@resend.dev'
+const E2E_ORG_SLUG = 'e2e-interview'
+
+/**
+ * A fresh candidate session on a fixed two-question role, for the browser
+ * test in `e2e/`. Internal: only a deploy key can run it (`npx convex run`),
+ * and a deploy key can already do everything this does. The organisation and
+ * role are created once and reused, so a run adds a session, not a tenant —
+ * and the test erases that session through the candidate's own erasure path
+ * when it is done.
+ */
+export const seedE2eSession = internalMutation({
+  args: {},
+  returns: v.object({ token: v.string() }),
+  handler: async (ctx) => {
+    const now = Date.now()
+    let org = await ctx.db
+      .query('organizations')
+      .withIndex('by_slug', (q) => q.eq('slug', E2E_ORG_SLUG))
+      .unique()
+    if (!org) {
+      const userId = await ctx.db.insert('users', {
+        betterAuthId: `seed:${E2E_ORG_SLUG}`,
+        email: E2E_EMAIL,
+        superAdmin: false,
+        createdAt: now,
+      })
+      const orgId = await ctx.db.insert('organizations', {
+        slug: E2E_ORG_SLUG,
+        name: 'E2E',
+        createdBy: userId,
+        createdAt: now,
+      })
+      await ctx.db.insert('organizationMembers', {
+        orgId,
+        userId,
+        role: 'owner',
+        joinedAt: now,
+      })
+      const projectId = await ctx.db.insert('projects', {
+        orgId,
+        slug: 'interview',
+        title: 'E2E interview',
+        status: 'active',
+        language: 'en',
+        introMode: 'none',
+        maxDurationMinutes: 5,
+        candidateFields: {
+          phone: { enabled: false, required: false },
+          linkedin: { enabled: false, required: false },
+          cv: { enabled: false, required: false },
+          coverLetter: { enabled: false, required: false },
+        },
+        createdBy: userId,
+        createdAt: now,
+        restricted: false,
+        sessionCount: 0,
+        completedSessionCount: 0,
+      })
+      for (const [orderIndex, content] of [
+        'Introduce yourself in one sentence.',
+        'Name one thing you are proud of.',
+      ].entries()) {
+        await ctx.db.insert('questions', {
+          orgId,
+          projectId,
+          orderIndex,
+          content,
+          maxResponseSeconds: 60,
+        })
+      }
+      org = await ctx.db.get('organizations', orgId)
+      if (!org) throw new ConvexError('not_found')
+    }
+
+    const project = await ctx.db
+      .query('projects')
+      .withIndex('by_org', (q) => q.eq('orgId', org._id))
+      .first()
+    if (!project) throw new ConvexError('not_found')
+
+    const token = generateToken()
+    await ctx.db.insert('sessions', {
+      orgId: org._id,
+      projectId: project._id,
+      accessToken: token,
+      candidateName: 'E2E Candidate',
+      candidateEmail: E2E_EMAIL,
+      status: 'pending',
+      lastQuestionIndex: 0,
+      invitedBy: org.createdBy,
+      invitedAt: now,
+    })
+    await ctx.db.patch('projects', project._id, {
+      sessionCount: project.sessionCount + 1,
+    })
+    return { token }
+  },
+})

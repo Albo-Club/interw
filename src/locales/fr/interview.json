@@ -89,6 +89,7 @@
     "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le depuis la barre d'adresse de votre navigateur, puis rechargez cette page.",
     "permissionHelp": "Cherchez l'icône de caméra dans la barre d'adresse de votre navigateur.",
     "noDevices": "Aucune caméra ni micro détecté. Branchez-en un, puis rechargez cette page.",
+    "busy": "Votre caméra ou votre micro est utilisé par une autre application, par exemple un appel vidéo. Fermez-la, puis réessayez.",
     "unsupported": "Ce navigateur ne peut pas enregistrer d'entretien vidéo. Ouvrez ce lien dans une version récente de Chrome, Safari, Firefox ou Edge — sur ordinateur si possible.",
     "inAppBrowser": "Vous semblez être dans un navigateur intégré à une application. L'enregistrement y échoue souvent. Ouvrez plutôt ce lien dans Safari ou Chrome.",
     "retry": "Vérifier à nouveau",
@@ -105,6 +106,7 @@
     "replayQuestion": "Réécouter",
     "readQuestion": "La question",
     "hint": "Un conseil",
+    "audioOnly": "Audio uniquement — votre caméra n'est pas disponible, cet entretien enregistre donc votre voix. Cela suffit pour participer.",
     "notRecording": "Enregistrement pas encore démarré",
     "startAnswer": "Commencer ma réponse",
     "recording": "Enregistrement",
@@ -112,25 +114,43 @@
     "timeLeft": "{{seconds}} s restantes",
     "timeUpSoon": "L'enregistrement s'arrête dans {{seconds}} secondes",
     "timeUp": "Le temps est écoulé pour cette question — votre réponse a été enregistrée.",
+    "interrupted": "Votre dernière réponse s'est arrêtée quand vous avez quitté la page ou qu'un appareil a été déconnecté. Ce que vous aviez dit a été enregistré.",
+    "videoLost": "Votre dernière réponse a été enregistrée, mais sa vidéo n'est pas passée — seul le son est arrivé.",
     "sending": "Enregistrement de votre réponse…",
     "sendingHint": "Gardez cette page ouverte.",
     "saved": "Réponse enregistrée",
     "retrying": "Problème de connexion — nouvelle tentative ({{attempt}} sur {{max}})",
+    "sendingPercent": "{{percent}} % envoyé",
     "sendFailed": {
       "title": "Votre dernière réponse n'a pas été enregistrée",
       "body": "Rien n'est perdu pour l'instant, mais le serveur est injoignable. Vérifiez votre connexion et réessayez.",
       "retry": "Réessayer",
       "skip": "Passer cette question et continuer"
     },
+    "recordingLost": {
+      "title": "Votre réponse n'a pas pu être enregistrée",
+      "body": "Rien n'a été capté, il n'y a donc rien à envoyer. Enregistrez à nouveau cette réponse.",
+      "rerecord": "L'enregistrer à nouveau"
+    },
     "networkPoor": "Votre connexion semble instable. L'enregistrement fonctionne toujours — l'envoi peut simplement prendre plus de temps.",
     "offline": "Vous êtes hors ligne. Votre réponse sera envoyée dès le retour de la connexion.",
     "next": "Question suivante",
     "finishInterview": "Terminer l'entretien",
     "finishing": "Finalisation…",
+    "review": {
+      "title": "Avant de terminer",
+      "allAnswered": "Votre réponse est enregistrée.",
+      "allAnswered_other": "Vos {{count}} réponses sont enregistrées.",
+      "missing": "{{count}} question n'a pas de réponse enregistrée :",
+      "missing_other": "{{count}} questions n'ont pas de réponse enregistrée :",
+      "question": "Question {{index}}",
+      "answer": "Y répondre maintenant",
+      "next": "Une fois l'entretien terminé, il est envoyé et vos réponses ne peuvent plus être modifiées."
+    },
     "leaveWarning": "Votre réponse est encore en cours d'envoi. Si vous quittez maintenant, elle sera perdue.",
     "crash": {
       "title": "Un problème est survenu sur cette page",
-      "body": "Vos réponses enregistrées sont intactes. Rechargez pour reprendre à la question {{index}}.",
+      "body": "Vos réponses enregistrées sont intactes. Rechargez pour reprendre là où vous en étiez.",
       "reload": "Recharger et continuer",
       "restart": "Revenir au début"
     }

@@ -193,6 +193,24 @@ describe('a failed save', () => {
     expect(again).toMatchObject({ phase: 'prompt', index: 1, error: null })
   })
 
+  it('never announces as saved an answer that was not', () => {
+    const lost = run([
+      boot(0),
+      { type: 'recordingStarted' },
+      { type: 'stopRequested', reason: 'interrupted' },
+      { type: 'stopFailed', error: 'x' },
+    ])
+    expect(lost.stopReason).toBeNull()
+
+    const skipped = run([
+      boot(0),
+      ...record('timeUp'),
+      { type: 'saveFailed', error: 'x' },
+      { type: 'skip', answered: [false, false, false, false] },
+    ])
+    expect(skipped).toMatchObject({ stopReason: null, videoLost: false })
+  })
+
   it('does not offer to record again while bytes are still held', () => {
     const failed = run([
       boot(0),

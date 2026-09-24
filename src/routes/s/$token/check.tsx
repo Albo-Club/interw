@@ -10,8 +10,10 @@ import type { MicVerdict } from '~/lib/media/devices'
 import { fireAndForget } from '~/lib/fire-and-forget'
 import {
   assessMicLevels,
+  classifyMediaError,
   detectBrowserSupport,
   levelFromTimeDomain,
+  openInterviewStream,
 } from '~/lib/media/devices'
 import { detectRecorderSupport } from '~/lib/media/recorder'
 import { Button } from '~/components/ui/button'
@@ -26,14 +28,24 @@ import {
 } from '~/components/ui/select'
 import { Label } from '~/components/ui/label'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
-import { CandidateShell } from '~/components/candidate/CandidateShell'
+import {
+  CandidateShell,
+  candidateAction,
+} from '~/components/candidate/CandidateShell'
 import { cn } from '~/lib/utils'
 
 export const Route = createFileRoute('/s/$token/check')({
   component: DeviceCheck,
 })
 
-type Phase = 'starting' | 'live' | 'denied' | 'nodevice' | 'unsupported'
+type Phase =
+  | 'starting'
+  | 'live'
+  | 'denied'
+  | 'busy'
+  | 'nodevice'
+  | 'failed'
+  | 'unsupported'
 
 function DeviceCheck() {
   const { t } = useTranslation(['interview', 'common'])
@@ -49,6 +61,7 @@ function DeviceCheck() {
   const [microphones, setMicrophones] = useState<Array<MediaDeviceInfo>>([])
   const [cameraId, setCameraId] = useState<string>('')
   const [micId, setMicId] = useState<string>('')
+  const [audioOnly, setAudioOnly] = useState(false)
   const [level, setLevel] = useState(0)
   const [verdict, setVerdict] = useState<MicVerdict>('silent')
 
@@ -76,11 +89,15 @@ function DeviceCheck() {
     setPhase('starting')
     levelsRef.current = []
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: cameraId ? { deviceId: { exact: cameraId } } : true,
-        audio: micId ? { deviceId: { exact: micId } } : true,
+      // The very call the interview makes, so what is checked here is what
+      // will be recorded — the audio-only fallback included.
+      const { stream, audioOnly: withoutCamera } = await openInterviewStream({
+        cameraId: cameraId || undefined,
+        micId: micId || undefined,
+        video: recorderSupport.video !== null,
       })
       streamRef.current = stream
+      setAudioOnly(withoutCamera)
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         // Autoplay rejection is expected, not an error: browsers refuse it
@@ -120,16 +137,23 @@ function DeviceCheck() {
       rafRef.current = requestAnimationFrame(tick)
       setPhase('live')
     } catch (error) {
-      const name = error instanceof Error ? error.name : ''
-      const next = name === 'NotFoundError' ? 'nodevice' : 'denied'
-      setPhase(next)
+      const failure = classifyMediaError(error)
+      setPhase(
+        failure === 'permissionDenied'
+          ? 'denied'
+          : failure === 'busy'
+            ? 'busy'
+            : failure === 'noDevices'
+              ? 'nodevice'
+              : 'failed',
+      )
       fireAndForget(logEvent({
         token,
         kind: 'device_check_failed',
-        detail: name || 'unknown',
+        detail: error instanceof Error ? error.name : 'unknown',
       }), 'candidate event log')
     }
-  }, [cameraId, micId, logEvent, teardown, token])
+  }, [cameraId, micId, recorderSupport.video, logEvent, teardown, token])
 
   useEffect(() => {
     if (!support.usable) {
@@ -167,7 +191,12 @@ function DeviceCheck() {
   const proceed = () => {
     fireAndForget(logEvent({ token, kind: 'device_check_passed' }), 'candidate event log')
     teardown()
-    void navigate({ to: '/s/$token/interview', params: { token } })
+    // The devices chosen here are the ones the interview opens.
+    void navigate({
+      to: '/s/$token/interview',
+      params: { token },
+      search: { camera: cameraId || undefined, mic: micId || undefined },
+    })
   }
 
   return (
@@ -197,13 +226,21 @@ function DeviceCheck() {
           </Alert>
         ) : (
           <>
-            <div className="bg-muted relative aspect-video w-full overflow-hidden rounded-lg">
+            <div className="bg-muted relative aspect-[3/4] w-full overflow-hidden rounded-lg sm:aspect-video">
               <video
                 ref={videoRef}
                 muted
                 playsInline
                 className="size-full scale-x-[-1] object-cover"
               />
+              {phase === 'live' && audioOnly && (
+                <div className="bg-muted text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-sm">
+                  <Mic className="size-8" />
+                  <p className="max-w-sm leading-relaxed">
+                    {t('interview:run.audioOnly')}
+                  </p>
+                </div>
+              )}
               {phase !== 'live' && (
                 <div className="text-muted-foreground absolute inset-0 flex items-center justify-center text-sm">
                   {phase === 'starting'
@@ -223,9 +260,19 @@ function DeviceCheck() {
                 </AlertDescription>
               </Alert>
             )}
+            {phase === 'busy' && (
+              <Alert variant="destructive">
+                <AlertTitle>{t('interview:device.busy')}</AlertTitle>
+              </Alert>
+            )}
             {phase === 'nodevice' && (
               <Alert variant="destructive">
                 <AlertTitle>{t('interview:device.noDevices')}</AlertTitle>
+              </Alert>
+            )}
+            {phase === 'failed' && (
+              <Alert variant="destructive">
+                <AlertTitle>{t('interview:errors.unexpected')}</AlertTitle>
               </Alert>
             )}
 
@@ -283,6 +330,7 @@ function DeviceCheck() {
               would be worse than a quiet recording. */}
           <Button
             size="lg"
+            className={candidateAction}
             onClick={proceed}
             disabled={!recorderSupport.usable}
           >
@@ -295,7 +343,12 @@ function DeviceCheck() {
               t('interview:device.continueAnyway')
             )}
           </Button>
-          <Button variant="outline" size="lg" onClick={() => void startPreview()}>
+          <Button
+            variant="outline"
+            size="lg"
+            className={candidateAction}
+            onClick={() => void startPreview()}
+          >
             {t('interview:device.retry')}
           </Button>
         </div>
@@ -305,11 +358,13 @@ function DeviceCheck() {
 }
 
 function MicMeter({ level, verdict }: { level: number; verdict: MicVerdict }) {
+  const { t } = useTranslation('interview')
   const percent = Math.min(100, Math.round(level * 320))
   return (
     <div
       className="bg-muted h-3 w-full overflow-hidden rounded-full"
       role="meter"
+      aria-label={t('device.micLabel')}
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}

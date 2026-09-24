@@ -178,6 +178,7 @@ export function interviewReducer(
             phase: 'saveFailed',
             hasRecording: false,
             error: event.error,
+            stopReason: null,
           }
         : state
 
@@ -215,11 +216,14 @@ export function interviewReducer(
         ? { ...state, phase: 'prompt', error: null, progress: null }
         : state
 
+    // Nothing was saved, so nothing may be announced as saved.
     case 'skip':
       return state.phase === 'saveFailed'
         ? {
             ...moveTo(state, nextOpenQuestion(event.answered, state.index)),
             error: null,
+            stopReason: null,
+            videoLost: false,
           }
         : state
 
@@ -227,7 +231,12 @@ export function interviewReducer(
       return (state.phase === 'review' || state.phase === 'finishFailed') &&
         event.index >= 0 &&
         event.index < state.total
-        ? { ...moveTo(state, event.index), error: null, stopReason: null }
+        ? {
+            ...moveTo(state, event.index),
+            error: null,
+            stopReason: null,
+            videoLost: false,
+          }
         : state
 
     case 'finishRequested':

@@ -3,6 +3,13 @@ import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
 
 /**
+ * For every button a candidate presses. `lg` is 40 px and `sm` 32 px, and the
+ * two smallest used to be "Try again" and "Skip" — the buttons that decide
+ * whether an answer is saved. A thumb needs 44 px, and no double-tap zoom.
+ */
+export const candidateAction = 'min-h-11 touch-manipulation'
+
+/**
  * The frame every candidate screen sits in.
  *
  * Deliberately almost empty: no sidebar, no menu, no navigation of any kind.

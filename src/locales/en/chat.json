@@ -45,5 +45,7 @@
   "errors": {
     "rate_limited": "Slow down — too many messages",
     "default": "Could not send message"
-  }
+  },
+  "imageNotShown": "[Image not shown]",
+  "imageNotShownAlt": "[Image not shown: {{alt}}]"
 }

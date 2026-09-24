@@ -1076,6 +1076,10 @@ existing `revokeSessionsOnPasswordReset: true` covers the takeover-mitigation
 side (all sessions revoked, user must re-auth) so a hijacker is locked out;
 the missing piece is the *informational* email to the rightful owner.
 
+The mutation is public and cannot tell a real change from a replay, so it
+consumes the per-user `passwordChangedNotify` bucket (3/h, burst 2) before
+sending; the client's fire-and-forget call absorbs a `rate_limited` silently.
+
 Two paths if/when this matters:
 1. Add `databaseHooks.account.update.after(account)` in `convex/auth.ts` and
    gate on `providerId === 'credential'`. Risk: BA's `databaseHooks` type
@@ -1902,6 +1906,16 @@ unchanged. Two traps:
 Responses are requested with `Accept-Encoding: identity` and not decompressed,
 so the 2 MiB cap counts what is read; a server that compresses anyway yields
 unreadable text and the import fails as too thin.
+
+### Its other neighbour: parse work must be linear, not just capped
+
+The fetcher caps a page at 2 MiB; that bounds the transfer, not the parse. A
+lazy `open[\s\S]*?close` regex, or a tag class like `[^>]`, rescans to the end
+of the input from every unclosed opener — 2 MiB of `<` cost an extrapolated
+~30 min of CPU in one action (audit 2026-09-22,
+`convex/lib/htmlText.ts:htmlToText:quadratic-regex-over-uncapped-body`).
+`htmlText.ts` uses `[^<>]` classes and a single-pass span scan (`spans()`);
+`htmlText.test.ts` fails if either is widened back.
 
 Note that `errors.page_unreachable` still offers to let them "paste the text
 instead", which no screen in the wizard does. Either build it or drop the

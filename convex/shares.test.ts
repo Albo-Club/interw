@@ -1,8 +1,11 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
+import { ConvexError } from 'convex/values'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from './_generated/api'
+import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -189,5 +192,73 @@ describe('shares.view', () => {
       const result = await t.query(api.shares.view, { token, now: NOW })
       expect(result).toEqual({ state: 'not_found', report: null })
     }
+  })
+})
+
+describe('shares.recordView', () => {
+  let t: ReturnType<typeof newTest>
+  let s: Seed
+
+  beforeEach(async () => {
+    t = newTest()
+    registerRateLimiter(t, 'rateLimiter')
+    s = await seed(t)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Fingerprint: convex/shares.ts:recordView:limiter-key-before-token-check
+  // The limiter ran on the raw argument before the token was resolved, so an
+  // anonymous caller chose the keys written to the limiter's store. An
+  // unresolved token now fails like every other one in this file — nothing
+  // counted, nothing written, nothing thrown — before the limiter is reached.
+  it('never reaches the limiter with a token that does not resolve', async () => {
+    const limit = vi.spyOn(rateLimiter, 'limit')
+    const revoked = 'r'.repeat(43)
+    await t.run(async (ctx) => {
+      const share = await ctx.db.get('reportShares', s.shareId)
+      await ctx.db.insert('reportShares', {
+        orgId: share!.orgId,
+        reportId: share!.reportId,
+        token: revoked,
+        createdBy: share!.createdBy,
+        viewCount: 0,
+        createdAt: NOW - DAY,
+        revokedAt: NOW - DAY,
+      })
+    })
+
+    for (const token of ['x'.repeat(43), '', 'nope', '../../reports', revoked]) {
+      // Well past the bucket's capacity: a limiter keyed on the argument
+      // would start throwing here.
+      for (let i = 0; i < 40; i++) {
+        expect(await t.mutation(api.shares.recordView, { token })).toBeNull()
+      }
+    }
+    expect(limit).not.toHaveBeenCalled()
+  })
+
+  it('still counts and rate-limits views of a live link', async () => {
+    const limit = vi.spyOn(rateLimiter, 'limit')
+    let limited = 0
+    for (let i = 0; i < 35; i++) {
+      try {
+        await t.mutation(api.shares.recordView, { token: s.token })
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConvexError)
+        expect((error as ConvexError<{ code: string }>).data).toMatchObject({
+          code: 'rate_limited',
+          limit: 'shareView',
+        })
+        limited += 1
+      }
+    }
+    expect(limited).toBe(5)
+    const share = await t.run((ctx) => ctx.db.get('reportShares', s.shareId))
+    expect(share?.viewCount).toBe(30)
+    expect(share?.lastViewedAt).toBeTypeOf('number')
+    expect(limit).toHaveBeenCalledTimes(35)
   })
 })

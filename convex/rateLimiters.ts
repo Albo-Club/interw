@@ -56,7 +56,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   candidateRead: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 60 },
   // Candidate writes, keyed by token: consent, profile, segment bookkeeping.
   candidateWrite: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
-  // Report share views, keyed by share token.
+  // Report share views, keyed by the resolved share, never the raw token.
   shareView: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
 })
 

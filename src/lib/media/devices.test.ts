@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  DARK_FRAME_BRIGHTNESS,
   assessMicLevels,
   classifyMediaError,
   detectBrowserSupport,
+  frameBrightness,
   isInAppBrowser,
   levelFromTimeDomain,
   openInterviewStream,
@@ -225,5 +227,24 @@ describe('openInterviewStream', () => {
       audio: expect.anything(),
       video: false,
     })
+  })
+})
+
+describe('frameBrightness', () => {
+  const frame = (r: number, g: number, b: number, pixels = 4) =>
+    new Uint8ClampedArray(Array.from({ length: pixels }, () => [r, g, b, 255]).flat())
+
+  it('reads a covered lens as dark', () => {
+    expect(frameBrightness(frame(3, 3, 3))).toBeLessThan(DARK_FRAME_BRIGHTNESS)
+  })
+
+  it('reads a dim room as an image', () => {
+    expect(frameBrightness(frame(40, 35, 30))).toBeGreaterThan(
+      DARK_FRAME_BRIGHTNESS,
+    )
+  })
+
+  it('reads an empty frame as dark', () => {
+    expect(frameBrightness(new Uint8ClampedArray())).toBe(0)
   })
 })

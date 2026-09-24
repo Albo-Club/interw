@@ -108,6 +108,24 @@ export function assessMicLevels(levels: ReadonlyArray<number>): MicVerdict {
   return 'good'
 }
 
+/**
+ * Below this mean brightness (0..255) a frame is black: a lens cover, a
+ * privacy shutter, a laptop lid half closed. A dim room reads well above it.
+ */
+export const DARK_FRAME_BRIGHTNESS = 12
+
+/** Mean brightness of an RGBA frame, 0..255 — what `getImageData` returns. */
+export function frameBrightness(rgba: Uint8ClampedArray): number {
+  const pixels = rgba.length / 4
+  if (pixels === 0) return 0
+  let sum = 0
+  for (let i = 0; i < rgba.length; i += 4) {
+    // Rec. 601 luma: what the eye calls bright, not the plain channel mean.
+    sum += 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]
+  }
+  return sum / pixels
+}
+
 /** What a refused camera or microphone means for the candidate. */
 export type MediaFailure = 'permissionDenied' | 'busy' | 'noDevices'
 

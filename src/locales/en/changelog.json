@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "interview-survives-crash": {
+      "title": "An answer survives a crash, and candidates can hear themselves first",
+      "body": "While a candidate answers, the recording is now also kept on their device: if the page crashes or is closed, reopening the link sends the answer instead of losing it. They also see a live microphone meter while they talk — with a warning if we stop hearing them — and the check screen tells them when their camera shows only black and lets them record a short test to hear themselves before starting."
+    },
     "recordings-play-everywhere": {
       "title": "Answers that play everywhere, and a phone that stays awake",
       "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included, so jumping to a quote in a report lands where it should. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."

@@ -52,6 +52,19 @@ export const AUDIO_BITS_PER_SECOND = 64_000
 export const STOP_TIMEOUT_MS = 10_000
 
 /**
+ * How often each recorder hands over what it has. Every chunk is copied off
+ * the tab (see takeStore.ts) so a crash costs seconds, not the answer.
+ */
+export const CHUNK_INTERVAL_MS = 2_000
+
+/**
+ * A recorder that has produced no audio after this long never will. Found
+ * here, the candidate hears about it seconds in — not after two minutes of
+ * talking into an encoder that was writing nothing.
+ */
+export const NO_DATA_TIMEOUT_SECONDS = 6
+
+/**
  * First supported type from a preference list, or null when the browser
  * supports none of them — which is a blocking condition the candidate must be
  * told about before they start, not discovered when they stop recording.
@@ -94,6 +107,18 @@ export type Recording = {
 /** Emitted every second while recording, for the countdown and the meter. */
 export type RecorderTick = { elapsedSeconds: number }
 
+export type SegmentRecorderHooks = {
+  onTick?: (tick: RecorderTick) => void
+  /** An encoder that failed, or never produced audio. It has stopped, or
+   *  will produce nothing more: the caller saves what there is rather than
+   *  find out at the end. */
+  onFailure?: () => void
+  /** What is being recorded, once it is: the video only if it really is. */
+  onStart?: (mimeTypes: { audio: string; video: string | null }) => void
+  /** Each chunk as it is recorded, to be kept somewhere a crash cannot reach. */
+  onChunk?: (track: 'audio' | 'video', chunk: Blob) => void
+}
+
 type RecorderState = 'idle' | 'recording' | 'stopping' | 'stopped'
 
 /**
@@ -116,10 +141,7 @@ export class SegmentRecorder {
   constructor(
     private readonly stream: MediaStream,
     private readonly support: RecorderSupport,
-    private readonly onTick?: (tick: RecorderTick) => void,
-    /** An encoder that fails mid-answer stops on its own; the caller must
-     *  save what it has rather than find out at the end. */
-    private readonly onFailure?: () => void,
+    private readonly hooks: SegmentRecorderHooks = {},
   ) {}
 
   get isRecording(): boolean {
@@ -136,34 +158,52 @@ export class SegmentRecorder {
     // A separate MediaStream over the same track — not a clone of the stream,
     // which would also carry the video track into the "audio" file.
     const audioOnly = new MediaStream(audioTracks)
-    this.audioRecorder = new MediaRecorder(audioOnly, {
+    this.audioRecorder = this.record('audio', audioOnly, {
       mimeType: this.support.audio,
       audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
     })
-    this.audioRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) this.audioChunks.push(event.data)
-    }
-    this.audioRecorder.onerror = () => this.onFailure?.()
-    this.audioRecorder.start()
 
     if (this.support.video && this.stream.getVideoTracks().length > 0) {
-      this.videoRecorder = new MediaRecorder(this.stream, {
+      this.videoRecorder = this.record('video', this.stream, {
         mimeType: this.support.video,
         videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       })
-      this.videoRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) this.videoChunks.push(event.data)
-      }
-      this.videoRecorder.onerror = () => this.onFailure?.()
-      this.videoRecorder.start()
     }
+    this.hooks.onStart?.({
+      audio: this.support.audio,
+      video: this.videoRecorder ? this.support.video : null,
+    })
 
     this.startedAt = Date.now()
     this.state = 'recording'
     this.tickTimer = setInterval(() => {
-      this.onTick?.({ elapsedSeconds: this.elapsedSeconds() })
+      const elapsedSeconds = this.elapsedSeconds()
+      this.hooks.onTick?.({ elapsedSeconds })
+      if (
+        elapsedSeconds === NO_DATA_TIMEOUT_SECONDS &&
+        this.audioChunks.length === 0
+      ) {
+        this.hooks.onFailure?.()
+      }
     }, 1000)
+  }
+
+  private record(
+    track: 'audio' | 'video',
+    stream: MediaStream,
+    options: MediaRecorderOptions,
+  ): MediaRecorder {
+    const chunks = track === 'audio' ? this.audioChunks : this.videoChunks
+    const recorder = new MediaRecorder(stream, options)
+    recorder.ondataavailable = (event) => {
+      if (event.data.size === 0) return
+      chunks.push(event.data)
+      this.hooks.onChunk?.(track, event.data)
+    }
+    recorder.onerror = () => this.hooks.onFailure?.()
+    recorder.start(CHUNK_INTERVAL_MS)
+    return recorder
   }
 
   elapsedSeconds(): number {

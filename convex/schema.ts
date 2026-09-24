@@ -153,6 +153,7 @@ export const sessionEventKindValidator = v.union(
   v.literal('upload_failed'),
   v.literal('network_degraded'),
   v.literal('interview_resumed'),
+  v.literal('recording_recovered'),
   v.literal('render_error'),
 )
 

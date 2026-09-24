@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   AUDIO_MIME_PREFERENCES,
+  CHUNK_INTERVAL_MS,
+  NO_DATA_TIMEOUT_SECONDS,
   STOP_TIMEOUT_MS,
   SegmentRecorder,
   VIDEO_MIME_PREFERENCES,
@@ -103,7 +105,10 @@ class FakeRecorder {
     FakeRecorder.instances.push(this)
   }
 
-  start() {
+  timeslice: number | undefined
+
+  start(timeslice?: number) {
+    this.timeslice = timeslice
     this.state = 'recording'
   }
 
@@ -163,14 +168,56 @@ describe('SegmentRecorder', () => {
 
   it('reports an encoder that fails mid-answer', () => {
     const onFailure = vi.fn()
-    new SegmentRecorder(
-      fakeStream({ video: true }),
-      bothFormats,
-      undefined,
+    new SegmentRecorder(fakeStream({ video: true }), bothFormats, {
       onFailure,
-    ).start()
+    }).start()
     FakeRecorder.instances[1].onerror?.()
     expect(onFailure).toHaveBeenCalledOnce()
+  })
+
+  it('hands over chunks as they are recorded', () => {
+    const onChunk = vi.fn()
+    new SegmentRecorder(fakeStream({ video: true }), bothFormats, {
+      onChunk,
+    }).start()
+    const [audio, video] = FakeRecorder.instances
+    expect(audio.timeslice).toBe(CHUNK_INTERVAL_MS)
+    audio.ondataavailable?.({ data: new Blob(['a']) })
+    video.ondataavailable?.({ data: new Blob(['v']) })
+    video.ondataavailable?.({ data: new Blob([]) })
+    expect(onChunk.mock.calls.map(([track]) => track)).toEqual([
+      'audio',
+      'video',
+    ])
+  })
+
+  it('says what it records once it starts, video only if there is some', () => {
+    const onStart = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onStart,
+    }).start()
+    expect(onStart).toHaveBeenCalledWith({ audio: 'audio/webm', video: null })
+  })
+
+  it('reports an encoder that produces no audio, seconds in', async () => {
+    vi.useFakeTimers()
+    const onFailure = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onFailure,
+    }).start()
+    await vi.advanceTimersByTimeAsync(NO_DATA_TIMEOUT_SECONDS * 1000)
+    expect(onFailure).toHaveBeenCalledOnce()
+  })
+
+  it('stays quiet about an encoder that is writing', async () => {
+    vi.useFakeTimers()
+    const onFailure = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onFailure,
+    }).start()
+    FakeRecorder.instances[0].ondataavailable?.({ data: new Blob(['a']) })
+    await vi.advanceTimersByTimeAsync(NO_DATA_TIMEOUT_SECONDS * 2000)
+    expect(onFailure).not.toHaveBeenCalled()
   })
 
   it('records audio alone from a stream with no camera', async () => {

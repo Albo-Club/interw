@@ -1734,6 +1734,32 @@ PUT succeeded, and every player picks its source through `playbackMedia`
 (`convex/lib/objectStore.ts`) rather than `videoKey ?? audioKey`. Rows older
 than the flag have it absent and are taken as uploaded.
 
+## An answer is copied to IndexedDB while it records
+
+`SegmentRecorder` starts both recorders with a 2 s timeslice and hands every
+chunk to `onChunk`; the runner writes it to `src/lib/media/takeStore.ts`
+(IndexedDB `interw-takes`). A reload finds the take for the question it
+resumes on and sends it — the same attempt, not a second one. The in-memory
+chunks are still what a normal `stop()` uploads, after the final flush: the
+IndexedDB copy is only ever read after a reload.
+
+Traps worth knowing:
+
+- **Best effort, never blocking.** Safari private browsing and a full disk
+  refuse IndexedDB; every write is `fireAndForget`, and recording works from
+  memory exactly as before. Do not make a write awaited on the recording path.
+- **It is candidate video on the candidate's device.** A take is deleted when
+  the server holds the answer, on skip, on finish, when the candidate erases
+  their data from this browser, and after 24 h whoever it belongs to (a shared
+  computer must not keep it). Erasure from anywhere else cannot reach it —
+  that is why the 24 h cut exists.
+- **A crashed take has no final flush.** Concatenated WebM/fMP4 chunks still
+  play; the last ≤ 2 s are lost, and the duration is the time between the
+  take's start and its last chunk.
+- **A recorder with no audio after 6 s never will.** The tick fires
+  `onFailure`, the runner stops the take, and the empty-take path offers to
+  record again — seconds in, instead of after two minutes.
+
 ## Video is recorded as MP4 wherever the browser can
 
 `VIDEO_MIME_PREFERENCES` puts H.264/AAC MP4 first (Chrome and Edge 126+,

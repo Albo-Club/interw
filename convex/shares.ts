@@ -29,7 +29,7 @@ import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
 import { normalizeWeights } from './lib/weights'
-import { presignGet } from './lib/objectStore'
+import { playbackMedia, presignGet } from './lib/objectStore'
 import { consumeLimit } from './rateLimiters'
 import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -309,8 +309,8 @@ export const resolveSharedMedia = internalQuery({
       .withIndex('by_session', (q) => q.eq('sessionId', report.sessionId))
       .collect()
     return segments.flatMap((segment) => {
-      const key = segment.videoKey ?? segment.audioKey
-      return key ? [{ segmentId: segment._id, key }] : []
+      const media = playbackMedia(segment)
+      return media ? [{ segmentId: segment._id, key: media.key }] : []
     })
   },
 })

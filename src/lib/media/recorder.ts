@@ -11,19 +11,26 @@
  * Browser APIs are injected so the selection logic can be tested without one.
  */
 
-/** In preference order. WebM everywhere; MP4 is the Safari branch. */
+/**
+ * In preference order. MP4 (H.264/AAC) wherever the browser can record it —
+ * Chrome and Edge 126+, Safari — because it is what every recruiter's browser
+ * plays, iPhones included, and it seeks: MediaRecorder's WebM carries no
+ * duration and no cues, so "jump to the quote" landed wherever the browser
+ * guessed. WebM stays as the Firefox branch, which records nothing else.
+ */
 export const VIDEO_MIME_PREFERENCES = [
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4;codecs=avc1.42E01F,mp4a.40.2',
+  'video/mp4',
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
   'video/webm',
-  'video/mp4',
 ] as const
 
 export const AUDIO_MIME_PREFERENCES = [
   'audio/webm;codecs=opus',
   'audio/webm',
   'audio/mp4',
-  'audio/mpeg',
 ] as const
 
 export type MimeSupportCheck = (mimeType: string) => boolean
@@ -110,6 +117,9 @@ export class SegmentRecorder {
     private readonly stream: MediaStream,
     private readonly support: RecorderSupport,
     private readonly onTick?: (tick: RecorderTick) => void,
+    /** An encoder that fails mid-answer stops on its own; the caller must
+     *  save what it has rather than find out at the end. */
+    private readonly onFailure?: () => void,
   ) {}
 
   get isRecording(): boolean {
@@ -133,6 +143,7 @@ export class SegmentRecorder {
     this.audioRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) this.audioChunks.push(event.data)
     }
+    this.audioRecorder.onerror = () => this.onFailure?.()
     this.audioRecorder.start()
 
     if (this.support.video && this.stream.getVideoTracks().length > 0) {
@@ -144,6 +155,7 @@ export class SegmentRecorder {
       this.videoRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) this.videoChunks.push(event.data)
       }
+      this.videoRecorder.onerror = () => this.onFailure?.()
       this.videoRecorder.start()
     }
 
@@ -244,7 +256,11 @@ export class SingleRecorder {
   ) {}
 
   start(): void {
-    this.recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType })
+    this.recorder = new MediaRecorder(this.stream, {
+      mimeType: this.mimeType,
+      videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
+      audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+    })
     this.recorder.ondataavailable = (event) => {
       if (event.data.size > 0) this.chunks.push(event.data)
     }

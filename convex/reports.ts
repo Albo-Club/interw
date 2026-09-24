@@ -17,7 +17,7 @@ import { recruiterDecisionValidator } from './schema'
 import { requireOrgMember } from './lib/auth'
 import { requireProjectAccess } from './lib/projectAccess'
 import { normalizeWeights } from './lib/weights'
-import { presignGet } from './lib/objectStore'
+import { playbackMedia, presignGet } from './lib/objectStore'
 import type { Doc, Id } from './_generated/dataModel'
 
 const NOTE_MAX = 4_000
@@ -118,7 +118,7 @@ export const forSession = query({
             durationSeconds:
               segment.measuredSeconds ?? segment.durationSeconds ?? null,
             uploadState: segment.uploadState,
-            hasVideo: segment.videoKey !== undefined,
+            hasVideo: playbackMedia(segment)?.kind === 'video',
             transcript: transcript?.text ?? null,
           }
         }),
@@ -198,11 +198,14 @@ export const resolveSessionMedia = internalQuery({
       .collect()
     return {
       candidateName: session.candidateName,
-      segments: segments.map((segment) => ({
-        segmentId: segment._id,
-        key: segment.videoKey ?? segment.audioKey ?? null,
-        kind: segment.videoKey ? ('video' as const) : ('audio' as const),
-      })),
+      segments: segments.map((segment) => {
+        const media = playbackMedia(segment)
+        return {
+          segmentId: segment._id,
+          key: media?.key ?? null,
+          kind: media?.kind ?? ('audio' as const),
+        }
+      }),
       cvKey: session.cvKey ?? null,
       coverLetterKey: session.coverLetterKey ?? null,
     }

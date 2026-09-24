@@ -1727,10 +1727,34 @@ the report needs was already in the bucket. A failed video is logged as an
 
 The trap is on the reading side: such a segment still carries its `videoKey`
 (written before the upload, which is what keeps erasure exact), and no object
-sits behind it. A player given a signed URL for it gets a 404 that looks like
-a signing bug. There is no `videoUploaded` column yet — adding one is a schema
-change, outside the candidate surface — so until then, treat a failed video
-load on a segment as "this answer is audio only", not as an error.
+sits behind it — a signed URL for it is a 404 that looks like a signing bug.
+So a key is not proof of an object: `reserveSegment` writes
+`videoUploaded: false` next to the key, `markVideoUploaded` flips it once the
+PUT succeeded, and every player picks its source through `playbackMedia`
+(`convex/lib/objectStore.ts`) rather than `videoKey ?? audioKey`. Rows older
+than the flag have it absent and are taken as uploaded.
+
+## Video is recorded as MP4 wherever the browser can
+
+`VIDEO_MIME_PREFERENCES` puts H.264/AAC MP4 first (Chrome and Edge 126+,
+Safari) and keeps WebM only as the Firefox branch. Two reasons, both on the
+recruiter's side, not the candidate's:
+
+- **MediaRecorder's WebM has no duration and no cues.** The player reports an
+  unknown duration and seeks wherever it guesses, which quietly breaks "jump
+  to the quote". Its MP4 is fragmented, which carries its own timing.
+- **WebM playback on Safari, iOS above all, varies by version.** A recruiter on
+  an iPhone could not always watch an answer recorded in Chrome.
+
+The **audio** file is deliberately left alone: WebM/Opus on Chrome and
+Firefox, M4A on Safari. It is what gets transcribed, and the transcription
+path already takes both — changing it would risk the answer for no gain.
+The transcription call labels the file with `mimeTypeForKey(key)`; it used to
+hard-code `audio/webm`, which was wrong for every Safari answer.
+
+Firefox answers therefore stay WebM, with the seeking problem above, until
+something re-muxes them server-side. Plain `video/mp4` stays in the list
+after the codec-qualified entries for a Safari that answers no codec query.
 
 ## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
 

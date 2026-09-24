@@ -69,6 +69,7 @@ function InterviewRunner() {
   const start = useConvexMutation(api.interview.start)
   const requestUpload = useConvexAction(api.interview.requestSegmentUpload)
   const markUploaded = useConvexMutation(api.interview.markSegmentUploaded)
+  const markVideoUploaded = useConvexMutation(api.interview.markVideoUploaded)
   const markFailed = useConvexMutation(api.interview.markSegmentFailed)
   const logEvent = useConvexMutation(api.interview.logEvent)
   const finish = useConvexMutation(api.interview.finish)
@@ -138,6 +139,33 @@ function InterviewRunner() {
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [state.phase])
+
+  /* ── A phone left untouched locks its screen within a minute — mid-answer,
+        and a locked screen reads as leaving the page, which ends the take.
+        The browser drops the lock whenever the page is hidden, so it is
+        taken again on return. ───────────────────────────────────────────── */
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return
+    let lock: WakeLockSentinel | null = null
+    let released = false
+    const acquire = () => {
+      if (document.visibilityState !== 'visible') return
+      fireAndForget(
+        navigator.wakeLock.request('screen').then((sentinel) => {
+          if (released) return sentinel.release()
+          lock = sentinel
+        }),
+        'screen wake lock',
+      )
+    }
+    acquire()
+    document.addEventListener('visibilitychange', acquire)
+    return () => {
+      released = true
+      document.removeEventListener('visibilitychange', acquire)
+      if (lock) fireAndForget(lock.release(), 'screen wake lock release')
+    }
+  }, [])
 
   /* ── One camera acquisition for the interview, reopened only if a track
         died: re-requesting between questions makes the preview flicker and,
@@ -288,6 +316,7 @@ function InterviewRunner() {
               contentType: slot.video.contentType,
               onProgress: progressFrom(recording.audio.size),
             })
+            await markVideoUploaded({ token, segmentId: slot.segmentId })
           } catch (cause) {
             videoLost = true
             log('upload_failed', `video: ${detail(cause)}`)
@@ -309,7 +338,15 @@ function InterviewRunner() {
         log('upload_failed', detail(cause))
       }
     },
-    [requestUpload, markUploaded, markFailed, log, answered, token],
+    [
+      requestUpload,
+      markUploaded,
+      markVideoUploaded,
+      markFailed,
+      log,
+      answered,
+      token,
+    ],
   )
 
   const stopAndSave = useCallback(
@@ -332,7 +369,8 @@ function InterviewRunner() {
     [current, send, log],
   )
 
-  /* ── A phone that goes to the background, or a headset unplugged, keeps
+  /* ── A phone that goes to the background, a headset unplugged, or a
+        microphone taken by a phone call or muted by the system keeps
         "recording" an empty track that nobody sees. Stop there, keep what was
         said, and tell the candidate. ─────────────────────────────────────── */
   useEffect(() => {
@@ -342,11 +380,18 @@ function InterviewRunner() {
       if (document.visibilityState === 'hidden') interrupt()
     }
     const tracks = streamRef.current?.getTracks() ?? []
+    // `mute` on the microphone only: that is the take going silent.
+    const events = (track: MediaStreamTrack) =>
+      track.kind === 'audio' ? ['ended', 'mute'] : ['ended']
     document.addEventListener('visibilitychange', onVisibility)
-    tracks.forEach((track) => track.addEventListener('ended', interrupt))
+    tracks.forEach((track) =>
+      events(track).forEach((e) => track.addEventListener(e, interrupt)),
+    )
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
-      tracks.forEach((track) => track.removeEventListener('ended', interrupt))
+      tracks.forEach((track) =>
+        events(track).forEach((e) => track.removeEventListener(e, interrupt)),
+      )
     }
   }, [state.phase, stopAndSave])
 
@@ -358,6 +403,7 @@ function InterviewRunner() {
         live,
         detectRecorderSupport(),
         ({ elapsedSeconds }) => setElapsed(elapsedSeconds),
+        () => void stopAndSave('interrupted'),
       )
       recorder.start()
       recorderRef.current = recorder

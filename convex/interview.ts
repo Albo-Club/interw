@@ -48,7 +48,7 @@ const MAX_SESSION_EVENTS = 200
 /** Slack over a question's time limit for the recorder's own stop latency. */
 const DURATION_MARGIN_SECONDS = 5
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
-const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
+const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4']
 
 /**
  * Resolve a token to its session, or fail the same way every token that does
@@ -84,6 +84,22 @@ async function requireOpenSession(
   }
   if (gate.needsConsent) throw new ConvexError('consent_required')
   return { session, project }
+}
+
+/**
+ * One of this session's answers. Scoping the segment to the resolved session
+ * is what stops a token from writing to another candidate's answer.
+ */
+async function requireSessionSegment(
+  ctx: GenericQueryCtx<DataModel>,
+  session: Doc<'sessions'>,
+  segmentId: Id<'segments'>,
+): Promise<Doc<'segments'>> {
+  const segment = await ctx.db.get('segments', segmentId)
+  if (!segment || segment.sessionId !== session._id) {
+    throw new ConvexError('not_found')
+  }
+  return segment
 }
 
 /**
@@ -332,6 +348,7 @@ export const reserveSegment = internalMutation({
     const fields = {
       audioKey,
       videoKey,
+      videoUploaded: videoKey ? false : undefined,
       uploadState: 'pending' as const,
       recordedAt: now,
     }
@@ -444,12 +461,7 @@ export const markSegmentUploaded = mutation({
     const { session } = await requireOpenSession(ctx, token, now)
     await consumeLimit(ctx, 'candidateWrite', token)
 
-    const segment = await ctx.db.get('segments', segmentId)
-    // Scoping the segment to the resolved session is what stops a token from
-    // marking another candidate's answer as uploaded.
-    if (!segment || segment.sessionId !== session._id) {
-      throw new ConvexError('not_found')
-    }
+    const segment = await requireSessionSegment(ctx, session, segmentId)
 
     // The client's number is a hint for display, never the measurement the
     // report is computed from (see `saveTranscript`) — and even as a hint it
@@ -478,6 +490,24 @@ export const markSegmentUploaded = mutation({
   },
 })
 
+/**
+ * The video landed too. Until this runs the answer plays as audio: the audio
+ * is what `markSegmentUploaded` confirmed, and a signed URL to a video that
+ * never arrived is a 404 on the recruiter's screen.
+ */
+export const markVideoUploaded = mutation({
+  args: { token: v.string(), segmentId: v.id('segments') },
+  handler: async (ctx, { token, segmentId }) => {
+    const { session } = await requireOpenSession(ctx, token, Date.now())
+    await consumeLimit(ctx, 'candidateWrite', token)
+
+    const segment = await requireSessionSegment(ctx, session, segmentId)
+    if (!segment.videoKey) throw new ConvexError('not_found')
+    await ctx.db.patch('segments', segmentId, { videoUploaded: true })
+    return null
+  },
+})
+
 export const markSegmentFailed = mutation({
   args: { token: v.string(), segmentId: v.id('segments'), detail: v.string() },
   handler: async (ctx, { token, segmentId, detail }) => {
@@ -485,10 +515,7 @@ export const markSegmentFailed = mutation({
     const { session } = await requireOpenSession(ctx, token, now)
     await consumeLimit(ctx, 'candidateWrite', token)
 
-    const segment = await ctx.db.get('segments', segmentId)
-    if (!segment || segment.sessionId !== session._id) {
-      throw new ConvexError('not_found')
-    }
+    await requireSessionSegment(ctx, session, segmentId)
     await ctx.db.patch('segments', segmentId, { uploadState: 'failed' })
     await appendSessionEvent(ctx, session, {
       kind: 'upload_failed',

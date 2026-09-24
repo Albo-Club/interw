@@ -459,6 +459,11 @@ export default defineSchema({
     videoKey: v.optional(v.string()),
     audioKey: v.optional(v.string()),
     thumbnailKey: v.optional(v.string()),
+    /** False from reservation until the video PUT is confirmed. The key is
+     *  written first so erasure can name it, which means a key alone does not
+     *  say an object sits behind it. Absent on rows older than the field,
+     *  whose videos are taken as present. */
+    videoUploaded: v.optional(v.boolean()),
     /** Keys this slot was reserved under before and no longer is. Re-reserving
      *  an answer in another container, or without video, changes its keys,
      *  and the earlier object would otherwise be named nowhere — out of reach

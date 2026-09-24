@@ -19,7 +19,7 @@ describe('pickSupportedMimeType', () => {
         VIDEO_MIME_PREFERENCES,
         supports('video/webm', 'video/mp4'),
       ),
-    ).toBe('video/webm')
+    ).toBe('video/mp4')
   })
 
   it('returns null when nothing is supported', () => {
@@ -28,7 +28,7 @@ describe('pickSupportedMimeType', () => {
 })
 
 describe('detectRecorderSupport', () => {
-  it('prefers VP9 WebM on Chrome-like browsers', () => {
+  it('falls back to VP9 WebM where MP4 cannot be recorded (Firefox)', () => {
     const support = detectRecorderSupport(
       supports(
         'video/webm;codecs=vp9,opus',
@@ -43,7 +43,21 @@ describe('detectRecorderSupport', () => {
     expect(support.usable).toBe(true)
   })
 
-  it('falls back to MP4 on Safari', () => {
+  it('prefers H.264/AAC MP4 wherever it can be recorded', () => {
+    const support = detectRecorderSupport(
+      supports(
+        'video/mp4;codecs=avc1,mp4a.40.2',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'audio/webm;codecs=opus',
+      ),
+    )
+    expect(support.video).toBe('video/mp4;codecs=avc1,mp4a.40.2')
+    // The audio stays WebM/Opus: the transcription path already takes it.
+    expect(support.audio).toBe('audio/webm;codecs=opus')
+  })
+
+  it('takes plain MP4 on a Safari that answers no codec query', () => {
     const support = detectRecorderSupport(supports('video/mp4', 'audio/mp4'))
     expect(support.video).toBe('video/mp4')
     expect(support.audio).toBe('audio/mp4')
@@ -80,6 +94,7 @@ class FakeRecorder {
   state: 'inactive' | 'recording' = 'inactive'
   ondataavailable: ((event: { data: Blob }) => void) | null = null
   onstop: (() => void) | null = null
+  onerror: (() => void) | null = null
 
   constructor(
     readonly stream: { kind: string },
@@ -144,6 +159,18 @@ describe('SegmentRecorder', () => {
       videoBitsPerSecond: 1_000_000,
       audioBitsPerSecond: 64_000,
     })
+  })
+
+  it('reports an encoder that fails mid-answer', () => {
+    const onFailure = vi.fn()
+    new SegmentRecorder(
+      fakeStream({ video: true }),
+      bothFormats,
+      undefined,
+      onFailure,
+    ).start()
+    FakeRecorder.instances[1].onerror?.()
+    expect(onFailure).toHaveBeenCalledOnce()
   })
 
   it('records audio alone from a stream with no camera', async () => {

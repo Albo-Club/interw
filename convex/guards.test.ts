@@ -360,6 +360,26 @@ describe('project visibility inside an organisation', () => {
       ),
     ).rejects.toThrow()
   })
+
+  /**
+   * Audit 2026-09-15, backend F3. The search box re-implemented the
+   * visibility rule instead of asking `canSeeProject`; it now asks, and this
+   * pins the outcome so a copy cannot creep back in and drift.
+   */
+  it('keeps a role off the search results of a member outside its team', async () => {
+    const search = (who: string) =>
+      as(t, who).query(api.reports.searchCandidates, {
+        orgId: w.acmeOrgId,
+        text: 'Alex',
+      })
+    expect(await search('acmeShared')).toEqual([])
+    expect((await search('acmeMember')).map((r) => r.projectSlug)).toEqual([
+      'backend',
+    ])
+    expect((await search('acmeAdmin')).map((r) => r.projectSlug)).toEqual([
+      'backend',
+    ])
+  })
 })
 
 /** A finished interview with a report on `projectId`; returns who was mailed. */

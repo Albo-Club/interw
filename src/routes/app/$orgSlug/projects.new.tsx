@@ -37,9 +37,11 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/new')({
   component: NewProjectPage,
+  errorComponent: AppRouteError,
   head: () => ({
     meta: [
       { title: getI18n(getLocale()).getFixedT(null, 'projects')('new.title') },

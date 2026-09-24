@@ -15,6 +15,7 @@ import {
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
+import { publishBlockers } from './lib/publishReadiness'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
 import type { MutationCtx } from './_generated/server'
@@ -278,18 +279,25 @@ export const update = mutation({
 })
 
 /**
- * Draft → active. A project with no question cannot be published: a candidate
- * would receive a link to an empty interview, which is worse than an error.
+ * Draft → active. Refused while `publishBlockers` names anything (M10): a
+ * candidate would otherwise receive an empty interview, the wizard's example
+ * question, or a score against a criterion nobody defined — each worse than
+ * an error the recruiter can fix in a minute.
  */
 export const publish = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    const question = await ctx.db
+    const questions = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .first()
-    if (!question) throw new ConvexError('no_questions')
+      .collect()
+    const criteria = await ctx.db
+      .query('criteria')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect()
+    const blockers = publishBlockers(questions, criteria)
+    if (blockers.length > 0) throw new ConvexError(blockers[0].code)
     if (project.status !== 'active') {
       await ctx.db.patch('projects', projectId, { status: 'active' })
     }

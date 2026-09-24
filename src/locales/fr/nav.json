@@ -123,5 +123,18 @@
         "failed": "Échec de la relance"
       }
     }
+  },
+  "routeFallback": {
+    "error": {
+      "title": "Cette page n'a pas pu se charger",
+      "body": "Un échec s'est produit de notre côté pendant le chargement. Il a été signalé. Réessayez, ou revenez à vos postes.",
+      "retry": "Réessayer"
+    },
+    "notFound": {
+      "title": "Rien ici",
+      "body": "Le lien est peut-être mal saisi, ou ce vers quoi il pointait a été supprimé ou ne vous est plus partagé."
+    },
+    "backToRoles": "Retour aux postes",
+    "backToApp": "Retour à l'application"
   }
 }

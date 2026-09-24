@@ -284,7 +284,6 @@ export default defineSchema({
     status: projectStatusValidator,
     language: languageValidator,
     personaName: v.optional(v.string()),
-    personaAvatarKey: v.optional(v.string()),
     introMode: storedIntroModeValidator,
     /** Retired with the `text` intro mode: written and read by nothing. */
     introText: v.optional(v.string()),
@@ -322,8 +321,6 @@ export default defineSchema({
     mediaKind: v.optional(mediaKindValidator),
     hintText: v.optional(v.string()),
     maxResponseSeconds: v.number(),
-    /** Per-question override of criteria weighting, criterion id → weight. */
-    criteriaWeights: v.optional(v.record(v.id('criteria'), v.number())),
   })
     .index('by_project', ['projectId', 'orderIndex'])
     .index('by_org', ['orgId']),

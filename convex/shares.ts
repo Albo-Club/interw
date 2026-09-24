@@ -102,6 +102,10 @@ export const create = mutation({
   handler: async (ctx, { sessionId, expiresInDays }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
+    // Team level on purpose (audit Back F2), like `reports.setDecision`: the
+    // team is who may read this report, so it is who may show it. The link
+    // records its creator and is revoked when they leave the org (h03). See
+    // KNOWN_ISSUES.md § "Decisions and report links are team-level".
     const { user } = await requireProjectAccess(ctx, session.projectId)
     const report = await ctx.db
       .query('reports')

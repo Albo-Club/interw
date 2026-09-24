@@ -213,8 +213,10 @@
     "readyBody": "Publiez-le, puis invitez votre premier candidat.",
     "blocked": "Pas encore prêt",
     "missing": {
-      "questions": "Ajoutez au moins une question.",
-      "criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer."
+      "no_questions": "Ajoutez au moins une question.",
+      "question_not_written": "La question {{position}} contient encore le texte d'exemple. Rédigez la question que vous voulez poser.",
+      "no_criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer.",
+      "criterion_not_named": "Le critère {{position}} porte encore son nom d'exemple. Nommez ce que vous voulez évaluer."
     }
   },
   "team": {
@@ -245,7 +247,8 @@
     "title": "Supprimer ce poste ?",
     "body": "« {{title}} », ses questions et ses critères seront définitivement supprimés. Cette action est irréversible.",
     "confirm": "Supprimer le poste",
-    "hasSessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt : leurs entretiens et rapports sont conservés."
+    "hasSessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt : leurs entretiens et rapports sont conservés.",
+    "done": "Poste supprimé."
   },
   "errors": {
     "invalid_title": "Donnez au poste un intitulé de 120 caractères maximum.",

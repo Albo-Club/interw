@@ -22,7 +22,6 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
-import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { deleteObjects } from './lib/objectStore'
 import { hashEmail } from './purge'
@@ -280,17 +279,6 @@ export const cancel = mutation({
     if (session.status === 'completed') throw new ConvexError('session_closed')
     await ctx.db.patch('sessions', sessionId, { status: 'cancelled' })
     return null
-  },
-})
-
-/** Whether a given session's link would work right now, for the recruiter. */
-export const linkStatus = query({
-  args: { sessionId: v.id('sessions'), now: v.number() },
-  handler: async (ctx, { sessionId, now }) => {
-    const session = await ctx.db.get('sessions', sessionId)
-    if (!session) throw new ConvexError('not_found')
-    const { project } = await requireProjectAccess(ctx, session.projectId)
-    return evaluateSessionGate({ session, project, now })
   },
 })
 

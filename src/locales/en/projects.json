@@ -213,8 +213,10 @@
     "readyBody": "Publish it, then invite your first candidate.",
     "blocked": "Not ready yet",
     "missing": {
-      "questions": "Add at least one question.",
-      "criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against."
+      "no_questions": "Add at least one question.",
+      "question_not_written": "Question {{position}} still has the example text. Write the question you want to ask.",
+      "no_criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against.",
+      "criterion_not_named": "Criterion {{position}} still has its example name. Name what you want to assess."
     }
   },
   "team": {
@@ -245,7 +247,8 @@
     "title": "Delete this role?",
     "body": "\"{{title}}\" and its questions and criteria will be permanently deleted. This cannot be undone.",
     "confirm": "Delete role",
-    "hasSessions": "This role has candidates, so it cannot be deleted. Archive it instead — that keeps their interviews and reports."
+    "hasSessions": "This role has candidates, so it cannot be deleted. Archive it instead — that keeps their interviews and reports.",
+    "done": "Role deleted."
   },
   "errors": {
     "invalid_title": "Give the role a title of 120 characters or fewer.",

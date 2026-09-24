@@ -16,9 +16,11 @@ import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { EmptyState } from '~/components/projects/EmptyState'
 import { ProjectsTable } from '~/components/projects/ProjectsTable'
 import { ProjectTeamDialog } from '~/components/projects/ProjectTeamDialog'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/')({
   component: ProjectsPage,
+  errorComponent: AppRouteError,
   head: () => ({
     meta: [
       {

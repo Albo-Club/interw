@@ -9,6 +9,7 @@ import { AppSidebar } from '~/components/app-shell/AppSidebar'
 import { AppHeader } from '~/components/app-shell/AppHeader'
 import { AiPanel } from '~/components/ai/AiPanel'
 import { cn } from '~/lib/utils'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 // AI panel open/closed persists in a 7-day cookie (same pattern as shadcn's
 // sidebar_state), open by default.
@@ -25,6 +26,8 @@ function readAiPanelCookie(): boolean {
 
 export const Route = createFileRoute('/app/$orgSlug')({
   component: OrgLayout,
+  errorComponent: AppRouteError,
+  notFoundComponent: AppNotFound,
 })
 
 function OrgLayout() {

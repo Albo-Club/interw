@@ -11,9 +11,11 @@
 
 import { ConvexError, v } from 'convex/values'
 
+import enReport from '../src/locales/en/report.json'
+import frReport from '../src/locales/fr/report.json'
 import { action, internalQuery, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
-import { recruiterDecisionValidator } from './schema'
+import { languageValidator, recruiterDecisionValidator } from './schema'
 import { requireOrgMember } from './lib/auth'
 import {
   canSeeProject,
@@ -203,6 +205,11 @@ export const setDecision = mutation({
   handler: async (ctx, { sessionId, decision }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
+    // Team level on purpose (audit Back F2): whoever can see the role — its
+    // team, or an org owner or admin — may decide. The team is the people
+    // hiring for it; accountability comes from naming who decided
+    // (`recruiterDecisionBy`, `decisionEvents`), not from a rank. See
+    // KNOWN_ISSUES.md § "Decisions and report links are team-level".
     const { user } = await requireProjectAccess(ctx, session.projectId)
     // Re-setting the current decision changes nothing, so it records nothing.
     if ((session.recruiterDecision ?? null) === decision) return null
@@ -297,10 +304,14 @@ export const resolveSessionMedia = internalQuery({
  * a reactive query would happily serve a cached one long after it died.
  */
 export const sessionMediaUrls = action({
-  args: { sessionId: v.id('sessions') },
+  args: {
+    sessionId: v.id('sessions'),
+    /** The recruiter's UI language, which names the downloaded documents. */
+    language: v.optional(languageValidator),
+  },
   handler: async (
     ctx,
-    { sessionId },
+    { sessionId, language },
   ): Promise<{
     segments: Array<{ segmentId: Id<'segments'>; url: string; kind: string }>
     cv: string | null
@@ -318,18 +329,20 @@ export const sessionMediaUrls = action({
           url: await presignGet(segment.key!),
         })),
     )
-    const safeName = target.candidateName.replace(/[^\w .-]/g, '_')
+    // Named in the recruiter's language, from the same copy the page shows
+    // for the link, and carrying the stored extension so the file opens.
+    const labels = (language === 'fr' ? frReport : enReport).documents
+    const download = (key: string, label: string) =>
+      presignGet(key, undefined, {
+        download: `${label} - ${target.candidateName}.${key.split('.').pop()}`
+          // A header value: ASCII only, whatever the name was typed in.
+          .replace(/[^\w .-]/g, '_'),
+      })
     return {
       segments,
-      cv: target.cvKey
-        ? await presignGet(target.cvKey, undefined, {
-            download: `CV - ${safeName}`,
-          })
-        : null,
+      cv: target.cvKey ? await download(target.cvKey, labels.cv) : null,
       coverLetter: target.coverLetterKey
-        ? await presignGet(target.coverLetterKey, undefined, {
-            download: `Lettre - ${safeName}`,
-          })
+        ? await download(target.coverLetterKey, labels.coverLetter)
         : null,
     }
   },

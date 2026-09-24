@@ -15,9 +15,11 @@ import {
   DecisionBadge,
   ScoreBadge,
 } from '~/components/candidates/StatusBadge'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/')({
   component: OrgDashboard,
+  errorComponent: AppRouteError,
   head: () => ({
     meta: [
       {

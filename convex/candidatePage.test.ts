@@ -274,3 +274,51 @@ describe('decision history', () => {
     expect(JSON.stringify(rows)).not.toContain('@acme.test')
   })
 })
+
+/**
+ * Carried over from audit T07: the documents downloaded from the candidate
+ * page were named in French ("Lettre - …") whatever the recruiter's language,
+ * and without their extension.
+ */
+describe('document download names', () => {
+  beforeEach(() => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const disposition = (url: string | null) =>
+    url && new URL(url).searchParams.get('response-content-disposition')
+
+  it("names each document in the recruiter's language, with its extension", async () => {
+    const t = newTest()
+    const s = await seed(t)
+    await t.run((ctx) =>
+      ctx.db.patch('sessions', s.sessionId, {
+        cvKey: `orgs/${s.orgId}/sessions/${s.sessionId}/cv.docx`,
+        coverLetterKey: `orgs/${s.orgId}/sessions/${s.sessionId}/cover.pdf`,
+      }),
+    )
+    const fetch = (language: 'en' | 'fr') =>
+      as(t, 'creator').action(api.reports.sessionMediaUrls, {
+        sessionId: s.sessionId,
+        language,
+      })
+
+    const en = await fetch('en')
+    expect(disposition(en.coverLetter)).toBe(
+      'attachment; filename="Cover letter - Alex Martin.pdf"',
+    )
+    expect(disposition(en.cv)).toBe('attachment; filename="CV - Alex Martin.docx"')
+
+    const fr = await fetch('fr')
+    expect(disposition(fr.coverLetter)).toBe(
+      'attachment; filename="Lettre de motivation - Alex Martin.pdf"',
+    )
+  })
+})

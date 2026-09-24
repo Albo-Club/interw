@@ -38,6 +38,7 @@ import type * as lib_invitations from "../lib/invitations.js";
 import type * as lib_objectStore from "../lib/objectStore.js";
 import type * as lib_projectAccess from "../lib/projectAccess.js";
 import type * as lib_prompts from "../lib/prompts.js";
+import type * as lib_publishReadiness from "../lib/publishReadiness.js";
 import type * as lib_reportBuilder from "../lib/reportBuilder.js";
 import type * as lib_reportSchema from "../lib/reportSchema.js";
 import type * as lib_safeUrl from "../lib/safeUrl.js";
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "lib/objectStore": typeof lib_objectStore;
   "lib/projectAccess": typeof lib_projectAccess;
   "lib/prompts": typeof lib_prompts;
+  "lib/publishReadiness": typeof lib_publishReadiness;
   "lib/reportBuilder": typeof lib_reportBuilder;
   "lib/reportSchema": typeof lib_reportSchema;
   "lib/safeUrl": typeof lib_safeUrl;

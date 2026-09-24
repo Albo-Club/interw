@@ -123,5 +123,18 @@
         "failed": "Relaunch failed"
       }
     }
+  },
+  "routeFallback": {
+    "error": {
+      "title": "This page could not load",
+      "body": "Something failed on our side while loading it. It has been reported. Try again, or go back to your roles.",
+      "retry": "Try again"
+    },
+    "notFound": {
+      "title": "Nothing here",
+      "body": "The link may be mistyped, or what it pointed to was deleted or is no longer shared with you."
+    },
+    "backToRoles": "Back to roles",
+    "backToApp": "Back to the app"
   }
 }

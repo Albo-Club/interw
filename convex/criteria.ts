@@ -97,22 +97,6 @@ export const remove = mutation({
     const criterion = await loadCriterionForEdit(ctx, criterionId)
     await ctx.db.delete('criteria', criterionId)
 
-    // Drop the criterion from any per-question weighting that referenced it,
-    // otherwise the report generator resolves a dangling id.
-    const questions = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', criterion.projectId))
-      .collect()
-    for (const question of questions) {
-      if (!question.criteriaWeights) continue
-      if (!(criterionId in question.criteriaWeights)) continue
-      const next = { ...question.criteriaWeights }
-      delete next[criterionId]
-      await ctx.db.patch('questions', question._id, {
-        criteriaWeights: Object.keys(next).length > 0 ? next : undefined,
-      })
-    }
-
     const rest = await ctx.db
       .query('criteria')
       .withIndex('by_project', (q) => q.eq('projectId', criterion.projectId))

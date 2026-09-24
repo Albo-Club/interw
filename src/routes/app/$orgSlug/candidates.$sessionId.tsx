@@ -52,9 +52,12 @@ import {
   SessionStatusBadge,
 } from '~/components/candidates/StatusBadge'
 import { cn } from '~/lib/utils'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/candidates/$sessionId')({
   component: CandidateReportPage,
+  errorComponent: AppRouteError,
+  notFoundComponent: AppNotFound,
   head: () => ({
     meta: [
       { title: getI18n(getLocale()).getFixedT(null, 'report')('metaTitle') },
@@ -85,7 +88,7 @@ function CandidateReportPage() {
     retry: retryMedia,
     onPlaybackError,
   } = useSessionMedia(data ? sessionMediaKey(data) : null, () =>
-    mediaUrls({ sessionId: sessionId as never }),
+    mediaUrls({ sessionId: sessionId as never, language: locale }),
   )
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { Mic, Pencil, Send, UserPlus, Users, Video } from 'lucide-react'
+import { Mic, Pencil, Send, Trash2, UserPlus, Users, Video } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
@@ -12,6 +12,16 @@ import { errorMessageKey } from '~/lib/convex-errors'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Progress } from '~/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
@@ -20,9 +30,12 @@ import { ProjectTeamDialog } from '~/components/projects/ProjectTeamDialog'
 import { CandidatesTable } from '~/components/candidates/CandidatesTable'
 import { InviteCandidatesDialog } from '~/components/candidates/InviteCandidatesDialog'
 import { EmptyState } from '~/components/projects/EmptyState'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/$projectSlug/')({
   component: ProjectDetailPage,
+  errorComponent: AppRouteError,
+  notFoundComponent: AppNotFound,
   head: () => ({
     meta: [
       { title: getI18n(getLocale()).getFixedT(null, 'projects')('metaTitle') },
@@ -36,6 +49,7 @@ function ProjectDetailPage() {
   const navigate = useNavigate()
   const [editingTeam, setEditingTeam] = useState(false)
   const [inviting, setInviting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const me = useConvexQuery(api.users.me)
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
@@ -46,6 +60,7 @@ function ProjectDetailPage() {
   const publish = useConvexMutation(api.projects.publish)
   const archive = useConvexMutation(api.projects.archive)
   const restore = useConvexMutation(api.projects.restore)
+  const remove = useConvexMutation(api.projects.remove)
 
   const run = async (action: Promise<unknown>) => {
     try {
@@ -80,6 +95,20 @@ function ProjectDetailPage() {
     myRole === 'admin' ||
     myRole === 'owner' ||
     project.createdBy === ready?.user._id
+  // `projects.remove` refuses once anyone was invited; the dialog says so
+  // up front instead of offering a button that can only fail.
+  const deletable = project.sessionCount === 0
+
+  const deleteRole = async () => {
+    // Leave first: the page's own query turns into `not_found` the moment the
+    // row is gone, and the recruiter should land on the list, not on that.
+    await navigate({ to: '/app/$orgSlug/projects', params: { orgSlug } })
+    await run(
+      remove({ projectId: project._id }).then(() =>
+        toast.success(t('projects:delete.done')),
+      ),
+    )
+  }
 
   return (
     <main className="flex-1 space-y-6 p-6">
@@ -145,6 +174,12 @@ function ProjectDetailPage() {
               }}
             >
               {t('projects:detail.restore')}
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="ghost" onClick={() => setConfirmingDelete(true)}>
+              <Trash2 className="size-4" />
+              {t('projects:detail.delete')}
             </Button>
           )}
         </div>
@@ -311,6 +346,30 @@ function ProjectDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('projects:delete.title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletable
+                ? t('projects:delete.body', { title: project.title })
+                : t('projects:delete.hasSessions')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+            {deletable && (
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => void deleteRole()}
+              >
+                {t('projects:delete.confirm')}
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <InviteCandidatesDialog
         projectId={project._id}

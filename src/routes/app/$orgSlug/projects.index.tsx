@@ -81,7 +81,7 @@ function ProjectsPage() {
     )
     .map((project) => ({
       ...project,
-      canArchive: managesAll || project.createdBy === ready?.user._id,
+      canManage: managesAll || project.createdBy === ready?.user._id,
     }))
   const hasAnyProject = (projects ?? []).length > 0
 

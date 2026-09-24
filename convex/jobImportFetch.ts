@@ -157,46 +157,50 @@ export const fetchJobPage = internalAction({
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       const response = await open(current, await resolvePublicly(current))
-      const status = response.statusCode ?? 0
+      try {
+        const status = response.statusCode ?? 0
 
-      if (status >= 300 && status < 400) {
-        // A redirect's body is never read.
-        response.destroy()
-        const location = response.headers.location
-        if (!location) throw new ConvexError('page_unreachable')
-        let next: URL
-        try {
-          // Resolved against the current URL, then checked from scratch — a
-          // relative redirect is still a redirect.
-          next = assertPublicHttpUrl(new URL(location, current).toString())
-        } catch {
-          throw new ConvexError('invalid_url')
+        if (status >= 300 && status < 400) {
+          const location = response.headers.location
+          if (!location) throw new ConvexError('page_unreachable')
+          let next: URL
+          try {
+            // Resolved against the current URL, then checked from scratch — a
+            // relative redirect is still a redirect.
+            next = assertPublicHttpUrl(new URL(location, current).toString())
+          } catch {
+            throw new ConvexError('invalid_url')
+          }
+          current = next
+          continue
         }
-        current = next
-        continue
-      }
 
-      // The site answered, and the answer is "not you". Worth its own code:
-      // "that page could not be read, check the link" sends a recruiter
-      // hunting for a typo in a URL that is perfectly good.
-      if ([401, 403, 429].includes(status)) {
-        throw new ConvexError('page_blocked')
-      }
-      if (status < 200 || status >= 300) {
-        throw new ConvexError('page_unreachable')
-      }
+        // The site answered, and the answer is "not you". Worth its own code:
+        // "that page could not be read, check the link" sends a recruiter
+        // hunting for a typo in a URL that is perfectly good.
+        if ([401, 403, 429].includes(status)) {
+          throw new ConvexError('page_blocked')
+        }
+        if (status < 200 || status >= 300) {
+          throw new ConvexError('page_unreachable')
+        }
 
-      // The `Accept` header is a request, not a guarantee. A response that is
-      // not markup is either not a job ad or not meant for us.
-      const contentType = (response.headers['content-type'] ?? '')
-        .split(';')[0]
-        .trim()
-        .toLowerCase()
-      if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-        throw new ConvexError('page_unreachable')
-      }
+        // The `Accept` header is a request, not a guarantee. A response that
+        // is not markup is either not a job ad or not meant for us.
+        const contentType = (response.headers['content-type'] ?? '')
+          .split(';')[0]
+          .trim()
+          .toLowerCase()
+        if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+          throw new ConvexError('page_unreachable')
+        }
 
-      return await readCapped(response)
+        return await readCapped(response)
+      } finally {
+        // Whatever this hop did not read — a redirect, a refusal, a page past
+        // the cap — releases its socket now, not when the timeout fires.
+        response.destroy()
+      }
     }
     throw new ConvexError('page_unreachable')
   },

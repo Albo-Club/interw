@@ -165,6 +165,37 @@ describe('fetchJobPage connects to the address it checked', () => {
     ).rejects.toThrow('page_too_large')
   })
 
+  it.each([
+    [403, 'text/html', 'page_blocked'],
+    [500, 'text/html', 'page_unreachable'],
+    [200, 'application/json', 'page_unreachable'],
+  ])(
+    'lets go of the connection at once on %s %s',
+    async (status, contentType, code) => {
+      let closed!: Promise<void>
+      // Headers, then a body that never ends: only our side can close this.
+      const port = await listen(
+        createServer((req, res) => {
+          closed = new Promise((resolve) => req.socket.on('close', resolve))
+          res.writeHead(status, { 'content-type': contentType }).write('...')
+        }),
+      )
+      checkLookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
+      connectResolvesTo('::1', 6)
+
+      await expect(fetchPage(`http://jobs.example:${port}/`)).rejects.toThrow(
+        code,
+      )
+      // Well before the 15 s timeout would have closed it for us.
+      await expect(
+        Promise.race([
+          closed.then(() => 'closed'),
+          new Promise((resolve) => setTimeout(resolve, 1000, 'still open')),
+        ]),
+      ).resolves.toBe('closed')
+    },
+  )
+
   it('offers the hostname for TLS, so the certificate is checked against it', async () => {
     let servername: string | undefined
     const port = await listen(

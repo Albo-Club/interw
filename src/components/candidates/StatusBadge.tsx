@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
+import { MailWarning } from 'lucide-react'
 
+import type { CandidateRow, DeliveryIssue } from './candidate-rows'
 import { Badge } from '~/components/ui/badge'
 import { cn } from '~/lib/utils'
 
@@ -79,5 +81,38 @@ export function ScoreBadge({ score }: { score: number }) {
         : 'text-destructive-strong'
   return (
     <span className={cn('font-semibold tabular-nums', tone)}>{score}</span>
+  )
+}
+
+/**
+ * The model's reading, in plain text rather than a pill: it sits next to the
+ * recruiter's decision and must not look like one.
+ */
+export function RecommendationLabel({
+  recommendation,
+}: {
+  recommendation: CandidateRow['recommendation']
+}) {
+  const { t } = useTranslation('candidates')
+  return (
+    <span
+      className={cn(
+        'text-sm',
+        recommendation ? 'text-foreground' : 'text-muted-foreground',
+      )}
+    >
+      {t(`recommendation.${recommendation ?? 'none'}`)}
+    </span>
+  )
+}
+
+/** An invitation that never reached the candidate. Icon and words, not colour alone. */
+export function DeliveryIssueBadge({ issue }: { issue: DeliveryIssue }) {
+  const { t } = useTranslation('candidates')
+  return (
+    <span className="text-destructive-strong inline-flex items-center gap-1 text-xs font-medium">
+      <MailWarning className="size-3.5 shrink-0" aria-hidden />
+      {t(`delivery.${issue}`)}
+    </span>
   )
 }

@@ -297,13 +297,17 @@ function ProjectDetailPage() {
               body={t('candidates:list.emptyDraft.body')}
             />
           ) : (
-            <CandidatesTable
-              projectId={project._id}
-              orgSlug={orgSlug}
-              canInvite={project.status === 'active'}
-              onInvite={() => setInviting(true)}
-              locale={getLocale()}
-            />
+            org && (
+              <CandidatesTable
+                orgId={org._id}
+                projectId={project._id}
+                orgSlug={orgSlug}
+                canInvite={project.status === 'active'}
+                canManage={canManage}
+                onInvite={() => setInviting(true)}
+                locale={getLocale()}
+              />
+            )
           )}
         </TabsContent>
       </Tabs>

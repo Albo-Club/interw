@@ -67,6 +67,10 @@ function toRecruiterRow(session: Doc<'sessions'>) {
     completedAt: session.completedAt ?? null,
     lastActivityAt: session.lastActivityAt ?? null,
     durationSeconds: session.durationSeconds ?? null,
+    // Denormalised by the queue when the report lands (see schema): reading
+    // `reports` per row here would make the table a reactive N+1.
+    overallScore: session.overallScore ?? null,
+    recommendation: session.recommendation ?? null,
     recruiterDecision: session.recruiterDecision ?? null,
     lastQuestionIndex: session.lastQuestionIndex,
   }
@@ -239,9 +243,8 @@ export const invitationLink = query({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    // Owner or admin, not any member who can see the role: this destroys a
-    // candidate's recordings, their CV and their assessment, irreversibly.
-    // It used to be less protected than deleting an empty role.
+    // Owner, admin or the role's creator: the link is the candidate's
+    // interview, and whoever holds it can sit it in their name.
     await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return { url: invitationUrl(session.accessToken) }
   },

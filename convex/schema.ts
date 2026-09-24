@@ -654,4 +654,17 @@ export default defineSchema({
     detail: v.optional(v.string()),
     at: v.number(),
   }).index('by_session', ['sessionId', 'at']),
+
+  /** Every change to a candidate's decision, newest last. `sessions` holds
+   *  only the current one, so "who shortlisted them, and who rejected them
+   *  after?" had no answer. Written by `reports.setDecision`, purged with the
+   *  session. `decision` absent means the decision was cleared. */
+  decisionEvents: defineTable({
+    orgId: v.id('organizations'),
+    sessionId: v.id('sessions'),
+    decision: v.optional(recruiterDecisionValidator),
+    /** An id, never an address, like `jobLog.actorId`. */
+    actorId: v.id('users'),
+    at: v.number(),
+  }).index('by_session', ['sessionId', 'at']),
 })

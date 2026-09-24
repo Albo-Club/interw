@@ -49,7 +49,10 @@
     "shortlisted": "Shortlisted",
     "hired": "Hired",
     "set": "Your decision",
-    "saved": "Decision saved"
+    "saved": "Decision saved",
+    "history": "History",
+    "cleared": "Decision cleared",
+    "formerMember": "A former member"
   },
   "invite": {
     "title": "Invite candidates",

@@ -49,7 +49,10 @@
     "shortlisted": "Retenu",
     "hired": "Recruté",
     "set": "Votre décision",
-    "saved": "Décision enregistrée"
+    "saved": "Décision enregistrée",
+    "history": "Historique",
+    "cleared": "Décision retirée",
+    "formerMember": "Un ancien membre"
   },
   "invite": {
     "title": "Inviter des candidats",

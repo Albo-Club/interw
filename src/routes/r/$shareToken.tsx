@@ -10,10 +10,12 @@ import type { SeekCue } from '~/components/report/AnswerPlayer'
 import { getI18n } from '~/lib/i18n'
 import { fireAndForget } from '~/lib/fire-and-forget'
 import { getLocale } from '~/lib/locale'
+import { useSessionMedia } from '~/hooks/useSessionMedia'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Progress } from '~/components/ui/progress'
 import { Card, CardContent } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
+import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
 import { AnswerPlayer, formatTimecode } from '~/components/report/AnswerPlayer'
 import { ScoreBadge } from '~/components/candidates/StatusBadge'
 import { cn } from '~/lib/utils'
@@ -45,19 +47,24 @@ function SharedReport() {
   const recordView = useConvexMutation(api.shares.recordView)
   const sharedMedia = useConvexAction(api.shares.sharedMediaUrls)
 
-  const [media, setMedia] = useState<
-    Array<{ segmentId: string; url: string }> | null
-  >(null)
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)
+
+  // Signed on the token alone: a revoked or expired link drops the key, and
+  // nothing else about the report changes what there is to play.
+  const {
+    media,
+    failed: mediaFailed,
+    retry: retryMedia,
+    onPlaybackError,
+  } = useSessionMedia(data?.state === 'active' ? shareToken : null, () =>
+    sharedMedia({ token: shareToken }),
+  )
 
   useEffect(() => {
     if (data?.state !== 'active') return
     fireAndForget(recordView({ token: shareToken }), 'share view counter')
-    void sharedMedia({ token: shareToken, now: Date.now() })
-      .then(setMedia)
-      .catch(() => undefined)
-  }, [data?.state, recordView, sharedMedia, shareToken])
+  }, [data?.state, recordView, shareToken])
 
   if (data === undefined) {
     return (
@@ -143,6 +150,8 @@ function SharedReport() {
           </CardContent>
         </Card>
 
+        {mediaFailed && <MediaFailedAlert onRetry={retryMedia} />}
+
         {media && media.length > 0 && (
           <AnswerPlayer
             segments={media.map((entry) => ({ ...entry, kind: 'video' }))}
@@ -150,6 +159,7 @@ function SharedReport() {
             activeSegmentId={activeSegment}
             onSelect={setActiveSegment}
             questionLabels={questionLabels}
+            onError={onPlaybackError}
           />
         )}
 
@@ -232,11 +242,15 @@ function SharedReport() {
           <Card>
             <CardContent className="space-y-2 pt-6">
               <h3 className="font-medium">{t('report:sections.strengths')}</h3>
-              <ul className="list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
-                {report.strengths.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
+              {report.strengths.length === 0 ? (
+                <p className="text-muted-foreground text-sm">—</p>
+              ) : (
+                <ul className="list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
+                  {report.strengths.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
           <Card>

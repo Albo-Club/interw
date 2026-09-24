@@ -60,18 +60,22 @@
     "title": "L'analyse est en cours",
     "body": "L'entretien est bien arrivé : il est en cours de transcription et d'analyse. Cela prend généralement quelques minutes.",
     "failedTitle": "L'analyse n'a pas abouti",
-    "failedBody": "Les enregistrements sont intacts et l'analyse sera relancée automatiquement. Les dernières étapes sont listées ci-dessous.",
+    "failedBody": "Les enregistrements sont intacts. Les étapes en échec sont retentées automatiquement ; si l'analyse n'est toujours pas terminée, relancez-la. Les dernières étapes sont listées ci-dessous.",
     "steps": {
       "transcribe": "Transcription",
       "report": "Analyse",
-      "notify": "Notification"
+      "notify": "Notification",
+      "relaunch": "Relance",
+      "purge": "Conservation"
     },
     "outcome": {
       "started": "Démarré",
       "succeeded": "Terminé",
       "failed": "Échec",
       "skipped": "Ignoré"
-    }
+    },
+    "relaunch": "Relancer l'analyse",
+    "relaunched": "Analyse relancée"
   },
   "notStarted": {
     "title": "Pas encore commencé",
@@ -97,13 +101,18 @@
     },
     "copy": "Copier le lien",
     "copied": "Lien copié",
-    "revoke": "Révoquer",
+    "revoke": "Révoquer…",
     "revoked": "Lien révoqué",
     "existing": "Lien actif",
     "views": "Ouvert {{count}} fois",
     "views_other": "Ouvert {{count}} fois",
     "neverViewed": "Jamais ouvert",
-    "expiresOn": "Cesse de fonctionner le {{date}}"
+    "expiresOn": "Cesse de fonctionner le {{date}}",
+    "revokeConfirm": {
+      "title": "Révoquer ce lien ?",
+      "body": "Créé le {{date}}. {{views}}. Les personnes qui ont ce lien ne pourront plus lire le rapport. C'est irréversible.",
+      "confirm": "Révoquer le lien"
+    }
   },
   "shared": {
     "title": "Rapport d'entretien",
@@ -125,6 +134,29 @@
     "not_found": "Ce rapport est introuvable.",
     "note_too_long": "Cette note est trop longue.",
     "share_expired": "Ce lien a expiré.",
-    "share_revoked": "Ce lien a été révoqué."
+    "share_revoked": "Ce lien a été révoqué.",
+    "report_exists": "L'analyse est déjà terminée.",
+    "report_in_progress": "L'analyse est déjà en cours. Laissez-lui quelques minutes.",
+    "session_not_completed": "L'entretien n'est pas encore terminé.",
+    "rate_limited": "Vous avez relancé beaucoup d'analyses récemment. Patientez un instant et réessayez.",
+    "insufficient_role": "Seuls les admins, les propriétaires et la personne qui a créé le poste peuvent faire cela."
+  },
+  "highlights": {
+    "kind": {
+      "strength": "Point fort",
+      "personality": "Personnalité",
+      "watchpoint": "Vigilance"
+    },
+    "jump": "Voir à partir de {{time}}"
+  },
+  "documents": {
+    "cv": "CV",
+    "coverLetter": "Lettre de motivation",
+    "newTab": "(s'ouvre dans un nouvel onglet)"
+  },
+  "media": {
+    "failedTitle": "Les enregistrements n'ont pas pu être chargés",
+    "failedBody": "Le lien de lecture a peut-être expiré, ou la connexion a été coupée. Les enregistrements eux-mêmes sont intacts.",
+    "retry": "Les recharger"
   }
 }

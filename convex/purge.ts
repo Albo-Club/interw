@@ -155,6 +155,7 @@ async function deleteChildRows(
     'transcripts',
     'segments',
     'sessionEvents',
+    'decisionEvents',
     'jobLog',
     'emailLog',
   ] as const) {

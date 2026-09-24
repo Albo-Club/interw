@@ -58,6 +58,9 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   candidateWrite: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
   // Report share views, keyed by the resolved share, never the raw token.
   shareView: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
+  // Report relaunches, per recruiter. Each one can re-bill transcriptions and
+  // a deep-model completion; a stuck report needs one click, not a hundred.
+  reportRelaunch: { kind: 'token bucket', rate: 10, period: HOUR, capacity: 3 },
 })
 
 type LimitName =
@@ -72,6 +75,7 @@ type LimitName =
   | 'candidateRead'
   | 'candidateWrite'
   | 'shareView'
+  | 'reportRelaunch'
 
 /**
  * Throws a friendly ConvexError when a limit is hit. The data payload includes

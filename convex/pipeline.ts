@@ -148,10 +148,13 @@ export const onSessionCompleted = internalMutation({
       return null
     }
 
-    // Re-entrant on purpose: this also runs when an operator relaunches a
-    // stuck session. An answer that already has a transcript keeps it and
-    // counts as settled; one that failed for good goes back to `pending` and
-    // gets another real attempt, which is the whole point of relaunching.
+    // Re-entrant on purpose: this also runs when someone relaunches a stuck
+    // session. An answer that already has a transcript keeps it and counts as
+    // settled; one that failed for good goes back to `pending` and gets
+    // another real attempt, which is the whole point of relaunching. One that
+    // is `pending` already has a job in the pool, whose `onTranscribeComplete`
+    // will settle it: queueing a second would bill the provider twice for the
+    // same answer.
     let settled = 0
     const toEnqueue: Array<Id<'segments'>> = []
     for (const segment of uploaded) {
@@ -159,6 +162,7 @@ export const onSessionCompleted = internalMutation({
         settled += 1
         continue
       }
+      if (segment.transcriptionState === 'pending') continue
       await ctx.db.patch('segments', segment._id, {
         transcriptionState: 'pending',
       })

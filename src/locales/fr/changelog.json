@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "team-access-hardening": {
+      "title": "Les postes confidentiels le restent, et un retrait met fin à l’accès",
+      "body": "Nous avons renforcé les contrôles sur qui peut voir et modifier les postes confidentiels, et garanti qu’un membre retiré de votre organisation perd entièrement son accès — y compris les e-mails qu’il recevait sur les candidats. Restaurer un poste archivé demande désormais les mêmes droits que l’archiver."
+    },
     "assistant-images-and-role-actions": {
       "title": "Des réponses de l’assistant plus sûres, des actions plus claires",
       "body": "Nous avons renforcé l’assistant : les images de ses réponses ne sont plus chargées, seulement décrites. Et les actions Partager, Archiver et Restaurer d’un poste ne sont plus proposées qu’aux personnes autorisées à les utiliser."

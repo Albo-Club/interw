@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "team-access-hardening": {
+      "title": "Confidential roles stay confidential, and removal ends access",
+      "body": "We tightened who can see and act on confidential roles, and made sure that removing a teammate fully ends their access to your organisation — including the emails they receive about candidates. Restoring an archived role now takes the same rights as archiving it."
+    },
     "assistant-images-and-role-actions": {
       "title": "Safer assistant replies, clearer role actions",
       "body": "We hardened the assistant: images in its replies are no longer loaded, only described. And a role’s Share, Archive and Restore actions are now offered only to the people who can use them."

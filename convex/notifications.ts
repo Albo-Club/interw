@@ -98,6 +98,15 @@ export const sendReportReady = internalMutation({
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
     for (const userId of recipients) {
+      // Membership is re-checked at send time: `createdBy` and a share row are
+      // attributions inside the org, never a grant that outlives removal.
+      const membership = await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', session.orgId).eq('userId', userId),
+        )
+        .unique()
+      if (!membership) continue
       const user = await ctx.db.get('users', userId)
       if (!user) continue
       const { subject, html, text } = reportReadyEmail({

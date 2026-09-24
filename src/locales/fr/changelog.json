@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "assistant-images-and-role-actions": {
+      "title": "Des réponses de l’assistant plus sûres, des actions plus claires",
+      "body": "Nous avons renforcé l’assistant : les images de ses réponses ne sont plus chargées, seulement décrites. Et les actions Partager, Archiver et Restaurer d’un poste ne sont plus proposées qu’aux personnes autorisées à les utiliser."
+    },
     "abuse-hardening": {
       "title": "Renforcé contre les usages abusifs",
       "body": "Nous avons renforcé l’assistant IA, l’import d’offres d’emploi, les notifications de compte et les liens de partage de rapports contre les usages abusifs, pour qu’ils restent rapides et équitables pour tous."

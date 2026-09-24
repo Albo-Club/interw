@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "assistant-images-and-role-actions": {
+      "title": "Safer assistant replies, clearer role actions",
+      "body": "We hardened the assistant: images in its replies are no longer loaded, only described. And a role’s Share, Archive and Restore actions are now offered only to the people who can use them."
+    },
     "abuse-hardening": {
       "title": "Hardened against misuse",
       "body": "We hardened the AI assistant, job-ad import, account notifications and shared report links against misuse, so they stay fast and fair for everyone."

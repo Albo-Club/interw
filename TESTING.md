@@ -222,6 +222,7 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | C1b | Press ⌘J / Ctrl+J (or the header AI button), then reload | Panel toggles; state persists across reload (cookie `ai_panel_state`) |
 | C2  | Send a simple message ("ping")                          | Stream visible token by token; "Thinking…" before first token; no UI blocking |
 | C2b | Ask for a formatted response ("bullet list + bold")     | Markdown rendered via streamdown (bullets, bold, inline code, tables) |
+| C2c | Ask it to reply with `![chart](https://example.com/x.png)`, then with `<img src="https://example.com/x.png" alt="chart">` | Both show "[Image not shown: chart]" ("[Image non affichée : chart]" in FR); DevTools › Network shows **no** request to example.com. Links still open the confirmation modal |
 | C3  | Ask the agent "list my open roles" (an empty-state suggestion) | `listRoles` runs (read-only, no approval), collapsible tool call, response lists Acme roles |
 | C4  | Ask it to reject a candidate, invite someone, or change a role | It refuses and points at where to do it in the app. **Every tool is read-only** — a hiring decision is never a tool call |
 | C5  | While a long answer streams, click **Stop**             | Generation aborts                                                 |
@@ -277,6 +278,7 @@ is cheaper to get wrong.
 | IA9 | Restrict a role | Share → name one colleague → Save | A different member (non-admin) no longer sees the role in the list, in search, or by URL — and gets **not found**, not "forbidden" |
 | IA10 | Archive | Archive an active role | Becomes read-only; editing is refused; restoring returns it to **Draft**, never straight to Active |
 | IA11 | Archiving needs owner or admin | As a plain member of the org, try to archive a live role | Refused. Archiving closes the link of every candidate mid-interview at once, so it is no longer less protected than deleting an empty role |
+| IA11b | Actions follow the tier | As a plain member, open ⋯ on a role someone else created, then that role's page | Only **Edit**: no Share, Archive or Restore. On a role you created, they are shown; admins and owners see them everywhere. The server refuses the member anyway (`insufficient_role`) — this row checks the UI does not offer what will fail |
 
 ### Editing a role that already has candidates
 

@@ -1599,14 +1599,17 @@ reference in a module-level initialiser.
 `_storage` carries no owner field and `ctx.storage.delete` accepts any id. So a
 mutation that takes an `Id<'_storage'>` from a client must refuse an id another
 row already references, and must delete a blob only when no other row still
-points at it — `claim` / `release` in `convex/files.ts`. And a raw storage id
+points at it — `claim` in `convex/files.ts`, `heldElsewhere` / `release` in
+`convex/lib/storage.ts`. And a raw storage id
 never reaches a client: resolve it to a URL server-side.
 `organizations.bySlug` used to spread the whole row, handing every member the
 logo's handle, which `setMyAvatar` then accepted and `removeMyAvatar` deleted
 (audit 2026-09-22, `convex/files.ts:setMyAvatar:storageId-unbound-to-caller`).
 
-`users.cascadeDelete` still deletes the avatar blob without that check. It is
-reachable only for a blob two rows already shared before `claim` existed.
+Every path that clears an avatar or a logo — `setMyAvatar`, `removeMyAvatar`,
+`setOrgLogo`, `removeOrgLogo` and `users.cascadeDelete` — goes through
+`release`, never a bare `ctx.storage.delete`, so a blob two rows already shared
+before `claim` existed survives until its last holder lets go.
 
 ## Candidate recordings are NOT in Convex file storage
 

@@ -106,15 +106,25 @@
     "clearExpiry": "No expiry",
     "intro": {
       "title": "Introduction",
-      "subtitle": "The first thing a candidate sees. A recorded welcome sets a much better tone than a wall of text.",
+      "subtitle": "The first thing a candidate sees: you, on camera, welcoming them. Without one, candidates go straight to the first question.",
       "mode": {
         "none": "No introduction",
-        "text": "Written",
-        "audio": "Recorded audio",
-        "video": "Recorded video"
+        "video": "Video of you"
       },
-      "text": "Introduction text",
-      "textPlaceholder": "Welcome, and thank you for your time…"
+      "media": {
+        "hint": "Until you record it, candidates go straight to the first question.",
+        "record": "Record your intro",
+        "rerecord": "Record again",
+        "remove": "Remove video",
+        "stop": "Stop",
+        "uploading": "Uploading…",
+        "uploadFailed": "Upload failed. Nothing was saved — try again.",
+        "none": "No video recorded yet.",
+        "ready": "Your intro video",
+        "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again.",
+        "noCamera": "No camera found. The intro is a video: connect a camera, then try again.",
+        "unsupported": "This browser can't record video. Use the latest Chrome, Safari, Firefox or Edge."
+      }
     }
   },
   "questions": {
@@ -148,7 +158,9 @@
       "uploadFailed": "Upload failed. Nothing was saved — try again.",
       "none": "No recording. The question will be shown as text.",
       "ready": "Recorded",
-      "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again."
+      "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again.",
+      "noCamera": "No camera or microphone found. Connect one, then try again.",
+      "unsupported": "This browser can't record. Use the latest Chrome, Safari, Firefox or Edge."
     },
     "remove": "Delete question",
     "removeConfirm": {

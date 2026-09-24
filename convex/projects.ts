@@ -9,6 +9,7 @@ import {
   projectStatusValidator,
 } from './schema'
 import { requireOrgMember, requireOrgRole } from './lib/auth'
+import { effectiveIntroMode } from './lib/candidateView'
 import {
   filterVisibleProjects,
   requireProjectEditable,
@@ -21,7 +22,6 @@ import type { Doc, Id } from './_generated/dataModel'
 
 const TITLE_MAX = 120
 const JOB_TITLE_MAX = 120
-const INTRO_TEXT_MAX = 2_000
 const PERSONA_NAME_MAX = 60
 const MIN_DURATION_MINUTES = 5
 const MAX_DURATION_MINUTES = 120
@@ -140,8 +140,7 @@ export const getBySlug = query({
       project: {
         ...toSummary(project),
         personaName: project.personaName ?? null,
-        introMode: project.introMode,
-        introText: project.introText ?? null,
+        introMode: effectiveIntroMode(project),
         hasIntroMedia: project.introMediaKey !== undefined,
         maxDurationMinutes: project.maxDurationMinutes,
         candidateFields: project.candidateFields,
@@ -225,7 +224,6 @@ export const update = mutation({
     language: v.optional(languageValidator),
     personaName: v.optional(v.string()),
     introMode: v.optional(introModeValidator),
-    introText: v.optional(v.string()),
     maxDurationMinutes: v.optional(v.number()),
     candidateFields: v.optional(candidateFieldsValidator),
     /** Epoch ms, or null to clear. */
@@ -254,13 +252,6 @@ export const update = mutation({
       )
     }
     if (args.introMode !== undefined) patch.introMode = args.introMode
-    if (args.introText !== undefined) {
-      patch.introText = optionalText(
-        args.introText,
-        INTRO_TEXT_MAX,
-        'intro_too_long',
-      )
-    }
     if (args.maxDurationMinutes !== undefined) {
       if (
         !Number.isInteger(args.maxDurationMinutes) ||

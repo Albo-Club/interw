@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "video-intro": {
+      "title": "Film your intro, replay your questions",
+      "body": "You can now film a short video intro for a role from its Basics step: candidates see it before the first question. The intro is a video or nothing — written and audio intros are gone, and a role that had one now opens straight on its first question. Every question you record now plays back right where you recorded it, and a recording made without a camera plays as audio for you and for candidates."
+    },
     "role-team": {
       "title": "Choose who follows each role",
       "body": "Each role now has a team: you, plus the colleagues you pick when you create it or later from Team. The team sees the role and gets the email when a candidate's report is ready — nobody else in your organisation is emailed any more. Admins and owners still see every role. A role that was open to everyone is now visible to its creator, admins and owners until you add its team."

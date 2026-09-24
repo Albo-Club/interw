@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "video-intro": {
+      "title": "Filmez votre introduction, réécoutez vos questions",
+      "body": "Vous pouvez désormais filmer une courte vidéo d'introduction depuis l'étape « Le poste » : les candidats la voient avant la première question. L'introduction est une vidéo, ou rien — les introductions écrites et audio disparaissent, et un poste qui en avait une commence désormais directement par sa première question. Chaque question enregistrée se réécoute à l'endroit même où vous l'avez enregistrée, et un enregistrement fait sans caméra se lit en audio, pour vous comme pour les candidats."
+    },
     "role-team": {
       "title": "Choisissez qui suit chaque poste",
       "body": "Chaque poste a désormais une équipe : vous, plus les collègues que vous choisissez à la création ou ensuite depuis Équipe. L’équipe voit le poste et reçoit l’e-mail quand le rapport d’un candidat est prêt — plus personne d’autre dans votre organisation n’est notifié. Les administrateurs et propriétaires voient toujours tous les postes. Un poste ouvert à tous n’est plus visible que de son créateur, des administrateurs et des propriétaires, jusqu’à ce que vous ajoutiez son équipe."

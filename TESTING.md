@@ -272,8 +272,10 @@ is cheaper to get wrong.
 | -- | -------- | ----- | -------- |
 | IA1 | Create a role | `/app/{org}/projects` → New role → title + language → Create | Lands in the wizard on step 1, status **Draft** |
 | IA2 | Questions | Wizard → Questions → **Add a question** three times, edit the text, reorder with the arrows | Each click opens an editable card seeded with the example question. `questions.create` refuses empty text, so the button must never send it — a toast saying the question needs text is the bug this row exists for. Order persists on reload; indices stay contiguous |
-| IA3 | Record a question | Questions → Record this question → speak → Stop | Uploads, then shows **Recorded**. Check the object exists in the bucket under `orgs/{orgId}/projects/{projectId}/q-{questionId}.*` |
-| IA4 | Re-record | Record again with a different browser (WebM vs MP4) | The old object is deleted, not orphaned. Exactly one `q-{questionId}.*` remains |
+| IA3 | Record a question | Questions → Record this question → speak → Stop | Uploads, then the recording **plays back** in place (E7), with native controls. Check the object exists in the bucket under `orgs/{orgId}/projects/{projectId}/q-{questionId}.*`. A take recorded audio-only plays in an audio bar, not a black 16:9 box |
+| IA4 | Re-record | Record again with a different browser (WebM vs MP4) | The old object is deleted, not orphaned. Exactly one `q-{questionId}.*` remains, and the player shows the new take |
+| IA4b | Intro video | Basics → Introduction → **Video of you** → Record your intro → Stop | Uploads, then plays back in place; one `intro.*` object in the bucket, never `intro.weba`. The selector offers only **No introduction** and **Video of you**. On a machine with no camera the take is refused with "No camera found" — it never falls back to audio |
+| IA4c | Forged intro key (Pipe F6) | Call `media:attachIntroMedia` with the role's intro prefix and a made-up extension (`…/intro.zzz`) | Refused with `key_mismatch`; the current intro is still there. `convex/media.test.ts` |
 | IA5 | Criteria and weights | Add three criteria with weights 10 / 10 / 10 | Each shows **34% / 33% / 33%** — never 33/33/33 |
 | IA6 | Publish gate | Try to publish with no question | Refused with "Add at least one question" |
 | IA7 | Import a job ad | Questions → Import from a job ad → paste a real published ad URL | Draft appears with the requested number of questions and criteria summing to 100. **Nothing is saved** until "Add all to the role" |
@@ -307,6 +309,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IB3 | Duplicate invite | Paste the same list twice | No second session; the existing link is re-sent |
 | IB4 | Welcome screen | Open the link | Greeting, role, question count, duration, and a **What you'll need** block (camera and microphone, a quiet place, keep the page open). The only secondary link is **Your data**, in the footer. No app navigation anywhere on the page |
 | IB4b | Role language | Create a role in French, open its link in a browser set to English | The whole candidate surface is in French — welcome, check, interview, thank-you page and data page. It follows the role, not the browser |
+| IB4c | No intro, no intro screen | Invite a candidate on a role set to **No introduction**, then on one set to **Video of you** with nothing recorded | Both go from the device check straight to question 1 — no intro screen, not even an empty one. With a recorded intro, the intro screen shows the video and **I'm ready** |
 | IB5 | Consent | Try to continue without ticking the box | Blocked. After ticking, `consentAcceptedAt` is set |
 | IB6 | CV upload | Upload a PDF, then a `.txt` renamed to `.pdf` | First succeeds; second is refused on content type |
 | IB7 | Device check | Deny camera permission | Explains how to allow it in the address bar — never a blank screen |

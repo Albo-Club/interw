@@ -26,11 +26,16 @@ export const projectStatusValidator = v.union(
 
 export const languageValidator = v.union(v.literal('fr'), v.literal('en'))
 
-export const introModeValidator = v.union(
-  v.literal('none'),
+/** What a role opens on: nothing, or a video the recruiter filmed. */
+export const introModeValidator = v.union(v.literal('none'), v.literal('video'))
+
+/** What a stored row may still hold. `text` and `audio` are retired: read as
+ *  `none` everywhere, rewritten by `media.migrateLegacyIntroModes`, and
+ *  dropped from here once that has run on every deployment. */
+const storedIntroModeValidator = v.union(
+  introModeValidator,
   v.literal('text'),
   v.literal('audio'),
-  v.literal('video'),
 )
 
 export const mediaKindValidator = v.union(
@@ -280,7 +285,8 @@ export default defineSchema({
     language: languageValidator,
     personaName: v.optional(v.string()),
     personaAvatarKey: v.optional(v.string()),
-    introMode: introModeValidator,
+    introMode: storedIntroModeValidator,
+    /** Retired with the `text` intro mode: written and read by nothing. */
     introText: v.optional(v.string()),
     introMediaKey: v.optional(v.string()),
     maxDurationMinutes: v.number(),

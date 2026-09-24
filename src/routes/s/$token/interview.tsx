@@ -29,6 +29,7 @@ import { uploadToSignedUrl } from '~/lib/media/upload'
 import {
   initialInterviewState,
   interviewReducer,
+  opensOnIntro,
 } from '~/lib/interview-machine'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
@@ -36,6 +37,7 @@ import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { PromptMedia } from '~/components/candidate/PromptMedia'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
@@ -184,19 +186,22 @@ function InterviewRunner() {
     if (!data || bootedRef.current) return
     bootedRef.current = true
     const needsMedia =
-      data.hasIntroMedia || data.questions.some((question) => question.hasMedia)
+      (data.introMode === 'video' && data.hasIntroMedia) ||
+      data.questions.some((question) => question.hasMedia)
     // Reported once booted, into a phase that shows it.
     const deviceFailure = openStream().then(
       () => null,
       (cause: unknown) => cause,
     )
     void (async () => {
+      let introUrl: string | null = null
       try {
         const [, urls] = await Promise.all([
           start({ token }),
           needsMedia ? promptMedia({ token }) : null,
         ])
         if (urls) {
+          introUrl = urls.intro
           setMedia({
             intro: urls.intro,
             questions: Object.fromEntries(
@@ -212,8 +217,10 @@ function InterviewRunner() {
         type: 'booted',
         resumeAt: data.nextQuestionIndex,
         total: data.questions.length,
-        showIntro:
-          data.introMode !== 'none' && data.questions.every((q) => !q.answered),
+        showIntro: opensOnIntro(
+          { mode: data.introMode, url: introUrl },
+          data.questions.map((q) => q.answered),
+        ),
       })
       const failure = await deviceFailure
       if (failure) {
@@ -419,15 +426,13 @@ function InterviewRunner() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {t('interview:run.intro.title')}
           </h1>
-          {media.intro ? (
-            <video
+          {media.intro && (
+            <PromptMedia
               src={media.intro}
-              controls
-              playsInline
-              className="bg-muted aspect-video w-full rounded-lg"
+              kind="video"
+              label={t('interview:run.intro.title')}
+              className="rounded-lg"
             />
-          ) : (
-            <p className="max-w-prose leading-relaxed">{data.introText}</p>
           )}
           <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
             {t('interview:run.intro.continue')}
@@ -485,12 +490,14 @@ function InterviewRunner() {
 
               <section className="space-y-4 rounded-lg border p-5">
                 {current.hasMedia && media.questions[current.questionId] ? (
-                  <video
+                  <PromptMedia
                     key={current.questionId}
                     src={media.questions[current.questionId]}
-                    controls
-                    playsInline
-                    className="bg-muted aspect-video w-full rounded-md"
+                    kind={current.mediaKind ?? 'video'}
+                    label={t('interview:run.progress', {
+                      index: state.index + 1,
+                      total: state.total,
+                    })}
                   />
                 ) : null}
                 <div className="space-y-2">

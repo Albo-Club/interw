@@ -4,6 +4,7 @@ import {
   initialInterviewState,
   interviewReducer,
   nextOpenQuestion,
+  opensOnIntro,
 } from './interview-machine'
 import type { InterviewEvent, InterviewState } from './interview-machine'
 
@@ -46,6 +47,28 @@ describe('booting', () => {
     expect(run([boot(0, 4, true)]).phase).toBe('intro')
     expect(run([boot(4, 4, true)]).phase).toBe('review')
     expect(run([boot(0, 4, true), { type: 'introDone' }]).phase).toBe('prompt')
+  })
+
+  // Decision n° 1 (T05): a role with no intro opens on its first question,
+  // and the candidate never sees an intro screen. Cand F2: nor one with
+  // nothing on it, when the video could not be signed.
+  it('opens on the intro only for a video that can be played, on a first visit', () => {
+    const fresh = [false, false]
+    const video = { mode: 'video', url: 'https://media.test/intro.mp4' } as const
+    expect(opensOnIntro(video, fresh)).toBe(true)
+    expect(opensOnIntro({ mode: 'none', url: null }, fresh)).toBe(false)
+    expect(opensOnIntro({ mode: 'video', url: null }, fresh)).toBe(false)
+    // A URL signed for an intro the recruiter has since switched off.
+    expect(opensOnIntro({ mode: 'none', url: video.url }, fresh)).toBe(false)
+    expect(opensOnIntro(video, [true, false])).toBe(false)
+  })
+
+  it('goes straight to the first question when there is no intro', () => {
+    const showIntro = opensOnIntro({ mode: 'none', url: null }, [false, false])
+    expect(run([boot(0, 2, showIntro)])).toMatchObject({
+      phase: 'prompt',
+      index: 0,
+    })
   })
 
   it('boots once', () => {

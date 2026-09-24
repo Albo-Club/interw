@@ -26,7 +26,10 @@ import {
   sessionStatusValidator,
 } from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
-import { toCandidateQuestionView } from './lib/candidateView'
+import {
+  effectiveIntroMode,
+  toCandidateQuestionView,
+} from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { generateToken, looksLikeToken } from './lib/tokens'
@@ -135,7 +138,6 @@ export const questions = query({
     /** The role's language, which the whole candidate surface speaks. */
     language: languageValidator,
     introMode: introModeValidator,
-    introText: v.union(v.string(), v.null()),
     hasIntroMedia: v.boolean(),
   }),
   handler: async (ctx, { token, now }) => {
@@ -155,8 +157,7 @@ export const questions = query({
       })),
       nextQuestionIndex: progress.nextQuestionIndex,
       language: project.language,
-      introMode: project.introMode,
-      introText: project.introText ?? null,
+      introMode: effectiveIntroMode(project),
       hasIntroMedia: project.introMediaKey !== undefined,
     }
   },
@@ -195,7 +196,12 @@ export const resolvePromptMedia = internalQuery({
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
     return {
-      introKey: project.introMediaKey ?? null,
+      // A video kept while the intro is switched off is not the candidate's
+      // to see.
+      introKey:
+        effectiveIntroMode(project) === 'video'
+          ? (project.introMediaKey ?? null)
+          : null,
       questionKeys: rows.flatMap((question) =>
         question.mediaKey
           ? [{ questionId: question._id, key: question.mediaKey }]

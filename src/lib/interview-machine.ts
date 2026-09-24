@@ -111,6 +111,23 @@ export function nextOpenQuestion(
   return answered.length
 }
 
+/**
+ * Whether the interview opens on the recruiter's intro: a video that can be
+ * played, on a first visit. Anything else — no intro, a mode since retired, a
+ * URL that could not be signed — goes straight to the first question, and the
+ * candidate never sees an intro screen. One with nothing on it is a dead end.
+ */
+export function opensOnIntro(
+  intro: { mode: 'none' | 'video'; url: string | null },
+  answered: ReadonlyArray<boolean>,
+): boolean {
+  return (
+    intro.mode === 'video' &&
+    intro.url !== null &&
+    answered.every((done) => !done)
+  )
+}
+
 function moveTo(state: InterviewState, index: number): InterviewState {
   return {
     ...state,

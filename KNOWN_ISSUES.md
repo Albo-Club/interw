@@ -1852,6 +1852,30 @@ Traps:
   every org. A share link acts for whoever made it, so it must not outlive
   their membership (h03).
 
+## A role's intro is a video, or nothing
+
+Decision n° 1 of 24/09: the intro modes are `none` and `video`. The written
+and audio intros are gone from the selector and from `projects.update`, and
+`requestIntroUpload` only issues a slot for a video type — without a camera
+the take is refused, never saved as audio. A role with no intro, or in video
+mode with nothing recorded, sends the candidate from the device check straight
+to question 1 (`opensOnIntro` in `src/lib/interview-machine.ts`): an intro
+screen with nothing on it was a dead end.
+
+**The trap: `text` and `audio` are still in the `projects` table's validator.**
+Narrowing a stored union before the rows are rewritten fails the schema check
+on push — same widen-then-narrow rule as the hot `users` row above. So:
+
+- the argument and return validators use `introModeValidator` (`none | video`);
+  the table uses `storedIntroModeValidator`, which also admits the two retired
+  literals;
+- every read goes through `effectiveIntroMode` (`convex/lib/candidateView.ts`),
+  which reads a retired mode as `none` — nothing waits on the migration;
+- `internal.media.migrateLegacyIntroModes` rewrites those rows (and releases
+  an audio intro's object). It is **not** run by any deploy: run it once per
+  deployment, then drop the two literals from `schema.ts` in a later deploy.
+  `introText` is kept, read by nothing, until then.
+
 ## The shadcn CLI rewrites files you did not ask it to
 
 `pnpm dlx shadcn@latest add alert-dialog switch` also rewrote

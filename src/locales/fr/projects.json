@@ -106,15 +106,25 @@
     "clearExpiry": "Pas d'expiration",
     "intro": {
       "title": "Message d'introduction",
-      "subtitle": "La première chose que voit un candidat. Un accueil enregistré donne un tout autre ton qu'un pavé de texte.",
+      "subtitle": "La première chose que voit un candidat : vous, face caméra, qui l'accueillez. Sans introduction, le candidat passe directement à la première question.",
       "mode": {
         "none": "Pas d'introduction",
-        "text": "Écrit",
-        "audio": "Audio enregistré",
-        "video": "Vidéo enregistrée"
+        "video": "Vidéo de vous"
       },
-      "text": "Texte d'introduction",
-      "textPlaceholder": "Bienvenue, et merci du temps que vous nous accordez…"
+      "media": {
+        "hint": "Tant qu'elle n'est pas enregistrée, les candidats passent directement à la première question.",
+        "record": "Enregistrer votre introduction",
+        "rerecord": "Réenregistrer",
+        "remove": "Supprimer la vidéo",
+        "stop": "Arrêter",
+        "uploading": "Envoi en cours…",
+        "uploadFailed": "Envoi impossible. Rien n'a été enregistré — réessayez.",
+        "none": "Aucune vidéo enregistrée pour l'instant.",
+        "ready": "Votre vidéo d'introduction",
+        "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez.",
+        "noCamera": "Aucune caméra détectée. L'introduction est une vidéo : branchez une caméra, puis réessayez.",
+        "unsupported": "Ce navigateur ne peut pas enregistrer de vidéo. Utilisez la dernière version de Chrome, Safari, Firefox ou Edge."
+      }
     }
   },
   "questions": {
@@ -148,7 +158,9 @@
       "uploadFailed": "Envoi impossible. Rien n'a été enregistré — réessayez.",
       "none": "Aucun enregistrement. La question sera affichée en texte.",
       "ready": "Enregistrée",
-      "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez."
+      "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez.",
+      "noCamera": "Aucune caméra ni micro détecté. Branchez-en un, puis réessayez.",
+      "unsupported": "Ce navigateur ne peut pas enregistrer. Utilisez la dernière version de Chrome, Safari, Firefox ou Edge."
     },
     "remove": "Supprimer la question",
     "removeConfirm": {

@@ -158,12 +158,12 @@ Still logged in as Alice. Prepare a second browser for Bob.
 
 | #   | Step                                                        | Expected result                                                     |
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| M1  | `/app/acme/settings/invitations` → invite `bob@test.local`  | Email sent, listed as pending                                       |
+| M1  | `/app/acme/settings/invitations` → invite `bob@test.local`  | Email sent (names the role, what interw is, the expiry date), listed as pending with "Invited by Alice on <date>" in the app locale |
 | M2  | Browser 2 (incognito) → open the invitation link            | `/accept-invite/<token>` accessible unauthenticated                 |
-| M3  | Sign up Bob via the invitation flow                         | Bob created, automatically a member of Acme with "member" role. **No email-verification step**: the invite token pre-verifies the email (token-gated), Bob is signed in and lands on `/app/acme` directly |
+| M3  | Sign up Bob via the invitation flow                         | The page says "Alice invited you to join Acme as Member". Bob created, automatically a member of Acme with "member" role. **No email-verification step**: the invite token pre-verifies the email (token-gated), Bob is signed in, lands on `/app/acme` directly with a "You joined Acme as Member" toast |
 | M4  | Bob visits `/app/acme/projects`                             | Sees the roles he is allowed to see, can create one                 |
 | M5  | Alice changes Bob's role → "admin"                          | Persists, Bob sees the updated badge                                |
-| M6  | Bob creates a second org "Beta"                             | Switches to `/app/beta`, Alice is NOT a member                      |
+| M6  | Bob creates a second org "Beta" from the org switcher → "Create organization" | `/app/onboarding` titled "Create an organization" (not "first"), with a "Back to my organization" link. Submit switches to `/app/beta`, Alice is NOT a member |
 | M7  | Alice navigates to `/app/beta` directly                     | Redirects to `/app` or 403                                          |
 | M8  | Roles isolated: Alice sees Acme roles only                  | No Beta role on Alice's side                                        |
 | M9  | Switch org via top-bar dropdown                             | Routes recalculated, roles reloaded                                 |
@@ -175,16 +175,32 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | #  | Step                                                       | Expected result                                                     |
 | -- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
 | I1 | Invite an email already a member                           | Error "already_member", no duplicate                                |
-| I2 | Invite the same email twice (both pending)                 | Rejected or replaces the invitation, no duplicate                   |
-| I3 | Accept an expired invitation (force `expiresAt` in past), not yet a member | Error "expired", no member added                          |
-| I4 | Re-open an invite link already accepted (still a member)   | **No error**: idempotent no-op, re-lands on `/app/<org>` (the accept effect can fire twice / second tab — replayable) |
-| I5 | Accept invitation with a different account than the one invited | `/accept-invite` shows the "wrong account" switch card; a forced backend `accept` for a non-member with a mismatched email throws "email_mismatch" |
-| I6 | Spam 25 invitations in < 1h                                | Rate-limit triggers → "rate_limited" after threshold                |
-| I7 | Revoke a pending invitation                                | Disappears from list, link becomes invalid                          |
+| I2 | Invite the same email twice (both pending)                 | Second one rejected ("Already has a pending invitation"), no duplicate |
+| I3 | Accept an expired invitation (force `expiresAt` in past), not yet a member | "Invitation expired" card naming the org and inviter ("Ask Alice from Acme for a new invitation"), with "Sign in" (signed out) or "Go to the app" (signed in); no member added |
+| I4 | Re-open an invite link already accepted (still a member)   | **No error**: idempotent no-op, re-lands on `/app/<org>` (the accept effect can fire twice / second tab — replayable). Signed out, the "already used" card offers "Sign in", which returns to the link and then to the org |
+| I5 | Accept invitation with a different account than the one invited | `/accept-invite` shows the "wrong account" card: "Sign out & switch account", "Stay signed in and go to my app", and a hint to ask the inviter to invite the current address. Also for an account created seconds ago (no Convex row yet): same card, never a raw "email_mismatch" |
+| I6 | Spam 25 invitations in < 1h                                | Rate-limit triggers → "Invitation limit reached: you can send about 20 per hour" on the address that hit it; the rest of a pasted list is marked "Not sent" and left in the box |
+| I7 | Revoke a pending invitation                                | Confirmation dialog, spinner on confirm; disappears from list, link becomes invalid |
 | I8 | Verify `RESEND_TEST_MODE=true` sends no real email         | Convex logs show "skipped (test mode)"                              |
 | I9 | **Token-gated security** — sign up at `/register` with NO valid invite token (normal signup) | Email is **not** pre-verified: verification email sent, `emailVerified` stays false until the link is clicked. A signup whose `inviteToken` is absent/stale/for another email never bypasses verification |
 | I10 | Email-match casing — invite `Bob@Test.local`, accept signed in as `bob@test.local` | Accepted (match is case- and whitespace-insensitive on both sides) |
 | I11 | Sign up from `/register?redirect=/accept-invite/<token>` (not the inline accept page) | Lands **in the org** (`/app/<org>`), not stuck on `/app`: token-gated signup → signin → full nav to the accept page, which attaches the member. Parity with the inline `/accept-invite` flow |
+
+### Invitation management and pending invitations (10 min)
+
+Server rules are covered by `convex/invitations.test.ts`; these rows check the screens.
+
+| #      | Step | Expected result |
+| ------ | ---- | --------------- |
+| INV-1  | Force an invitation's `expiresAt` into the past, reload `/app/acme/settings/invitations` | Row shows an "Expired" badge and "Expired on <date>", no "Copy link". Inviting the same address again succeeds and replaces the row |
+| INV-2  | Paste `a@test.local, b@test.local` + a line with an existing member's address, send | One result line per address: two "Invitation sent", one "Already a member of this organization"; toast "2 invitations sent"; only the failed address stays in the box |
+| INV-3  | "Resend" on a pending row | Second email received with the same link; "Expires on" moves 7 days out; "Invited by" becomes the admin who resent |
+| INV-4  | "Copy link" on a pending row | Toast "Invite link copied"; the clipboard holds `<SITE_URL>/accept-invite/<token>` |
+| INV-5  | Invite `bounced@resend.dev` (Resend's bounce test address; needs `RESEND_TEST_MODE=false` and the webhook set up) | After the webhook fires, the row says the email bounced, in red |
+| INV-6  | Invite `carol@test.local`, then Carol signs up at `/register` **without** the link | Onboarding shows "Alice invited you to join Acme as Member — Join Acme" above the create form; Join lands in `/app/acme` with the welcome toast, no duplicate org |
+| INV-7  | Invite an existing user of another org (Bob, member of Beta) to Acme | Inside Beta, a banner under the header offers "Join Acme"; after joining, the banner is gone and Bob is in `/app/acme` |
+| INV-8  | Signed in as someone else, check onboarding / the banner | Never shows an invitation addressed to another email |
+| INV-9  | Onboarding with no invitation | "Waiting for an invitation?" hint naming the account's email, a language switcher and "Sign out". Typing a name fills the web address (editable), shows `<host>/app/<address>` and "can't be changed later"; submit disabled while the address is being checked or taken |
 
 ## Level 4 — Uploads (5 min)
 

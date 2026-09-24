@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "team-invitations": {
+      "title": "Smoother team invitations",
+      "body": "Invite several teammates at once, see who invited whom and when, resend an invitation or copy its link, and spot an email that bounced. Expired invitations are marked as such and can be sent again. People who sign up without the link now see the invitation waiting for them instead of creating a second organization, and anyone can create another organization from the organization menu. The invitation email now says which role you are offered and until when."
+    },
     "sturdier-interview": {
       "title": "A sturdier interview for your candidates",
       "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."

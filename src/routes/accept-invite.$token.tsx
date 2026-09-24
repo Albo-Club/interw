@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexAuth } from 'convex/react'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useForm } from '@tanstack/react-form'
 import { Trans, useTranslation } from 'react-i18next'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { ConvexError } from 'convex/values'
-
 import { api } from '../../convex/_generated/api'
+import { emailsMatch } from '../../convex/lib/invitations'
+import type { ReactNode } from 'react'
+
 import { authClient } from '~/lib/auth-client'
+import { convexErrorCode } from '~/lib/convex-errors'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { classifyAuthError, formatAuthError } from '~/lib/auth-errors'
@@ -17,6 +19,7 @@ import { isPasswordPwned } from '~/lib/hibp'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Spinner } from '~/components/ui/spinner'
+import { AuthShell } from '~/components/auth/auth-shell'
 import { PasswordInput } from '~/components/auth/password-input'
 import { PasswordStrength } from '~/components/auth/password-strength'
 import { VerificationSentCard } from '~/components/auth/verification-sent'
@@ -27,14 +30,7 @@ import {
   FieldGroup,
   FieldLabel,
 } from '~/components/ui/field'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card'
+import { CardContent, CardFooter } from '~/components/ui/card'
 
 export const Route = createFileRoute('/accept-invite/$token')({
   component: AcceptInvitePage,
@@ -53,9 +49,16 @@ export const Route = createFileRoute('/accept-invite/$token')({
 type Preview = NonNullable<
   ReturnType<typeof useConvexQuery<typeof api.invitations.preview>>
 >
+type OkPreview = Extract<Preview, { kind: 'ok' }>
+
+type AcceptState =
+  | { status: 'idle' | 'pending' }
+  | { status: 'failed'; code: string }
+
+const KNOWN_ACCEPT_ERRORS = ['not_found', 'already_accepted', 'expired']
 
 function AcceptInvitePage() {
-  const { t } = useTranslation('auth')
+  const { t } = useTranslation(['auth', 'common'])
   const { token } = Route.useParams()
   const navigate = useNavigate()
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth()
@@ -63,79 +66,84 @@ function AcceptInvitePage() {
   const me = useConvexQuery(api.users.me, isAuthenticated ? {} : 'skip')
   const acceptMutation = useConvexMutation(api.invitations.accept)
   const triedAccept = useRef(false)
-  const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [accept, setAccept] = useState<AcceptState>({ status: 'idle' })
 
+  // A brand-new account has no Convex row yet, but Better Auth already knows
+  // its address. Using it lets the wrong-account check run before the accept
+  // instead of surfacing afterwards as an `email_mismatch` error.
+  const myEmail =
+    me?.kind === 'ready'
+      ? me.user.email
+      : me?.kind === 'unprovisioned'
+        ? me.baUser.email
+        : null
+
+  const runAccept = useCallback(async () => {
+    setAccept({ status: 'pending' })
+    try {
+      const result = await acceptMutation({ token })
+      if (result.joined) {
+        toast.success(
+          t('auth:acceptInvite.welcome', {
+            orgName: result.orgName,
+            role: t(`common:roles.${result.role}`),
+          }),
+        )
+      }
+      navigate({ to: '/app/$orgSlug', params: { orgSlug: result.orgSlug } })
+    } catch (err) {
+      setAccept({ status: 'failed', code: convexErrorCode(err) ?? 'generic' })
+    }
+  }, [acceptMutation, token, navigate, t])
+
+  // Accept as soon as the right account is signed in. Also on an expired or
+  // already-used link: `accept` is a no-op success for an existing member, so
+  // someone re-opening their invitation lands in the organization instead of
+  // on a dead end, and anyone else gets the card once the accept refuses.
   useEffect(() => {
-    if (!preview || preview.kind !== 'ok') return
-    if (authLoading || !isAuthenticated) return
-    if (me?.kind !== 'ready' && me?.kind !== 'unprovisioned') return
-    const myEmail = me.kind === 'ready' ? me.user.email : null
-    if (myEmail && myEmail.toLowerCase() !== preview.email.toLowerCase()) return
+    if (!preview || preview.kind === 'not_found') return
+    if (authLoading || !isAuthenticated || myEmail === null) return
+    if (preview.kind === 'ok' && !emailsMatch(myEmail, preview.email)) return
     if (triedAccept.current) return
     triedAccept.current = true
-    ;(async () => {
-      try {
-        const { orgSlug } = await acceptMutation({ token })
-        toast.success(t('acceptInvite.accepted'))
-        navigate({ to: '/app/$orgSlug', params: { orgSlug } })
-      } catch (err) {
-        const code = err instanceof ConvexError ? (err.data as string) : ''
-        const known = ['not_found', 'already_accepted', 'expired', 'email_mismatch']
-        setAcceptError(
-          known.includes(code)
-            ? t(`acceptInvite.errors.${code}`)
-            : t('acceptInvite.errors.generic'),
-        )
-        triedAccept.current = false
-      }
-    })()
-  }, [preview, authLoading, isAuthenticated, me, token, navigate, acceptMutation])
+    void runAccept()
+  }, [preview, authLoading, isAuthenticated, myEmail, runAccept])
 
-  if (!preview)
-    return <LoadingCard message={t('acceptInvite.loadingInvitation')} />
-  if (preview.kind === 'not_found') {
-    return (
-      <InfoCard
-        title={t('acceptInvite.notFound.title')}
-        message={t('acceptInvite.notFound.message')}
-      />
-    )
+  if (!preview) {
+    return <LoadingCard message={t('auth:acceptInvite.loadingInvitation')} />
   }
-  if (preview.kind === 'expired') {
+  if (preview.kind !== 'ok') {
+    const awaitingAccept =
+      preview.kind !== 'not_found' &&
+      (authLoading || (isAuthenticated && accept.status !== 'failed'))
+    if (awaitingAccept) return <LoadingCard />
     return (
-      <InfoCard
-        title={t('acceptInvite.expired.title')}
-        message={t('acceptInvite.expired.message')}
-      />
-    )
-  }
-  if (preview.kind === 'already_accepted') {
-    return (
-      <InfoCard
-        title={t('acceptInvite.alreadyAccepted.title')}
-        message={t('acceptInvite.alreadyAccepted.message')}
-      />
+      <DeadEndCard preview={preview} token={token} signedIn={isAuthenticated} />
     )
   }
 
   if (authLoading) return <LoadingCard />
 
   if (isAuthenticated) {
-    if (me?.kind !== 'ready' && me?.kind !== 'unprovisioned') {
-      return <LoadingCard />
-    }
-    const myEmail = me.kind === 'ready' ? me.user.email : null
-    const isMismatch =
-      myEmail && myEmail.toLowerCase() !== preview.email.toLowerCase()
-    if (isMismatch) {
+    if (myEmail === null) return <LoadingCard />
+    if (
+      !emailsMatch(myEmail, preview.email) ||
+      (accept.status === 'failed' && accept.code === 'email_mismatch')
+    ) {
       return <SwitchAccountCard preview={preview} currentEmail={myEmail} />
+    }
+    if (accept.status === 'failed') {
+      return (
+        <AcceptErrorCard
+          preview={preview}
+          code={accept.code}
+          onRetry={() => void runAccept()}
+        />
+      )
     }
     return (
       <LoadingCard
-        message={
-          acceptError ?? t('acceptInvite.joining', { orgName: preview.orgName })
-        }
-        error={!!acceptError}
+        message={t('auth:acceptInvite.joining', { orgName: preview.orgName })}
       />
     )
   }
@@ -147,42 +155,184 @@ function AcceptInvitePage() {
   )
 }
 
-function LoadingCard({
-  message,
-  error = false,
+/** The frame of the sign-in and sign-up states: who invited you, to what. */
+function InviteShell({
+  preview,
+  hint,
+  children,
 }: {
-  message?: string
-  error?: boolean
+  preview: OkPreview
+  hint: ReactNode
+  children: ReactNode
 }) {
   const { t } = useTranslation(['auth', 'common'])
+  const role = t(`common:roles.${preview.role}`)
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {error ? t('auth:acceptInvite.holdOn') : t('auth:acceptInvite.oneMoment')}
-          </CardTitle>
-          <CardDescription>
-            {message ?? t('common:loadingEllipsis')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent />
-      </Card>
-    </main>
+    <AuthShell
+      title={t('auth:acceptInvite.join', { orgName: preview.orgName })}
+      description={
+        <>
+          <span className="block">
+            {preview.inviterName ? (
+              <Trans
+                t={t}
+                i18nKey="auth:acceptInvite.summary"
+                values={{
+                  inviter: preview.inviterName,
+                  orgName: preview.orgName,
+                  role,
+                }}
+              />
+            ) : (
+              <Trans
+                t={t}
+                i18nKey="auth:acceptInvite.summaryNoInviter"
+                values={{ orgName: preview.orgName, role }}
+              />
+            )}
+          </span>
+          <span className="mt-2 block break-words">{hint}</span>
+        </>
+      }
+    >
+      {children}
+    </AuthShell>
   )
 }
 
-function InfoCard({ title, message }: { title: string; message: string }) {
+function LoadingCard({ message }: { message?: string }) {
+  const { t } = useTranslation(['auth', 'common'])
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>{message}</CardDescription>
-        </CardHeader>
-        <CardContent />
-      </Card>
-    </main>
+    <AuthShell
+      title={t('auth:acceptInvite.oneMoment')}
+      description={
+        <span
+          role="status"
+          className="inline-flex items-center justify-center gap-2"
+        >
+          <Spinner />
+          {message ?? t('common:loadingEllipsis')}
+        </span>
+      }
+    >
+      {null}
+    </AuthShell>
+  )
+}
+
+function SignOutButton({
+  label,
+  variant,
+}: {
+  label: string
+  variant?: 'default' | 'ghost'
+}) {
+  const [loading, setLoading] = useState(false)
+  return (
+    <Button
+      variant={variant}
+      className="w-full"
+      disabled={loading}
+      onClick={async () => {
+        setLoading(true)
+        await authClient.signOut()
+        window.location.reload()
+      }}
+    >
+      {loading && <Spinner />}
+      {label}
+    </Button>
+  )
+}
+
+/**
+ * A link that cannot be used. Never a dead end: it names who to ask where the
+ * token still resolves, and always offers the next step.
+ */
+function DeadEndCard({
+  preview,
+  token,
+  signedIn,
+}: {
+  preview: Exclude<Preview, OkPreview>
+  token: string
+  signedIn: boolean
+}) {
+  const { t } = useTranslation('auth')
+  let title: string
+  let message: string
+  if (preview.kind === 'not_found') {
+    title = t('acceptInvite.notFound.title')
+    message = t('acceptInvite.notFound.message')
+  } else if (preview.kind === 'expired') {
+    title = t('acceptInvite.expired.title')
+    message = preview.inviterName
+      ? t('acceptInvite.expired.message', {
+          inviter: preview.inviterName,
+          orgName: preview.orgName,
+        })
+      : t('acceptInvite.expired.messageNoInviter', { orgName: preview.orgName })
+  } else {
+    title = t('acceptInvite.alreadyAccepted.title')
+    message = t(
+      signedIn
+        ? 'acceptInvite.alreadyAccepted.messageSignedIn'
+        : 'acceptInvite.alreadyAccepted.message',
+      { orgName: preview.orgName },
+    )
+  }
+  return (
+    <AuthShell title={title} description={message}>
+      <CardFooter className="flex-col gap-3">
+        {signedIn ? (
+          <Button asChild className="w-full">
+            <Link to="/app">{t('acceptInvite.goToApp')}</Link>
+          </Button>
+        ) : (
+          <Button asChild className="w-full">
+            <Link to="/login" search={{ redirect: `/accept-invite/${token}` }}>
+              {t('acceptInvite.signIn')}
+            </Link>
+          </Button>
+        )}
+      </CardFooter>
+    </AuthShell>
+  )
+}
+
+function AcceptErrorCard({
+  preview,
+  code,
+  onRetry,
+}: {
+  preview: OkPreview
+  code: string
+  onRetry: () => void
+}) {
+  const { t } = useTranslation(['auth', 'common'])
+  return (
+    <AuthShell
+      title={t('auth:acceptInvite.failed.title', { orgName: preview.orgName })}
+      description={
+        <span role="alert">
+          {t(
+            KNOWN_ACCEPT_ERRORS.includes(code)
+              ? `auth:acceptInvite.errors.${code}`
+              : 'auth:acceptInvite.errors.generic',
+          )}
+        </span>
+      }
+    >
+      <CardFooter className="flex-col gap-3">
+        <Button className="w-full" onClick={onRetry}>
+          {t('common:actions.retry')}
+        </Button>
+        <Button asChild variant="outline" className="w-full">
+          <Link to="/app">{t('auth:acceptInvite.goToApp')}</Link>
+        </Button>
+        <SignOutButton variant="ghost" label={t('auth:acceptInvite.signOut')} />
+      </CardFooter>
+    </AuthShell>
   )
 }
 
@@ -190,49 +340,50 @@ function SwitchAccountCard({
   preview,
   currentEmail,
 }: {
-  preview: Extract<Preview, { kind: 'ok' }>
+  preview: OkPreview
   currentEmail: string
 }) {
   const { t } = useTranslation('auth')
-  const [loading, setLoading] = useState(false)
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{t('acceptInvite.wrongAccount.title')}</CardTitle>
-          <CardDescription>
-            <span className="block break-all">
-              <Trans
-                t={t}
-                i18nKey="acceptInvite.wrongAccount.signedInAs"
-                values={{ email: currentEmail }}
-              />
-            </span>
-            <span className="mt-2 block break-all">
-              <Trans
-                t={t}
-                i18nKey="acceptInvite.wrongAccount.invitationFor"
-                values={{ email: preview.email }}
-              />
-            </span>
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="flex-col gap-3">
-          <Button
-            className="w-full"
-            disabled={loading}
-            onClick={async () => {
-              setLoading(true)
-              await authClient.signOut()
-              window.location.reload()
-            }}
-          >
-            {loading && <Spinner />}
-            {t('acceptInvite.wrongAccount.switch')}
-          </Button>
-        </CardFooter>
-      </Card>
-    </main>
+    <AuthShell
+      title={t('acceptInvite.wrongAccount.title')}
+      description={
+        <>
+          <span className="block break-words">
+            <Trans
+              t={t}
+              i18nKey="acceptInvite.wrongAccount.signedInAs"
+              values={{ email: currentEmail }}
+            />
+          </span>
+          <span className="mt-2 block break-words">
+            <Trans
+              t={t}
+              i18nKey="acceptInvite.wrongAccount.invitationFor"
+              values={{ email: preview.email }}
+            />
+          </span>
+          <span className="mt-2 block break-words">
+            {preview.inviterName
+              ? t('acceptInvite.wrongAccount.askAdmin', {
+                  inviter: preview.inviterName,
+                  email: currentEmail,
+                })
+              : t('acceptInvite.wrongAccount.askAdminNoInviter', {
+                  orgName: preview.orgName,
+                  email: currentEmail,
+                })}
+          </span>
+        </>
+      }
+    >
+      <CardFooter className="flex-col gap-3">
+        <SignOutButton label={t('acceptInvite.wrongAccount.switch')} />
+        <Button asChild variant="outline" className="w-full">
+          <Link to="/app">{t('acceptInvite.wrongAccount.stay')}</Link>
+        </Button>
+      </CardFooter>
+    </AuthShell>
   )
 }
 
@@ -286,20 +437,16 @@ function SignInToAccept({
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {t('auth:acceptInvite.join', { orgName: preview.orgName })}
-          </CardTitle>
-          <CardDescription>
-            <Trans
-              t={t}
-              i18nKey="auth:acceptInvite.signInDescription"
-              values={{ email: preview.email }}
-            />
-          </CardDescription>
-        </CardHeader>
+    <InviteShell
+      preview={preview}
+      hint={
+        <Trans
+          t={t}
+          i18nKey="auth:acceptInvite.signInDescription"
+          values={{ email: preview.email }}
+        />
+      }
+    >
         <form
           className="flex flex-col gap-6"
           onSubmit={(e) => {
@@ -367,8 +514,7 @@ function SignInToAccept({
             </Button>
           </CardFooter>
         </form>
-      </Card>
-    </main>
+    </InviteShell>
   )
 }
 
@@ -448,20 +594,16 @@ function SignUpToAccept({
   }
 
   return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {t('auth:acceptInvite.join', { orgName: preview.orgName })}
-          </CardTitle>
-          <CardDescription>
-            <Trans
-              t={t}
-              i18nKey="auth:acceptInvite.signUpDescription"
-              values={{ email: preview.email }}
-            />
-          </CardDescription>
-        </CardHeader>
+    <InviteShell
+      preview={preview}
+      hint={
+        <Trans
+          t={t}
+          i18nKey="auth:acceptInvite.signUpDescription"
+          values={{ email: preview.email }}
+        />
+      }
+    >
         <form
           className="flex flex-col gap-6"
           onSubmit={(e) => {
@@ -575,7 +717,6 @@ function SignUpToAccept({
             </Button>
           </CardFooter>
         </form>
-      </Card>
-    </main>
+    </InviteShell>
   )
 }

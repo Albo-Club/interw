@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "team-invitations": {
+      "title": "Des invitations d’équipe plus simples",
+      "body": "Invitez plusieurs collègues d’un coup, voyez qui a invité qui et quand, renvoyez une invitation ou copiez son lien, et repérez un e-mail qui n’a pas été remis. Les invitations expirées sont signalées et peuvent être renvoyées. Une personne qui s’inscrit sans le lien voit désormais l’invitation qui l’attend au lieu de créer une deuxième organisation, et chacun peut créer une autre organisation depuis le menu des organisations. L’e-mail d’invitation précise le rôle proposé et sa date d’expiration."
+    },
     "sturdier-interview": {
       "title": "Un entretien plus solide pour vos candidats",
       "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."

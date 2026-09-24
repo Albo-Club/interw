@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values'
 import { mutation } from './_generated/server'
 import { requireAppUser, requireOrgRole } from './lib/auth'
+import { heldElsewhere, release } from './lib/storage'
 import type { GenericMutationCtx } from 'convex/server'
 
 import type { DataModel, Id } from './_generated/dataModel'
@@ -29,30 +30,6 @@ async function validateImage(
   }
 }
 
-/**
- * Whether a row other than `self` references this blob. Convex storage has no
- * per-file owner, so our own references are the only ownership record: an
- * avatar or logo may not claim a blob someone else holds, and clearing one
- * never deletes a blob another row still points at.
- */
-async function heldElsewhere(
-  ctx: GenericMutationCtx<DataModel>,
-  storageId: Id<'_storage'>,
-  self: Id<'users'> | Id<'organizations'>,
-): Promise<boolean> {
-  // `take(2)`, not `first()`: rows written before this check existed may
-  // already share a blob, and `self` must not hide the other holder.
-  const users = await ctx.db
-    .query('users')
-    .withIndex('by_avatarStorageId', (q) => q.eq('avatarStorageId', storageId))
-    .take(2)
-  const orgs = await ctx.db
-    .query('organizations')
-    .withIndex('by_logoStorageId', (q) => q.eq('logoStorageId', storageId))
-    .take(2)
-  return [...users, ...orgs].some((row) => row._id !== self)
-}
-
 /** Checked before `validateImage`, which deletes a blob it rejects. */
 async function claim(
   ctx: GenericMutationCtx<DataModel>,
@@ -65,16 +42,6 @@ async function claim(
     throw new ConvexError('not_found')
   }
   await validateImage(ctx, storageId)
-}
-
-async function release(
-  ctx: GenericMutationCtx<DataModel>,
-  storageId: Id<'_storage'> | undefined,
-  self: Id<'users'> | Id<'organizations'>,
-): Promise<void> {
-  if (storageId && !(await heldElsewhere(ctx, storageId, self))) {
-    await ctx.storage.delete(storageId)
-  }
 }
 
 export const generateUploadUrl = mutation({

@@ -641,6 +641,34 @@ describe('storage handles', () => {
     expect(await blobExists(avatarId)).toBe(true)
   })
 
+  it('does not delete a blob still referenced elsewhere when an account is deleted', async () => {
+    // A row written before the claim check existed may point at the logo.
+    await t.run(async (ctx) => {
+      const member = (await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_acmeMember'))
+        .unique())!
+      await ctx.db.patch('users', member._id, { avatarStorageId: logoId })
+    })
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    expect(await blobExists(logoId)).toBe(true)
+  })
+
+  it('still deletes an avatar only that account held', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    await as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+      storageId: avatarId,
+    })
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    expect(await blobExists(avatarId)).toBe(false)
+  })
+
   it('keeps the blob when an avatar is re-attached', async () => {
     const avatarId = await t.run(async (ctx) =>
       ctx.storage.store(new Blob(['avatar'])),

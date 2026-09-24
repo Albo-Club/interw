@@ -11,7 +11,6 @@ import {
 import { requireOrgMember, requireOrgRole } from './lib/auth'
 import {
   filterVisibleProjects,
-  requireProjectAccess,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
@@ -325,7 +324,9 @@ export const archive = mutation({
 export const restore = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
-    const { project } = await requireProjectAccess(ctx, projectId)
+    // Same tier as `archive`: restoring lifts the freeze on the questions and,
+    // through `publish`, reopens every candidate link the archival closed.
+    const { project } = await requireProjectOwnerOrAdmin(ctx, projectId)
     if (project.status !== 'archived') return null
     // Back to draft, never straight to active: the reason it was archived may
     // still hold, and re-publishing is one deliberate click.

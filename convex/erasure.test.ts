@@ -331,6 +331,78 @@ describe('erasure', () => {
     await expect(read(foreign)).rejects.toThrow(/forbidden/)
   })
 
+  /**
+   * Audit 2026-09-22, `convex/interview.ts:reserveSegment:replaced-keys-orphaned`.
+   *
+   * Re-reserving an answer in another container, or without video, changed
+   * its keys in place. The first take's objects — which may already be in the
+   * bucket — were then named nowhere, and every erasure path missed them.
+   */
+  it('erases every take of an answer re-reserved in another container', async () => {
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      await ctx.db.patch('sessions', s.sessionId, { status: 'in_progress' })
+    })
+    const reserve = (audio: string, video?: string) =>
+      t.mutation(internal.interview.reserveSegment, {
+        token: TOKEN,
+        questionIndex: 0,
+        audio: { mimeType: audio, contentLength: 1024 },
+        video: video ? { mimeType: video, contentLength: 4096 } : undefined,
+      })
+    await reserve('audio/webm;codecs=opus', 'video/webm')
+    await reserve('audio/mpeg')
+    // Back to the first container: named once, not twice.
+    await reserve('audio/webm')
+
+    const deleted: Array<string> = []
+    const spy = vi
+      .spyOn(await import('./lib/objectStore'), 'deleteObjects')
+      .mockImplementation((keys: Array<string>) => {
+        deleted.push(...keys)
+        return Promise.resolve()
+      })
+    await t.action(api.candidate.deleteMyData, { token: TOKEN })
+    spy.mockRestore()
+
+    const prefix = `orgs/${s.orgId}/sessions/${s.sessionId}/`
+    expect(deleted.sort()).toEqual(
+      ['q0.mp3', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
+    )
+  })
+
+  it('forgets superseded keys once retention has deleted them', async () => {
+    const s = await seed(t)
+    const segmentId = await t.run(async (ctx) => {
+      const question = (await ctx.db.query('questions').first())!
+      return await ctx.db.insert('segments', {
+        orgId: s.orgId,
+        sessionId: s.sessionId,
+        questionId: question._id,
+        questionIndex: 0,
+        audioKey: 'orgs/o/sessions/s/q0.mp3',
+        supersededKeys: ['orgs/o/sessions/s/q0.weba'],
+        uploadState: 'uploaded',
+        uploadAttempts: 2,
+        recordedAt: 0,
+      })
+    })
+    const objects = await t.query(internal.purge.collectSessionObjects, {
+      sessionId: s.sessionId,
+    })
+    expect(objects!.keys).toContain('orgs/o/sessions/s/q0.weba')
+
+    await t.mutation(internal.purge.clearSessionMedia, {
+      sessionId: s.sessionId,
+      candidateEmailHash: 'hash',
+      objectsDeleted: objects!.keys.length,
+    })
+    const segment = await t.run(async (ctx) =>
+      ctx.db.get('segments', segmentId),
+    )
+    expect(segment!.supersededKeys).toBeUndefined()
+  })
+
   it('refuses to write the register without a salt', async () => {
     vi.stubEnv('PURGE_HASH_SALT', '')
     await expect(

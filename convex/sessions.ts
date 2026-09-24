@@ -18,7 +18,6 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { requireOrgMember } from './lib/auth'
 import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
@@ -289,24 +288,6 @@ export const linkStatus = query({
     if (!session) throw new ConvexError('not_found')
     const { project } = await requireProjectAccess(ctx, session.projectId)
     return evaluateSessionGate({ session, project, now })
-  },
-})
-
-export const countsForOrg = query({
-  args: { orgId: v.id('organizations') },
-  handler: async (ctx, { orgId }) => {
-    await requireOrgMember(ctx, orgId)
-    const recent = await ctx.db
-      .query('sessions')
-      .withIndex('by_org', (q) => q.eq('orgId', orgId))
-      .order('desc')
-      .take(500)
-    return {
-      total: recent.length,
-      completed: recent.filter((s) => s.status === 'completed').length,
-      inProgress: recent.filter((s) => s.status === 'in_progress').length,
-      pending: recent.filter((s) => s.status === 'pending').length,
-    }
   },
 })
 

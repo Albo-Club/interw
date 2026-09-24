@@ -247,7 +247,8 @@ export default defineSchema({
     lastOrgSlug: v.optional(v.string()),
   })
     .index('by_betterAuthId', ['betterAuthId'])
-    .index('by_email', ['email']),
+    .index('by_email', ['email'])
+    .index('by_avatarStorageId', ['avatarStorageId']),
 
   // Frequently-written per-user state, isolated from `users` on purpose:
   // every query reads the caller's `users` row (requireAppUser), so writes
@@ -265,7 +266,9 @@ export default defineSchema({
     logoStorageId: v.optional(v.id('_storage')),
     createdBy: v.id('users'),
     createdAt: v.number(),
-  }).index('by_slug', ['slug']),
+  })
+    .index('by_slug', ['slug'])
+    .index('by_logoStorageId', ['logoStorageId']),
 
   organizationMembers: defineTable({
     orgId: v.id('organizations'),
@@ -456,7 +459,17 @@ export default defineSchema({
     videoKey: v.optional(v.string()),
     audioKey: v.optional(v.string()),
     thumbnailKey: v.optional(v.string()),
+    /** Keys this slot was reserved under before and no longer is. Re-reserving
+     *  an answer in another container, or without video, changes its keys,
+     *  and the earlier object would otherwise be named nowhere — out of reach
+     *  of every erasure path. */
+    supersededKeys: v.optional(v.array(v.string())),
+    /** Reported by the candidate's browser: a display hint, never an input
+     *  to the report. */
     durationSeconds: v.optional(v.number()),
+    /** The answer's length as the server observed it at transcription. What
+     *  the para-verbal measures and the quote anchors are computed from. */
+    measuredSeconds: v.optional(v.number()),
     uploadState: uploadStateValidator,
     uploadAttempts: v.number(),
     /** Where this answer got to in the pipeline. `failed` is a terminal state,

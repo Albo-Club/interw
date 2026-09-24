@@ -190,6 +190,7 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | U2 | Avatar > 20 MB                                          | Rejected (Convex cap)                                             |
 | U3 | `/app/acme/settings/general` → upload org logo          | Logo visible in top bar and member list                           |
 | U4 | Replace an existing logo                                | Old one replaced, no orphan (check `_storage`)                    |
+| U5 | As a plain member, call `files:setMyAvatar` with the org's logo id, or a colleague's avatar id | Refused `not_found`; the logo and the colleague's avatar are untouched. `organizations:bySlug` returns no `logoStorageId` |
 
 ## Level 4 — Account lifecycle (8 min)
 
@@ -311,6 +312,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IB14 | Expiry | Set the role's expiry to yesterday, reopen the link | "This interview has closed" — never a dead end or a raw error |
 | IB15 | Unknown token | Open `/s/aaaa…` (43 chars) and `/s/short` | Both give the **same** "This link doesn't work" |
 | IB16 | Finish | Complete the interview | Lands on the thank-you page; session is `completed`; `jobLog` shows `transcribe · started` |
+| IB17 | **A cancelled link cannot finish** | Mid-interview, cancel the session from the recruiter's candidate page, then press Finish in the candidate tab | The candidate sees the cancelled state; the session stays `cancelled`; no `jobLog` row, no report, no email. Same with the role archived instead |
 
 ## Interw C — Pipeline and report (15 min)
 
@@ -325,7 +327,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IC4 | Idempotent replay | Re-run `internal.pipeline.generateReport` for the same session via the Convex dashboard | Logs `report · skipped`, writes nothing, sends no second email |
 | IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
 | IC6 | Malformed model output | Temporarily set `EVALUATION_MODEL` in `convex/lib/ai.ts` to a model that ignores schemas, and push | The job **fails and retries**; no partial report is written |
-| IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay |
+| IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay, and independent of the duration the browser reported: the length comes from `segments.measuredSeconds`, set at transcription |
 | IC8 | Recruiter email | Check the inbox of a member of the role's org | "Report ready" with score and recommendation, and the caveat that it is automated |
 | IC9 | Failed upload visible | Mark a segment `failed` by hand, open the report | That answer says the recording never reached us, explicitly as our failure |
 
@@ -342,6 +344,9 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions` on a closed role |
 | ID6c | Unresolved tokens never reach the limiter | Call `shares:recordView` with 40 random tokens | Each returns `null`; the share's `viewCount` is unchanged and no rate-limiter row is written for them — the bucket is keyed on the resolved share |
 | ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
+| ID8 | **Removal ends access** | Share a restricted role with member B, have B create another role, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed, and after re-invite does **not** see the restricted role (its share row went with the membership) |
+| ID9 | Restore is admin-tier | As a plain member who did not create it, restore an archived role | Refused (`insufficient_role`), stays archived. Owner, admin and the role's creator succeed — same tier as Archive |
+| ID10 | Deliverability respects restricted roles | As a member not named on a restricted role, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
 
 ## Interw E — Retention and erasure (10 min)
 
@@ -355,6 +360,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IE7 | Deleting a role takes its media | Record an intro and a question prompt on a role with no candidates, delete the role | Both objects are gone from the bucket, not just the rows |
 | IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
 | IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
+| IE8 | **A re-recorded answer is erased too** | Record Q1 in Chrome (webm), cut the network before it is marked uploaded, resume in Safari (mp4) and finish, then Delete everything | Both `q0.weba`/`q0.webm` and `q0.m4a`/`q0.mp4` are gone from the bucket — the replaced keys stay named in `segments.supersededKeys` until erasure |
 | IE9 | Assistant threads go with the candidate | Ask the assistant for candidate X's report, keep the panel open, then delete X from another tab | The conversation disappears; the panel switches to the latest remaining thread (or the empty state) and the page does not crash. A conversation that never read X stays. `chatThreadSessions` has no row for the erased session |
 | IE10 | Resend copies expire | Convex dashboard → Crons | "remove old emails from the resend component" runs hourly; in the resend component's tables, no email is older than 30 days |
 

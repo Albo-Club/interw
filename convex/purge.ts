@@ -63,9 +63,12 @@ export const collectSessionObjects = internalQuery({
     // rather than a scan-and-hope.
     const keys = [
       ...segments.flatMap((segment) =>
-        [segment.videoKey, segment.audioKey, segment.thumbnailKey].filter(
-          (key): key is string => key !== undefined,
-        ),
+        [
+          segment.videoKey,
+          segment.audioKey,
+          segment.thumbnailKey,
+          ...(segment.supersededKeys ?? []),
+        ].filter((key): key is string => key !== undefined),
       ),
       session.cvKey,
       session.coverLetterKey,
@@ -255,6 +258,7 @@ export const clearSessionMedia = internalMutation({
         videoKey: undefined,
         audioKey: undefined,
         thumbnailKey: undefined,
+        supersededKeys: undefined,
       })
     }
     // `purgeAfter` stays. It is the record of which clock ran out, and

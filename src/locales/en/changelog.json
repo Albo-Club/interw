@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "candidate-table": {
+      "title": "Compare candidates at a glance",
+      "body": "The candidate table now shows each candidate's score and AI recommendation. Sort by score, recommendation, date or length, and filter by status or by your decision. An invitation that bounced or was marked as spam is flagged on its row, and owners, admins and the role's creator can copy a candidate's link to send it themselves. When you paste a list, repeated addresses are shown before anything is sent."
+    },
     "video-intro": {
       "title": "Film your intro, replay your questions",
       "body": "You can now film a short video intro for a role from its Basics step: candidates see it before the first question. The intro is a video or nothing — written and audio intros are gone, and a role that had one now opens straight on its first question. Every question you record now plays back right where you recorded it, and a recording made without a camera plays as audio for you and for candidates."

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "candidate-table": {
+      "title": "Comparez les candidats d’un coup d’œil",
+      "body": "Le tableau des candidats affiche désormais le score et la recommandation IA de chacun. Triez par score, recommandation, date ou durée, et filtrez par statut ou par votre décision. Une invitation rejetée ou signalée comme spam est signalée sur sa ligne, et les propriétaires, administrateurs et le créateur du poste peuvent copier le lien d’un candidat pour l’envoyer eux-mêmes. Quand vous collez une liste, les adresses en double sont affichées avant tout envoi."
+    },
     "video-intro": {
       "title": "Filmez votre introduction, réécoutez vos questions",
       "body": "Vous pouvez désormais filmer une courte vidéo d'introduction depuis l'étape « Le poste » : les candidats la voient avant la première question. L'introduction est une vidéo, ou rien — les introductions écrites et audio disparaissent, et un poste qui en avait une commence désormais directement par sa première question. Chaque question enregistrée se réécoute à l'endroit même où vous l'avez enregistrée, et un enregistrement fait sans caméra se lit en audio, pour vous comme pour les candidats."
@@ -62,8 +66,8 @@
       "body": "Deux corrections sur la création d’un poste. « Ajouter une question » ouvre désormais une carte modifiable au lieu de refuser avec « une question doit contenir du texte » avant même que vous ayez pu en saisir. Et l’import depuis une offre fonctionne sur les sites qui affichent leurs annonces dans le navigateur — Welcome to the Jungle, Indeed, les pages carrières d’ATS — qui répondaient jusqu’ici « pas assez de texte sur cette page ». Quand un site refuse d’être lu autrement que par un navigateur, l’application le dit, au lieu de laisser penser que votre lien est mauvais."
     },
     "european-ai": {
-      "title": "L\u2019analyse des entretiens tourne d\u00e9sormais en Europe",
-      "body": "La transcription et l\u2019\u00e9valuation passent toutes deux par Mistral, fournisseur fran\u00e7ais, sur une infrastructure europ\u00e9enne. L\u2019\u00e9tape d\u2019\u00e9valuation transitait auparavant par un routeur qui choisissait un fournisseur au meilleur prix ; nous l\u2019avions encadr\u00e9, mais la garantie tenait \u00e0 un r\u00e9glage plut\u00f4t qu\u2019\u00e0 la destination r\u00e9elle de la requ\u00eate. Il n\u2019y a d\u00e9sormais qu\u2019un fournisseur et une destination, et l\u2019entretien d\u2019un candidat n\u2019en sort pas."
+      "title": "L’analyse des entretiens tourne désormais en Europe",
+      "body": "La transcription et l’évaluation passent toutes deux par Mistral, fournisseur français, sur une infrastructure européenne. L’étape d’évaluation transitait auparavant par un routeur qui choisissait un fournisseur au meilleur prix ; nous l’avions encadré, mais la garantie tenait à un réglage plutôt qu’à la destination réelle de la requête. Il n’y a désormais qu’un fournisseur et une destination, et l’entretien d’un candidat n’en sort pas."
     },
     "reliable-reports": {
       "title": "Des rapports sur lesquels s’appuyer",

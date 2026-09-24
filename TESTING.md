@@ -305,7 +305,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
 | IB1 | Invitation | Role → Candidates → Invite → one name + address | Email arrives; the link is `/s/{token}` |
-| IB2 | Bulk invite | Paste 5 lines mixing `Name, email`, `Name <email>`, a bare address and one unreadable line | Shows "4 candidates ready" and the unreadable line **before** sending |
+| IB2 | Bulk invite | Paste 5 lines mixing `Name, email`, `Name <email>`, a bare address and one unreadable line, plus one address repeated | Shows "4 candidates ready", the repeated address and the unreadable line **before** sending |
 | IB3 | Duplicate invite | Paste the same list twice | No second session; the existing link is re-sent |
 | IB4 | Welcome screen | Open the link | Greeting, role, question count, duration, and a **What you'll need** block (camera and microphone, a quiet place, keep the page open). The only secondary link is **Your data**, in the footer. No app navigation anywhere on the page |
 | IB4b | Role language | Create a role in French, open its link in a browser set to English | The whole candidate surface is in French — welcome, check, interview, thank-you page and data page. It follows the role, not the browser |
@@ -353,6 +353,8 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | -- | -------- | ----- | -------- |
 | ID1 | Decision | Set Shortlisted, then click it again | Sets, then clears. Shows who decided and when |
 | ID2 | Private note | Type a note, blur | Saved. Never appears on any candidate or shared surface |
+| ID1b | Candidate table | Role → Candidates, with at least one scored, one unscored and one bounced invitation | Score (right-aligned) and AI recommendation columns; sorting by score keeps unscored candidates last in both directions; the status and decision filters combine, and "Clear filters" resets them. The bounced row says **Invitation bounced** under the address. With more than 25 candidates, a note says sorting only covers the loaded ones. The AI disclaimer sits under the table |
+| ID1c | Copy the link | As owner/admin or the role's creator: ⋯ → Copy the link on a not-started candidate, paste in a private window (Chrome and Safari). Then as a team member | The link opens the candidate's welcome page. The team member sees neither **Copy the link** nor **Cancel this invitation** |
 | ID3 | Share link | Share → 7 days → Create | Link copied. Opening it in a private window shows the report |
 | ID4 | Share withholds | On the shared page, search the HTML | No recruiter note, no candidate email, phone, LinkedIn, CV link, or internal role title |
 | ID5 | Revoke | Revoke, reload the shared page | "This link was revoked". Playback URLs stop being issued |

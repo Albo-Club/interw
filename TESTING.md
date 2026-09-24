@@ -50,8 +50,7 @@ undone later.
 | B10 | Candidate interview, real browsers | `DEPLOY_CONVEX=true pnpm build && pnpm test:e2e` | Chromium and WebKit, fake camera and microphone: consent, device check, two answers recorded, the bucket cut during the second upload and the failure shown, "Try again" saves it, a reload lands back on the saved review, finish; then `completed` with two `uploaded` segments read back from the database, and the test candidate erased. Needs `CONVEX_DEPLOY_KEY`, `VITE_CONVEX_SITE_URL` and `MEDIA_ORIGIN` for a deployment whose bucket CORS allows `http://localhost:3000` — the build deploys this branch's functions to it. The HTML report (`playwright-report/`) carries captures of the recording screen |
 
 B2–B3, B7, B8 and B9 also run in CI on every PR (`.github/workflows/ci.yml`), and so
-does the `skills-drift` job, which fails when upstream skills moved (fix:
-`pnpm skills:update`, read the diff, commit). B10 runs in the `e2e`
+does the `skills-drift` job (upstream skills moved — see `CLAUDE.md` § Skills). B10 runs in the `e2e`
 job, on repository secrets. CI covers B0
 implicitly: `pnpm/action-setup@v4` is given no `version:`, so it installs the
 `packageManager` version and cannot drift from local.

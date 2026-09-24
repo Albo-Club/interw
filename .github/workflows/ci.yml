@@ -18,7 +18,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Catches a Convex module added without its codegen committed — CI has
@@ -53,7 +53,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # A missing secret fails here, by name, instead of as a blank page three
@@ -75,10 +75,8 @@ jobs:
           name: playwright-report
           path: playwright-report/
 
-  # Upstream skill drift. `skills update` rewrites `.agents/skills` in place
-  # (the CLI has no read-only check), so the diff IS the drift. When this goes
-  # red: run `pnpm skills:update`, read the SKILL.md diff, commit. Don't mute
-  # it — see CLAUDE.md § Skills.
+  # Upstream skill drift: the CLI has no read-only check, so the diff after an
+  # update IS the drift. Red → CLAUDE.md § Skills. Don't mute it.
   skills-drift:
     runs-on: ubuntu-latest
     steps:
@@ -86,7 +84,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm skills:update

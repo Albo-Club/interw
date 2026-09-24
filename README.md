@@ -27,7 +27,7 @@ stranger's phone, where they get one attempt.
 
 **Prerequisites**
 
-- **Node 24** (the major pinned in `.nvmrc`)
+- **Node** — the major in `package.json` `engines.node`
 - **pnpm** — enable it once via Corepack (bundled with Node): `corepack enable`
 - **git**
 

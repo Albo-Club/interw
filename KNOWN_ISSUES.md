@@ -431,6 +431,13 @@ Previews stay off until that last point is wired.
   moving the environment's branch back to a good commit and letting the
   platform redeploy.
 
+### Node has one pin: `engines.node`
+
+Vercel builds on `engines.node` (it overrides the project's own setting) and
+CI's `setup-node` reads the same field via `node-version-file: package.json`.
+Don't add an `.nvmrc` or a `node-version:` in `ci.yml`: a second pin is how CI
+ran Node 22 while production built on 24.
+
 ## pnpm.overrides
 
 These live in the `pnpm.overrides` field of `package.json`, and **must stay
@@ -1229,7 +1236,7 @@ trigger was a collision: `npx convex ai-files update` shells out to the same
 Convex's own tooling would have clobbered ours. Git and PR review now do what
 `--verify` did (a hand edit shows in the diff).
 
-Two traps it leaves:
+Traps it leaves:
 
 - **`skills check` is not a check.** It is an alias of `skills update`
   (same code path) and rewrites `.agents/skills/`. The `skills-drift` CI job
@@ -1243,9 +1250,16 @@ Two traps it leaves:
   writes the canonical layout (`.agents/skills/` + `.claude/skills/`
   symlinks) whenever `.agents/` exists — even empty. A tree installed any
   other way flips layout on the first update and turns `skills-drift` red.
-  Install with plain `skills add … -y` and the layout never moves.
-- **Telemetry is on by default.** `skills:update` sets `DISABLE_TELEMETRY=1`;
-  do the same on a manual `pnpm exec skills add`.
+  Install with the Add command in `CLAUDE.md` § Skills and the layout never
+  moves.
+- **`web-design-guidelines` stays out of the CLI.** The only installable
+  version (`vercel-labs/agent-skills`) is a 1 kB wrapper telling the model to
+  fetch the real rules from `web-interface-guidelines@main` at run time:
+  unpinned, unreviewed, a network call and a prompt-injection surface on every
+  use. So `.claude/skills/web-design-guidelines/SKILL.md` is a committed copy
+  of that repo's `AGENTS.md` with skill frontmatter on top, not in
+  `skills-lock.json`. To refresh: diff it against upstream `AGENTS.md`, read,
+  paste. Nothing watches it — that is the price of not fetching at run time.
 
 **Convex rules used to be advisory, and were skipped.** The pointer to
 `convex/_generated/ai/guidelines.md` lived in `AGENTS.md`, which Claude Code
@@ -1388,6 +1402,9 @@ which looks like a bug in your test and is not. Moving `convex` to 1.46
 unblocked it, and it now sits at 0.0.58. Note the range stays effectively
 exact either way: on a `0.0.x` version `^0.0.58` reads `>=0.0.58 <0.0.59`, so
 every further step is a deliberate bump, not a float.
+
+Refresh the Convex AI guidelines in the same PR: `npx convex ai-files update`
+(`convex dev` warns when they are stale). Nothing else regenerates them.
 
 A `convex` bump also rewrites `convex/_generated/server.d.ts` (1.44 added the
 typed `env` export carrying `CONVEX_CLOUD_URL` / `CONVEX_SITE_URL`). Commit it

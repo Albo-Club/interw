@@ -39,7 +39,8 @@ docs. Paste into Claude Code from the derived project's root.
 Replace this repo's in-house skill sync (scripts/sync-skills.mjs, the
 sync:skills* scripts, the skills-verify / skills-drift CI jobs) with the
 standard `skills` CLI, and make Convex's guidelines load automatically. The
-reference is this template's PR that did the same; read KNOWN_ISSUES.md §
+reference is the template commit that deleted scripts/sync-skills.mjs
+(`git log --diff-filter=D -- scripts/sync-skills.mjs`); read KNOWN_ISSUES.md §
 "Skills: the standard `skills` CLI" there first.
 
 1. Record this repo's current skill set: the names and sources in
@@ -60,10 +61,10 @@ reference is this template's PR that did the same; read KNOWN_ISSUES.md §
 6. Create convex/CLAUDE.md containing `@_generated/ai/guidelines.md`, and
    convex.json with {"aiFiles": {"skills": {"agents": []}}} unless this repo
    deliberately installs Convex's own skills.
-7. Update CLAUDE.md, TESTING.md, KNOWN_ISSUES.md, eslint ignores and
-   scripts/init.mjs wherever they name sync:skills or .agents/skills.
+7. Update CLAUDE.md, TESTING.md and KNOWN_ISSUES.md wherever they name
+   sync:skills or the removed script.
 Then: pnpm typecheck, pnpm lint, pnpm test, and
-`grep -rn "sync:skills\|sync-skills\|\.agents/skills" --exclude-dir=node_modules --exclude-dir=docs .`
+`grep -rn "sync:skills\|sync-skills" --exclude-dir=node_modules --exclude-dir=docs .`
 must return nothing outside CHANGELOG/UPGRADING history.
 ```
 

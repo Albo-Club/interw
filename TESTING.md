@@ -78,6 +78,8 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | A9  | `/register` with already-registered email              | **Same** "Check your inbox" screen as a new signup (anti-enumeration), no email sent |
 | A10 | Rate-limit (sign-in 6×, sign-up 4×, magic 4× /60s)    | "Too many attempts…" toast via classifier (no raw BA message)                     |
 | A11 | `/app/me` → change email                               | **Approval email** arrives at the **current** address (anti-takeover), not the new one |
+| A12 | **Verification needs the password** | `/register`, click the email link | Lands on `/login` ("Sign in with the password you chose…"), **not** signed in yet. Enter the password → signed in and redirected. Hijack variant: browser A registers B's address with password P; in B's mailbox click the link and enter any other password → "invalid email or password", still unverified; A signing in with P → "email not verified" |
+| A13 | Email change, cross-device | `/app/me` → change email, approve from the old inbox, then click the new-address link in a fresh browser | Sent to `/login`; after signing in with the old address and password the change completes. Without signing in, nothing changes |
 | A12 | Password constraints (`/register` + `/reset-password`) | <12 chars → Zod block. HIBP leak → "appeared in known data breaches". zxcvbn meter visible. |
 | A13 | Password match feedback `/reset-password`              | Match → green ✓ "Passwords match". Mismatch → red case-sensitive hint.           |
 | A14 | Resend (verification & reset)                          | 2nd email arrives if address exists. Neutral privacy-respecting toast.            |

@@ -56,8 +56,26 @@ wait for the victim to OAuth/magic-link with the same email, and BA
 will silently link the attacker's password account to the victim's
 session → account takeover.
 
-Verified email closes the hole : the attacker's password account stays
-unverified, so BA refuses to link it.
+Verified email closes *that* hole: OAuth refuses to link an unverified local
+account (`requireLocalEmailVerified`, default true), and a magic link deletes
+the unproven credential before verifying (`revokeUnprovenAccountAccess`).
+
+**But a verification link is not proof of the password.** It proves control of
+the mailbox, and nothing about who chose the password on the account it points
+at. BA's `/verify-email` (1.6.x) flips `emailVerified` and, with
+`autoSignInAfterVerification`, signs the clicker in — without revoking an
+unproven credential. An attacker who signed up at the victim's address kept a
+working password on an identity the victim's own click verified, and could then
+accept invitations bound to that address. Same with a change-email link sent to
+a victim's address (audit 2026-09-22, `VALIDATION-RESULTS.md` lead 1).
+`verificationRequiresCredential` in `convex/auth.ts` closes both: a sign-up
+link only redirects to `/login?verifyToken=…`, and the email is verified by a
+`/sign-in/email` carrying that token **and** the account's password; a
+change-email link completes only for a clicker already signed in to the
+account. Never re-enable `autoSignInAfterVerification`, and never redeem a
+verification token without the credential. A squatted address is recovered by
+forgot-password (which replaces the stranger's password) or a magic link
+(which deletes it).
 
 ### Legacy users
 

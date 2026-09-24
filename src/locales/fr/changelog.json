@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "verification-needs-password": {
+      "title": "Confirmer votre e-mail demande désormais votre mot de passe",
+      "body": "Nous avons renforcé la vérification des e-mails : après avoir cliqué sur le lien, vous vous connectez avec votre mot de passe pour confirmer votre adresse. Ainsi, un lien de vérification ne peut finaliser qu’un compte que vous avez créé vous-même."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

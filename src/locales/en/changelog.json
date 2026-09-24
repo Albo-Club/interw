@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "verification-needs-password": {
+      "title": "Confirming your email now asks for your password",
+      "body": "We strengthened email verification: after clicking the link, you now sign in with your password to confirm your address. That way a verification link can only ever complete an account you set up yourself."
+    },
     "assistant-in-europe": {
       "title": "The assistant runs in Europe too",
       "body": "The assistant that answers your questions about roles and candidates now runs on the same French provider as interview transcription and assessment. It reads reports in order to answer you, so what you ask it about a candidate is interview data like any other — and it belongs under the same guarantee: one provider, one destination, and nothing about a candidate leaving it."

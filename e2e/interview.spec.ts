@@ -20,11 +20,14 @@ async function expectLivePreview(page: Page) {
     .toBeGreaterThan(0)
 }
 
-async function recordAnswer(page: Page, whileRecording?: () => Promise<void>) {
+async function recordAnswer(page: Page) {
   await page.getByRole('button', { name: 'Start my answer' }).click()
   await expectLivePreview(page)
   await page.waitForTimeout(1_500)
-  await whileRecording?.()
+  await test.info().attach('recording screen', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  })
   await page.getByRole('button', { name: "I've finished my answer" }).click()
 }
 
@@ -53,28 +56,26 @@ test('a candidate records two answers, gets through a failed upload, and finishe
       .click()
 
     await expect(page.getByText('Question 1 of 2')).toBeVisible()
-    await recordAnswer(page, async () => {
-      await test.info().attach('recording screen', {
-        body: await page.screenshot(),
-        contentType: 'image/png',
-      })
-    })
+    await recordAnswer(page)
 
-    // The network drops during the second upload: the failure is on screen.
+    // The bucket drops out during the second upload: the failure is on
+    // screen, and "Try again" sends the answer the page still holds.
     await expect(page.getByText('Question 2 of 2')).toBeVisible()
-    await page.route('**/*', (route) =>
-      route.request().method() === 'PUT' ? route.abort() : route.fallback(),
+    const bucket = new URL(process.env.MEDIA_ORIGIN ?? '').origin
+    await page.route(
+      (url) => url.origin === bucket,
+      (route) => route.abort(),
     )
     await recordAnswer(page)
     await expect(page.getByText("Your last answer didn't save")).toBeVisible()
-
-    // Back online, page reloaded: the server resumes at the unsaved answer.
     await page.unrouteAll()
-    await page.reload()
-    await expect(page.getByText('Question 2 of 2')).toBeVisible()
-    await recordAnswer(page)
-
+    await page.getByRole('button', { name: 'Try again' }).click()
     await expect(page.getByText('All 2 answers are saved.')).toBeVisible()
+
+    // A reload resumes from the server's cursor, not from the page's memory.
+    await page.reload()
+    await expect(page.getByText('All 2 answers are saved.')).toBeVisible()
+
     await page.getByRole('button', { name: 'Finish the interview' }).click()
     await expect(
       page.getByRole('heading', { name: "That's it — thank you" }),

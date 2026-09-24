@@ -644,6 +644,8 @@ export const RETENTION_MS = 365 * 24 * 60 * 60 * 1000
  * ------------------------------------------------------------------------ */
 const E2E_ORG_SLUG = 'e2e-interview'
 const E2E_EMAIL = 'delivered@resend.dev'
+/** A run that dies before its own cleanup leaves no media behind for long. */
+const E2E_PURGE_AFTER_MS = 24 * 60 * 60 * 1000
 
 /** A fresh two-question session; the org and role are created once. */
 export const seedE2eSession = internalMutation({
@@ -651,10 +653,16 @@ export const seedE2eSession = internalMutation({
   returns: v.object({ token: v.string() }),
   handler: async (ctx) => {
     const now = Date.now()
-    let org = await ctx.db
+    const org = await ctx.db
       .query('organizations')
       .withIndex('by_slug', (q) => q.eq('slug', E2E_ORG_SLUG))
       .unique()
+    let project =
+      org &&
+      (await ctx.db
+        .query('projects')
+        .withIndex('by_org', (q) => q.eq('orgId', org._id))
+        .first())
     if (!org) {
       const userId = await ctx.db.insert('users', {
         betterAuthId: `seed:${E2E_ORG_SLUG}`,
@@ -706,27 +714,22 @@ export const seedE2eSession = internalMutation({
           maxResponseSeconds: 60,
         })
       }
-      org = await ctx.db.get('organizations', orgId)
-      if (!org) throw new ConvexError('not_found')
+      project = await ctx.db.get('projects', projectId)
     }
-
-    const project = await ctx.db
-      .query('projects')
-      .withIndex('by_org', (q) => q.eq('orgId', org._id))
-      .first()
     if (!project) throw new ConvexError('not_found')
 
     const token = generateToken()
     await ctx.db.insert('sessions', {
-      orgId: org._id,
+      orgId: project.orgId,
       projectId: project._id,
       accessToken: token,
       candidateName: 'E2E Candidate',
       candidateEmail: E2E_EMAIL,
       status: 'pending',
       lastQuestionIndex: 0,
-      invitedBy: org.createdBy,
+      invitedBy: project.createdBy,
       invitedAt: now,
+      purgeAfter: now + E2E_PURGE_AFTER_MS,
     })
     await ctx.db.patch('projects', project._id, {
       sessionCount: project.sessionCount + 1,
@@ -743,11 +746,7 @@ export const e2eSessionState = internalQuery({
     uploadedSegments: v.number(),
   }),
   handler: async (ctx, { token }) => {
-    const session = await ctx.db
-      .query('sessions')
-      .withIndex('by_token', (q) => q.eq('accessToken', token))
-      .unique()
-    if (!session) throw new ConvexError('not_found')
+    const session = await resolveSessionByToken(ctx, token)
     const segments = await ctx.db
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', session._id))

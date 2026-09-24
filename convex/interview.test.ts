@@ -8,6 +8,24 @@ import { segmentKey } from './lib/objectStore'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
+const sent = vi.hoisted(
+  () => [] as Array<{ to: string; subject: string; html: string; text: string }>,
+)
+
+// Stood in for: what matters here is what would be sent, and to whom.
+vi.mock('./email', () => ({
+  RESEND_FROM: 'interw <no-reply@example.test>',
+  resend: {
+    sendEmail: (
+      _ctx: unknown,
+      email: { to: string; subject: string; html: string; text: string },
+    ) => {
+      sent.push(email)
+      return Promise.resolve('provider-id-stub')
+    },
+  },
+}))
+
 const modules = import.meta.glob('./**/*.ts')
 
 function newTest() {
@@ -349,5 +367,72 @@ describe('re-reserving an answer', () => {
 
   it('deletes nothing when the keys are unchanged', async () => {
     expect(await deletedAfter({ audio: AUDIO, video: VIDEO })).toEqual([])
+  })
+})
+
+/**
+ * The candidate had no trace of their interview and no way back to their data
+ * page — the only place to exercise the erasure the consent screen promised
+ * "at any time" — once they closed the tab.
+ */
+describe('the completion email', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    vi.stubEnv('SITE_URL', 'https://interw.test/')
+    sent.length = 0
+    t = newTest()
+    s = await seedOpen(t)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const scheduled = () =>
+    t.run((ctx) => ctx.db.system.query('_scheduled_functions').collect())
+
+  it('is scheduled by finish, once', async () => {
+    await t.mutation(api.interview.finish, { token: s.token })
+    await t.mutation(api.interview.finish, { token: s.token })
+    const jobs = (await scheduled()).filter((job) =>
+      job.name.includes('sendCompletionEmail'),
+    )
+    expect(jobs).toHaveLength(1)
+  })
+
+  it('carries the link to the data page, in the role’s language', async () => {
+    await t.mutation(internal.interview.sendCompletionEmail, {
+      sessionId: s.sessionId,
+    })
+    expect(sent).toHaveLength(1)
+    expect(sent[0].to).toBe('alex@example.test')
+    expect(sent[0].text).toContain(`https://interw.test/s/${s.token}/privacy`)
+    expect(sent[0].subject).toContain('envoyé')
+    const logged = await t.run((ctx) =>
+      ctx.db
+        .query('emailLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(logged.map((row) => row.template)).toEqual(['candidate-completed'])
+  })
+
+  it('is sent once even when the job is retried', async () => {
+    for (let run = 0; run < 2; run++) {
+      await t.mutation(internal.interview.sendCompletionEmail, {
+        sessionId: s.sessionId,
+      })
+    }
+    expect(sent).toHaveLength(1)
+  })
+
+  it('is not sent for a session erased in the meantime', async () => {
+    await t.run((ctx) => ctx.db.delete('sessions', s.sessionId))
+    await t.mutation(internal.interview.sendCompletionEmail, {
+      sessionId: s.sessionId,
+    })
+    expect(sent).toHaveLength(0)
   })
 })

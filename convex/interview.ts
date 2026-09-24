@@ -40,6 +40,8 @@ import {
   segmentKey,
 } from './lib/objectStore'
 import { consumeLimit } from './rateLimiters'
+import { RESEND_FROM, resend } from './email'
+import { candidateCompletedEmail } from './emailTemplates'
 import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
@@ -538,7 +540,68 @@ export const finish = mutation({
     await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {
       sessionId: session._id,
     })
+    await ctx.scheduler.runAfter(0, internal.interview.sendCompletionEmail, {
+      sessionId: session._id,
+    })
     return { alreadyCompleted: false }
+  },
+})
+
+const COMPLETED_TEMPLATE = 'candidate-completed'
+
+/**
+ * Tell the candidate their interview arrived, and give them the one link that
+ * lets them erase it later — the data page, which until now they could only
+ * reach from the screen they had just closed.
+ *
+ * Scheduled by `finish` rather than sent inline, so a provider outage cannot
+ * fail the transaction that completes the interview. Idempotent on the
+ * session's own `emailLog` rows: a retried job must not mail twice.
+ */
+export const sendCompletionEmail = internalMutation({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }) => {
+    // Erased between `finish` and this job: there is nobody left to write to.
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) return null
+    const logged = await ctx.db
+      .query('emailLog')
+      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+      .collect()
+    if (logged.some((entry) => entry.template === COMPLETED_TEMPLATE)) {
+      return null
+    }
+
+    const project = await ctx.db.get('projects', session.projectId)
+    if (!project) return null
+    const org = await ctx.db.get('organizations', session.orgId)
+    const siteUrl = process.env.SITE_URL
+    if (!siteUrl) throw new ConvexError('site_url_not_configured')
+
+    const { subject, html, text } = candidateCompletedEmail({
+      locale: project.language,
+      candidateName: session.candidateName,
+      jobTitle: project.jobTitle ?? project.title,
+      orgName: org?.name ?? '',
+      privacyUrl: `${siteUrl.replace(/\/+$/, '')}/s/${session.accessToken}/privacy`,
+    })
+    const providerId = await resend.sendEmail(ctx, {
+      from: RESEND_FROM,
+      to: session.candidateEmail,
+      subject,
+      html,
+      text,
+    })
+    await ctx.db.insert('emailLog', {
+      orgId: session.orgId,
+      template: COMPLETED_TEMPLATE,
+      recipient: session.candidateEmail,
+      status: 'sent',
+      providerId,
+      sessionId,
+      createdAt: Date.now(),
+    })
+    return null
   },
 })
 

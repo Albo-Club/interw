@@ -29,6 +29,22 @@ export const AUDIO_MIME_PREFERENCES = [
 export type MimeSupportCheck = (mimeType: string) => boolean
 
 /**
+ * About 1 Mbit/s of video and 64 kbit/s of speech. Left to itself a browser
+ * records 720p at several Mbit/s — three minutes came to ~50 MB, which on a
+ * phone in a train is an upload that does not finish. Speech needs far less
+ * than music, and the transcription model does not hear the difference.
+ */
+export const VIDEO_BITS_PER_SECOND = 1_000_000
+export const AUDIO_BITS_PER_SECOND = 64_000
+
+/**
+ * Long enough for a slow phone to flush minutes of video; short enough that a
+ * recorder which will never emit `stop` — iOS, after an incoming call — does
+ * not hold "Saving your answer…" on screen forever.
+ */
+export const STOP_TIMEOUT_MS = 10_000
+
+/**
  * First supported type from a preference list, or null when the browser
  * supports none of them — which is a blocking condition the candidate must be
  * told about before they start, not discovered when they stop recording.
@@ -112,6 +128,7 @@ export class SegmentRecorder {
     const audioOnly = new MediaStream(audioTracks)
     this.audioRecorder = new MediaRecorder(audioOnly, {
       mimeType: this.support.audio,
+      audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
     })
     this.audioRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) this.audioChunks.push(event.data)
@@ -121,6 +138,8 @@ export class SegmentRecorder {
     if (this.support.video && this.stream.getVideoTracks().length > 0) {
       this.videoRecorder = new MediaRecorder(this.stream, {
         mimeType: this.support.video,
+        videoBitsPerSecond: VIDEO_BITS_PER_SECOND,
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       })
       this.videoRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) this.videoChunks.push(event.data)
@@ -146,21 +165,31 @@ export class SegmentRecorder {
     if (this.tickTimer) clearInterval(this.tickTimer)
 
     const durationSeconds = (Date.now() - this.startedAt) / 1000
-    await Promise.all([
+    // The audio is the answer — it is what gets transcribed — so only its
+    // flush can fail the take. A video that does not flush costs the video.
+    const [audio, video] = await Promise.allSettled([
       stopAndFlush(this.audioRecorder),
       stopAndFlush(this.videoRecorder),
     ])
     this.state = 'stopped'
 
+    if (audio.status === 'rejected') throw audio.reason
     if (!this.support.audio) throw new Error('no supported audio format')
+    const audioBlob = new Blob(this.audioChunks, { type: this.support.audio })
+    // An empty take is a failure to show, not an answer to upload: sent as
+    // is, it would transcribe to nothing and read as a candidate who said
+    // nothing.
+    if (audioBlob.size === 0) throw new Error('empty recording')
+
+    const videoType =
+      video.status === 'fulfilled' && this.videoChunks.length > 0
+        ? this.support.video
+        : null
     return {
-      audio: new Blob(this.audioChunks, { type: this.support.audio }),
+      audio: audioBlob,
       audioMimeType: this.support.audio,
-      video:
-        this.videoChunks.length > 0 && this.support.video
-          ? new Blob(this.videoChunks, { type: this.support.video })
-          : null,
-      videoMimeType: this.videoChunks.length > 0 ? this.support.video : null,
+      video: videoType ? new Blob(this.videoChunks, { type: videoType }) : null,
+      videoMimeType: videoType,
       durationSeconds: Math.round(durationSeconds),
     }
   }
@@ -177,9 +206,21 @@ export class SegmentRecorder {
 
 function stopAndFlush(recorder: MediaRecorder | null): Promise<void> {
   if (!recorder || recorder.state === 'inactive') return Promise.resolve()
-  return new Promise<void>((resolve) => {
-    recorder.onstop = () => resolve()
-    recorder.stop()
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('recorder did not stop')),
+      STOP_TIMEOUT_MS,
+    )
+    recorder.onstop = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    try {
+      recorder.stop()
+    } catch (error) {
+      clearTimeout(timer)
+      reject(error instanceof Error ? error : new Error('recorder did not stop'))
+    }
   })
 }
 

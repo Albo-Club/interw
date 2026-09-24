@@ -13,6 +13,10 @@
       "title": "Clearer email verification",
       "body": "Opening a verification link while signed in to another account, or after it has expired, now tells you what to do next instead of leaving you on a plain sign-in page. Sign-up also asks you to type your password twice."
     },
+    "sturdier-interview": {
+      "title": "A sturdier interview for your candidates",
+      "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."
+    },
     "verification-needs-password": {
       "title": "Confirming your email now asks for your password",
       "body": "We strengthened email verification: after clicking the link, you now sign in with your password to confirm your address. That way a verification link can only ever complete an account you set up yourself."

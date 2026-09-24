@@ -18,6 +18,8 @@ export type UploadProgress = {
   phase: UploadPhase
   attempt: number
   maxAttempts: number
+  /** Bytes of this attempt that have left the browser. */
+  loaded: number
 }
 
 export class UploadError extends Error {
@@ -30,6 +32,17 @@ export class UploadError extends Error {
   }
 }
 
+export type PutRequest = {
+  url: string
+  body: Blob
+  contentType: string
+  signal?: AbortSignal
+  onUploadProgress: (loaded: number) => void
+}
+
+/** Resolves with the HTTP status; rejects only when no response came back. */
+export type SendImpl = (request: PutRequest) => Promise<number>
+
 export type UploadOptions = {
   url: string
   blob: Blob
@@ -40,9 +53,36 @@ export type UploadOptions = {
   backoffMs?: (attempt: number) => number
   onProgress?: (progress: UploadProgress) => void
   signal?: AbortSignal
-  fetchImpl?: typeof fetch
+  sendImpl?: SendImpl
   sleepImpl?: (ms: number) => Promise<void>
 }
+
+/**
+ * A PUT that reports bytes sent.
+ *
+ * XHR rather than `fetch`, because `fetch` exposes no upload progress — and on
+ * the candidate surface a screen that does not move for five minutes is a
+ * failure mode, not a cosmetic one: a 40 MB answer over 4G looks frozen, the
+ * candidate reloads, and the answer is gone.
+ */
+const xhrPut: SendImpl = ({
+  url,
+  body,
+  contentType,
+  signal,
+  onUploadProgress,
+}) =>
+  new Promise<number>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', contentType)
+    xhr.upload.onprogress = (event) => onUploadProgress(event.loaded)
+    xhr.onload = () => resolve(xhr.status)
+    xhr.onerror = () => reject(new Error('network error'))
+    xhr.onabort = () => reject(new Error('upload aborted'))
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true })
+    xhr.send(body)
+  })
 
 const DEFAULT_MAX_ATTEMPTS = 3
 const defaultBackoff = (attempt: number) => 1000 * 2 ** (attempt - 1)
@@ -63,36 +103,37 @@ export async function uploadToSignedUrl(options: UploadOptions): Promise<void> {
     backoffMs = defaultBackoff,
     onProgress,
     signal,
-    fetchImpl = fetch,
+    sendImpl = xhrPut,
     sleepImpl = defaultSleep,
   } = options
+
+  const report = (phase: UploadPhase, attempt: number, loaded: number) =>
+    onProgress?.({ phase, attempt, maxAttempts, loaded })
 
   let lastError: UploadError | undefined
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (signal?.aborted) throw new UploadError('upload aborted')
-    onProgress?.({
-      phase: attempt === 1 ? 'uploading' : 'retrying',
-      attempt,
-      maxAttempts,
-    })
+    const phase = attempt === 1 ? 'uploading' : 'retrying'
+    report(phase, attempt, 0)
 
     try {
-      const response = await fetchImpl(url, {
-        method: 'PUT',
+      const status = await sendImpl({
+        url,
         body: blob,
-        headers: { 'Content-Type': contentType },
+        contentType,
         signal,
+        onUploadProgress: (loaded) => report(phase, attempt, loaded),
       })
-      if (response.ok) {
-        onProgress?.({ phase: 'done', attempt, maxAttempts })
+      if (status >= 200 && status < 300) {
+        report('done', attempt, blob.size)
         return
       }
       lastError = new UploadError(
-        `upload rejected with HTTP ${response.status}`,
-        response.status,
+        `upload rejected with HTTP ${status}`,
+        status,
       )
-      if (!isRetryable(response.status)) break
+      if (!isRetryable(status)) break
     } catch (error) {
       // A network drop mid-interview is the case this whole function exists
       // for, so it is retryable; an explicit abort is not.
@@ -105,6 +146,6 @@ export async function uploadToSignedUrl(options: UploadOptions): Promise<void> {
     if (attempt < maxAttempts) await sleepImpl(backoffMs(attempt))
   }
 
-  onProgress?.({ phase: 'failed', attempt: maxAttempts, maxAttempts })
+  report('failed', maxAttempts, 0)
   throw lastError ?? new UploadError('upload failed')
 }

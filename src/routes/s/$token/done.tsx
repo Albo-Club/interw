@@ -7,6 +7,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { api } from '../../../../convex/_generated/api'
 import { Skeleton } from '~/components/ui/skeleton'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
+import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
 export const Route = createFileRoute('/s/$token/done')({
   component: InterviewDone,
@@ -17,8 +18,9 @@ function InterviewDone() {
   const { token } = Route.useParams()
   const [now] = useState(() => Date.now())
   const data = useConvexQuery(api.candidate.landing, { token, now })
+  const languageReady = useCandidateLanguage(data?.project.language)
 
-  if (data === undefined) {
+  if (data === undefined || !languageReady) {
     return (
       <CandidateShell>
         <Skeleton className="h-40 w-full rounded-lg" />

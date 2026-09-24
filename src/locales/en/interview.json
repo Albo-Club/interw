@@ -1,8 +1,7 @@
 {
   "metaTitle": "Your interview",
   "shell": {
-    "privacy": "Your data",
-    "help": "Something not working?"
+    "privacy": "Your data"
   },
   "state": {
     "notFound": {
@@ -23,7 +22,7 @@
     },
     "completed": {
       "title": "You've already completed this interview",
-      "body": "Thank you — there is nothing more to do. {{org}} has your answers and will be in touch."
+      "body": "Thank you — there is nothing more to do. Your answers have been sent, and the team will contact you directly."
     }
   },
   "welcome": {
@@ -47,8 +46,6 @@
     "yourDetails": "Your details",
     "detailsHint": "Only what {{org}} asked for. Everything here is optional unless marked.",
     "fields": {
-      "name": "Name",
-      "email": "Email",
       "phone": "Phone number",
       "linkedin": "LinkedIn profile",
       "cv": "Your CV",
@@ -89,6 +86,7 @@
     "permissionDenied": "Camera or microphone access was refused. Allow it in your browser's address bar, then reload this page.",
     "permissionHelp": "Look for the camera icon in your browser's address bar.",
     "noDevices": "No camera or microphone was found. Plug one in, then reload this page.",
+    "busy": "Your camera or microphone is being used by another app, such as a video call. Close it, then try again.",
     "unsupported": "This browser can't record video interviews. Please open this link in the latest Chrome, Safari, Firefox or Edge — on a computer if you can.",
     "inAppBrowser": "You seem to be in an in-app browser. Recording often fails here. Open this link in Safari or Chrome instead.",
     "retry": "Check again",
@@ -101,36 +99,48 @@
       "title": "A word before we begin",
       "continue": "I'm ready"
     },
-    "playQuestion": "Play the question",
-    "replayQuestion": "Play again",
-    "readQuestion": "The question",
     "hint": "A tip",
-    "notRecording": "Not recording yet",
+    "audioOnly": "Audio only — your camera isn't available, so this interview records your voice. That is enough to take part.",
     "startAnswer": "Start my answer",
     "recording": "Recording",
     "finishAnswer": "I've finished my answer",
     "timeLeft": "{{seconds}}s left",
     "timeUpSoon": "Recording will stop in {{seconds}} seconds",
     "timeUp": "Time is up for this question — your answer was saved.",
+    "interrupted": "Your last answer stopped when you left the page or a device was disconnected. What you had said was saved.",
+    "videoLost": "Your last answer was saved, but its video didn't get through — only the sound did.",
     "sending": "Saving your answer…",
     "sendingHint": "Keep this page open.",
     "saved": "Answer saved",
     "retrying": "Connection problem — trying again ({{attempt}} of {{max}})",
+    "sendingPercent": "{{percent}}% sent",
     "sendFailed": {
       "title": "Your last answer didn't save",
       "body": "Nothing has been lost yet, but we couldn't reach the server. Check your connection and try again.",
       "retry": "Try again",
       "skip": "Skip this question and continue"
     },
-    "networkPoor": "Your connection looks unstable. Recording still works — saving may just take longer.",
+    "recordingLost": {
+      "title": "Your answer couldn't be recorded",
+      "body": "Nothing reached the recorder, so there is nothing to send. Record this answer again.",
+      "rerecord": "Record it again"
+    },
     "offline": "You're offline. Your answer will be sent as soon as you're back.",
-    "next": "Next question",
     "finishInterview": "Finish the interview",
     "finishing": "Finishing…",
-    "leaveWarning": "Your answer is still being saved. Leave now and it will be lost.",
+    "review": {
+      "title": "Before you finish",
+      "allAnswered": "Your answer is saved.",
+      "allAnswered_other": "All {{count}} answers are saved.",
+      "missing": "{{count}} question has no saved answer:",
+      "missing_other": "{{count}} questions have no saved answer:",
+      "question": "Question {{index}}",
+      "answer": "Answer it now",
+      "next": "When you finish, your interview is sent and your answers can no longer be changed."
+    },
     "crash": {
       "title": "Something went wrong on this page",
-      "body": "Your saved answers are safe. Reload to pick up at question {{index}}.",
+      "body": "Your saved answers are safe. Reload to pick up where you left off.",
       "reload": "Reload and continue",
       "restart": "Go back to the start"
     }
@@ -141,8 +151,7 @@
     "whatNext": "What happens next",
     "nextSteps": {
       "review": "{{org}} will review your answers.",
-      "contact": "They will contact you directly, at {{email}}.",
-      "noReply": "This address doesn't accept replies — reply to the email that invited you instead."
+      "contact": "They will contact you directly, at {{email}}."
     },
     "privacy": "See what data is kept, and delete it"
   },
@@ -165,6 +174,7 @@
       "body": "Your recordings, transcript, analysis and uploaded documents will be permanently deleted. {{org}} will no longer be able to consider this application. This cannot be undone.",
       "confirm": "Delete permanently"
     },
+    "deleting": "Deleting your data…",
     "deleted": {
       "title": "Your data has been deleted",
       "body": "Nothing from this interview is held any more. You can close this page."

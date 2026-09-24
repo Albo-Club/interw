@@ -109,5 +109,5 @@ export type CandidateLandingView = {
   organisationName: string
   session: CandidateSessionView
   project: CandidateProjectView
-  gate: SessionGate
+  gate: SessionGate & { resumeAtIndex: number }
 }

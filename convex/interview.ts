@@ -19,12 +19,17 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { introModeValidator, sessionEventKindValidator } from './schema'
+import {
+  introModeValidator,
+  languageValidator,
+  sessionEventKindValidator,
+  sessionStatusValidator,
+} from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
-import { evaluateSessionGate } from './lib/sessionState'
-import { looksLikeToken } from './lib/tokens'
+import { evaluateSessionGate, loadProgress } from './lib/sessionState'
+import { generateToken, looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
   presignGet,
@@ -32,6 +37,8 @@ import {
   segmentKey,
 } from './lib/objectStore'
 import { consumeLimit } from './rateLimiters'
+import { RESEND_FROM, resend } from './email'
+import { candidateCompletedEmail } from './emailTemplates'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
@@ -122,7 +129,11 @@ export const questions = query({
         answered: v.boolean(),
       }),
     ),
-    resumeAtIndex: v.number(),
+    /** Where the interview picks up. The client computes no resume point of
+     *  its own; see `nextQuestionIndex` in convex/lib/sessionState.ts. */
+    nextQuestionIndex: v.number(),
+    /** The role's language, which the whole candidate surface speaks. */
+    language: languageValidator,
     introMode: introModeValidator,
     introText: v.union(v.string(), v.null()),
     hasIntroMedia: v.boolean(),
@@ -135,28 +146,15 @@ export const questions = query({
       token,
       effectiveNow(now),
     )
-    const rows = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', project._id))
-      .collect()
-    const segments = await ctx.db
-      .query('segments')
-      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
-      .collect()
-    // By id, not by index: `orderIndex` is renumbered when the trame is
-    // edited, `questionId` is not. See convex/pipeline.ts.
-    const answered = new Set(
-      segments
-        .filter((segment) => segment.uploadState === 'uploaded')
-        .map((segment) => segment.questionId),
-    )
+    const progress = await loadProgress(ctx, session)
 
     return {
-      questions: rows.map((question) => ({
+      questions: progress.questions.map((question) => ({
         ...toCandidateQuestionView(question),
-        answered: answered.has(question._id),
+        answered: progress.answered.has(question._id),
       })),
-      resumeAtIndex: session.lastQuestionIndex,
+      nextQuestionIndex: progress.nextQuestionIndex,
+      language: project.language,
       introMode: project.introMode,
       introText: project.introText ?? null,
       hasIntroMedia: project.introMediaKey !== undefined,
@@ -266,7 +264,12 @@ function validateMedia(
  * so "delete everything about this person" never has to guess or scan.
  *
  * Re-requesting the same question replaces the reservation in place, which is
- * what makes a retry after a dropped connection safe.
+ * what makes a retry after a dropped connection safe — unless the answer is
+ * already saved. A candidate gets one attempt: an answer the server holds is
+ * never reserved again, so it cannot be recorded over. That is an outcome,
+ * not an error — typically an earlier attempt landed and only its response
+ * was lost — so it comes back as `answered`, like `finish`'s
+ * `alreadyCompleted`.
  */
 export const reserveSegment = internalMutation({
   args: {
@@ -324,6 +327,7 @@ export const reserveSegment = internalMutation({
         q.eq('sessionId', session._id).eq('questionIndex', questionIndex),
       )
       .unique()
+    if (existing?.uploadState === 'uploaded') return { status: 'answered' as const }
 
     const fields = {
       audioKey,
@@ -365,6 +369,7 @@ export const reserveSegment = internalMutation({
 
     await ctx.db.patch('sessions', session._id, { lastActivityAt: now })
     return {
+      status: 'reserved' as const,
       segmentId,
       audio: { key: audioKey, contentType: audioMedia.contentType },
       video: videoSlot,
@@ -384,13 +389,19 @@ export const requestSegmentUpload = action({
   handler: async (
     ctx,
     args,
-  ): Promise<{
-    segmentId: Id<'segments'>
-    audio: { uploadUrl: string; contentType: string }
-    video: { uploadUrl: string; contentType: string } | null
-  }> => {
+  ): Promise<
+    | { status: 'answered' }
+    | {
+        status: 'reserved'
+        segmentId: Id<'segments'>
+        audio: { uploadUrl: string; contentType: string }
+        video: { uploadUrl: string; contentType: string } | null
+      }
+  > => {
     const slot = await ctx.runMutation(internal.interview.reserveSegment, args)
+    if (slot.status === 'answered') return slot
     return {
+      status: 'reserved',
       segmentId: slot.segmentId,
       audio: {
         uploadUrl: await presignPut(
@@ -418,9 +429,9 @@ export const requestSegmentUpload = action({
 })
 
 /**
- * The answer is in the bucket. Advancing `lastQuestionIndex` here, and only
- * here, is what makes "resume where I left off" mean "resume after the last
- * answer that actually arrived".
+ * The answer is in the bucket. `lastQuestionIndex` is kept for the recruiter's
+ * progress display; it is not where the candidate resumes — that is derived
+ * from the segments, see `nextQuestionIndex`.
  */
 export const markSegmentUploaded = mutation({
   args: {
@@ -564,9 +575,186 @@ export const finish = mutation({
     await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {
       sessionId: session._id,
     })
+    await ctx.scheduler.runAfter(0, internal.interview.sendCompletionEmail, {
+      sessionId: session._id,
+    })
     return { alreadyCompleted: false }
+  },
+})
+
+const COMPLETED_TEMPLATE = 'candidate-completed'
+
+/**
+ * Tell the candidate their interview arrived, and give them the one link that
+ * lets them erase it later — the data page, which until now they could only
+ * reach from the screen they had just closed.
+ *
+ * Its own scheduled job rather than part of `finish`, so nothing about the
+ * email — a missing `SITE_URL`, a template that throws — can fail the
+ * transaction that completes the interview. `finish` schedules it once, and a
+ * scheduled mutation runs exactly once.
+ */
+export const sendCompletionEmail = internalMutation({
+  args: { sessionId: v.id('sessions') },
+  handler: async (ctx, { sessionId }) => {
+    // Erased between `finish` and this job: there is nobody left to write to.
+    const session = await ctx.db.get('sessions', sessionId)
+    if (!session) return null
+
+    const project = await ctx.db.get('projects', session.projectId)
+    if (!project) return null
+    const org = await ctx.db.get('organizations', session.orgId)
+    const siteUrl = process.env.SITE_URL
+    if (!siteUrl) throw new ConvexError('site_url_not_configured')
+
+    const { subject, html, text } = candidateCompletedEmail({
+      locale: project.language,
+      candidateName: session.candidateName,
+      jobTitle: project.jobTitle ?? project.title,
+      orgName: org?.name ?? '',
+      privacyUrl: `${siteUrl.replace(/\/+$/, '')}/s/${session.accessToken}/privacy`,
+    })
+    const providerId = await resend.sendEmail(ctx, {
+      from: RESEND_FROM,
+      to: session.candidateEmail,
+      subject,
+      html,
+      text,
+    })
+    await ctx.db.insert('emailLog', {
+      orgId: session.orgId,
+      template: COMPLETED_TEMPLATE,
+      recipient: session.candidateEmail,
+      status: 'sent',
+      providerId,
+      sessionId,
+      createdAt: Date.now(),
+    })
+    return null
   },
 })
 
 /** 12 months after completion, media is purged. See convex/retention.ts. */
 export const RETENTION_MS = 365 * 24 * 60 * 60 * 1000
+
+/* ── Browser test fixtures (e2e/interview.spec.ts) ─────────────────────────
+ * Internal, so only a deploy key reaches them, through `npx convex run`. The
+ * org has no member who can sign in, and the candidate's address is Resend's
+ * delivery sink: the completion email really goes out.
+ * ------------------------------------------------------------------------ */
+const E2E_ORG_SLUG = 'e2e-interview'
+const E2E_EMAIL = 'delivered@resend.dev'
+/** A run that dies before its own cleanup leaves no media behind for long. */
+const E2E_PURGE_AFTER_MS = 24 * 60 * 60 * 1000
+
+/** A fresh two-question session; the org and role are created once. */
+export const seedE2eSession = internalMutation({
+  args: {},
+  returns: v.object({ token: v.string() }),
+  handler: async (ctx) => {
+    const now = Date.now()
+    const org = await ctx.db
+      .query('organizations')
+      .withIndex('by_slug', (q) => q.eq('slug', E2E_ORG_SLUG))
+      .unique()
+    let project =
+      org &&
+      (await ctx.db
+        .query('projects')
+        .withIndex('by_org', (q) => q.eq('orgId', org._id))
+        .first())
+    if (!org) {
+      const userId = await ctx.db.insert('users', {
+        betterAuthId: `seed:${E2E_ORG_SLUG}`,
+        email: E2E_EMAIL,
+        superAdmin: false,
+        createdAt: now,
+      })
+      const orgId = await ctx.db.insert('organizations', {
+        slug: E2E_ORG_SLUG,
+        name: 'E2E',
+        createdBy: userId,
+        createdAt: now,
+      })
+      await ctx.db.insert('organizationMembers', {
+        orgId,
+        userId,
+        role: 'owner',
+        joinedAt: now,
+      })
+      const projectId = await ctx.db.insert('projects', {
+        orgId,
+        slug: 'interview',
+        title: 'E2E interview',
+        status: 'active',
+        language: 'en',
+        introMode: 'none',
+        maxDurationMinutes: 5,
+        candidateFields: {
+          phone: { enabled: false, required: false },
+          linkedin: { enabled: false, required: false },
+          cv: { enabled: false, required: false },
+          coverLetter: { enabled: false, required: false },
+        },
+        createdBy: userId,
+        createdAt: now,
+        restricted: false,
+        sessionCount: 0,
+        completedSessionCount: 0,
+      })
+      for (const [orderIndex, content] of [
+        'Introduce yourself in one sentence.',
+        'Name one thing you are proud of.',
+      ].entries()) {
+        await ctx.db.insert('questions', {
+          orgId,
+          projectId,
+          orderIndex,
+          content,
+          maxResponseSeconds: 60,
+        })
+      }
+      project = await ctx.db.get('projects', projectId)
+    }
+    if (!project) throw new ConvexError('not_found')
+
+    const token = generateToken()
+    await ctx.db.insert('sessions', {
+      orgId: project.orgId,
+      projectId: project._id,
+      accessToken: token,
+      candidateName: 'E2E Candidate',
+      candidateEmail: E2E_EMAIL,
+      status: 'pending',
+      lastQuestionIndex: 0,
+      invitedBy: project.createdBy,
+      invitedAt: now,
+      purgeAfter: now + E2E_PURGE_AFTER_MS,
+    })
+    await ctx.db.patch('projects', project._id, {
+      sessionCount: project.sessionCount + 1,
+    })
+    return { token }
+  },
+})
+
+/** What the browser test checks in the database once the candidate is done. */
+export const e2eSessionState = internalQuery({
+  args: { token: v.string() },
+  returns: v.object({
+    status: sessionStatusValidator,
+    uploadedSegments: v.number(),
+  }),
+  handler: async (ctx, { token }) => {
+    const session = await resolveSessionByToken(ctx, token)
+    const segments = await ctx.db
+      .query('segments')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .collect()
+    return {
+      status: session.status,
+      uploadedSegments: segments.filter((s) => s.uploadState === 'uploaded')
+        .length,
+    }
+  },
+})

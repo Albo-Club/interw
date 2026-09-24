@@ -320,6 +320,31 @@ it should ever come from. It is read inside the middleware's server handler,
 never at module scope — `src/start.ts` is the isomorphic Start entry, and
 `process` does not exist in the browser.
 
+It is validated before it is spliced (`cspOrigin` in
+`src/lib/security-headers.ts`): an `https:` origin whose host is only letters,
+digits, dots and hyphens, and nothing after it. `new URL()` alone is not
+enough — it accepts `https://host;x` and keeps `;x` in the origin, which would
+append a directive of the operator's typo. A malformed value is dropped, and
+`media-src` falls back to `https:` as if it were unset.
+
+### `img-src` names hosts, and one of them comes from the build
+
+`img-src` used to end in a bare `https:`, which let any image the page was
+made to render — model output, above all — call any host with whatever the
+URL carried. It now lists what actually serves our images: `'self'`, `data:`,
+the **Convex deployment origin** (avatars and org logos resolve to
+`<deployment>.convex.cloud/api/storage/…`), the media bucket, and
+`https://*.googleusercontent.com` (the avatar Better Auth copies from a Google
+sign-in into `users.avatarUrl`).
+
+The Convex origin comes from `VITE_CONVEX_URL`, **inlined at build time** in
+`src/start.ts`. A build without it ships a policy that blocks every avatar and
+logo — `pnpm test:smoke` fails on that. If the deployment is ever put behind
+a Convex custom domain, `ctx.storage.getUrl` returns that domain and it must
+be added here. A new image source (another OAuth provider's avatars, images
+from the bucket) is a capability: add its host in the same PR, with an
+assertion in `security-headers.test.ts` on the URL it needs to load.
+
 ## A return-URL search param needs the URL parser, not a regex
 
 `/login` takes `?redirect=` and, after a successful `signIn.email`, calls
@@ -1459,6 +1484,18 @@ you touch this area:
    We keep only the core (GFM: tables, lists). Likewise `tool.tsx` replaces the
    upstream Shiki `CodeBlock` with a local `<pre>`. Comments mark both trims in
    the files.
+3. **Loaded on demand.** `AiPanelHost` imports the panel with `React.lazy`
+   and renders nothing while it is closed (the default), so streamdown's
+   131 KB gzip stay out of the recruiter layout until the panel opens
+   (474 → 301 KB gzip for the layout's static closure). A static import of
+   anything under `src/components/ai/` or `ai-elements/` from a layout undoes
+   that; `AiPanelHost.lazy.test.ts` fails if it happens.
+4. **Links lead into the app only.** `allowedLinkPrefixes` (rehype-harden,
+   reached through `defaultRehypePlugins.harden`) is the app origin, and the
+   `a` renderer re-checks every href, because harden passes `mailto:`,
+   `xmpp:`, `irc:` and `blob:` through whatever the prefix list says. There
+   is no `allowedLinkPrefixes` prop on `<Streamdown>` in 2.5 — the options
+   belong to the harden plugin entry.
 
 ## AI Elements (AI panel) — trimmed vendoring
 

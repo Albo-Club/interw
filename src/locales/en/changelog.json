@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "assistant-panel": {
+      "title": "A lighter, quieter assistant panel",
+      "body": "The AI assistant now stays closed until you open it, and loads only then, so recruiter pages open faster. On a phone or a narrow window it opens as a proper dialog you can leave with Escape or a tap outside. The composer shows how long your message is against the 8,000-character limit, and says so plainly when it is too long. We also tightened which links and images the assistant's answers can point to."
+    },
     "recruiter-routes": {
       "title": "Clearer errors, safer publishing",
       "body": "A mistyped or deleted link now shows a clear page inside the app with a way back to your roles, and refused actions tell you why. A role can no longer be published with the example question or an unnamed criterion, and you can delete a role created by mistake. Downloaded CVs and cover letters are named in your language."

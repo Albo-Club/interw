@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "assistant-panel": {
+      "title": "Un assistant plus léger et plus discret",
+      "body": "L’assistant IA reste fermé tant que vous ne l’ouvrez pas, et ne se charge qu’à ce moment-là : les pages recruteur s’ouvrent plus vite. Sur téléphone ou dans une fenêtre étroite, il s’ouvre dans une vraie fenêtre de dialogue, que l’on quitte avec Échap ou en touchant à côté. La zone de saisie indique la longueur de votre message face à la limite de 8 000 caractères, et le dit clairement quand il est trop long. Nous avons aussi resserré les liens et les images vers lesquels les réponses de l’assistant peuvent pointer."
+    },
     "recruiter-routes": {
       "title": "Des erreurs plus claires, une publication plus sûre",
       "body": "Un lien mal saisi ou supprimé affiche désormais une page claire dans l'application, avec un retour vers vos postes, et une action refusée dit pourquoi. Un poste ne peut plus être publié avec la question d'exemple ou un critère sans nom, et vous pouvez supprimer un poste créé par erreur. Les CV et lettres de motivation téléchargés sont nommés dans votre langue."

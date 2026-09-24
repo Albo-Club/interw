@@ -5,175 +5,91 @@
       "source": "agentmail-to/agentmail-skills",
       "sourceType": "github",
       "skillPath": "agentmail/SKILL.md",
-      "references": [
-        "references/admin.md",
-        "references/deliverability.md",
-        "references/python.md",
-        "references/typescript.md",
-        "references/webhooks.md",
-        "references/websockets.md"
-      ],
-      "trackingRef": "main",
-      "pinnedRef": "e0db938ca1dfd9f7525e08c0264c019707e034e2",
-      "computedHash": "3c8a83c793c81c3ee3b736ada011e18b51834a8a04d370a049cabb7764dcc4d7"
+      "computedHash": "f7544c2edb2e53422cb5d46e5da424ec4d95318e508d6c41a36f02a5abfe5984"
     },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/best-practices/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "a5337f186300d187fea2c8f7af339e091afdd130d36c070d0a2dcb8ca04dd413"
+      "computedHash": "0c30be0e118c2b7a0c4c57bd9e63bf110c7e420a79ec6ce7997153f3b1e066ee"
     },
     "better-auth-security-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "security/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "042f01c76b63b436c71797c8a1b84470c5b6e0c7cd2400aa0928f733da96facf"
+      "computedHash": "7a230edf3a24ce18162cb4379f59b6a19b8d24ca04db530609d0f15cede556dc"
     },
     "convex-create-component": {
       "source": "get-convex/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/convex-create-component/SKILL.md",
-      "references": [
-        "references/advanced-patterns.md",
-        "references/hybrid-components.md",
-        "references/local-components.md",
-        "references/packaged-components.md"
-      ],
-      "trackingRef": "main",
-      "pinnedRef": "0aa10576821c6928f6a0f498c087af4ee231536e",
-      "computedHash": "384ff94842bd6041e78aff2cd1563eef8f1384a56bf9b1bfc3ee572357a17253"
+      "computedHash": "641d2904a3aab8edacb11ef51c7bcf8a64b304d3f4e6a2ea040c5355f9333c37"
     },
-    "create-auth-skill": {
+    "create-auth": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/create-auth/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "e3f24141de734690c803c577cc30f19aa0b7a6e408def0d0de7f8e1b6780c5fc"
+      "computedHash": "9a9b498bc144367b8e237233f89def63fb2bd69e8cafe173eaa58fe3a863cdc4"
     },
     "email-and-password-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/emailAndPassword/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "70591495def0161b5adec5c697dd7740b75e80b16526654beff51f5611098e0a"
+      "computedHash": "863886759f729081e265941f4f72c503835d55a1f34f6d63cebe6571159fff4a"
     },
     "frontend-design": {
       "source": "anthropics/skills",
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "34040c9c568585f6929bedeaad110ad08f079624",
-      "computedHash": "d91970639e9f5c37682ac7ab60094d35f1c7c1f38d731bd56396563aee10c1d3"
+      "computedHash": "89496d5dd00f4810205f351759594fc2742bf8eea85a2f2b2d1de59f4bd91576"
     },
     "organization-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/organization/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "d0450769aab02fbddfddca5c17257dca451233ac8ae7c6b395fa6a3bad104d27"
+      "computedHash": "8c85e683dabef4532f1e8b67bbed5c453d39e0e3d5aeedd69d16b568f6e6d44f"
     },
-    "tanstack-react-router": {
+    "react-router": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/react-router/skills/react-router/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "e561fa1d7118e3d29267cc3b6ce1130d6581f387",
-      "computedHash": "9a08a0e3e647b59213577c846f1516f3070f4759738f1ed3d68afd25fad28d82"
+      "computedHash": "f762a6278b2b1ae911195cc7748d213ed08f37cb70ce33aef1578a5759ef01d2"
     },
-    "tanstack-react-start": {
+    "react-start": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/react-start/skills/react-start/SKILL.md",
-      "references": [
-        "server-components/SKILL.md",
-        "server-components/docs/architecture.md",
-        "server-components/docs/caching-refresh-ssr.md",
-        "server-components/docs/composite-components.md",
-        "server-components/docs/current-api-notes.md",
-        "server-components/docs/debugging-review.md",
-        "server-components/docs/sources.md",
-        "server-components/examples/01-renderable-route-loader.tsx",
-        "server-components/examples/02-composite-slots.tsx",
-        "server-components/examples/03-query-owned-rsc.tsx",
-        "server-components/examples/04-selective-ssr-data-only.tsx",
-        "server-components/examples/05-ssr-false-browser-loader.tsx",
-        "server-components/examples/06-low-level-flight-api-route.tsx"
-      ],
-      "trackingRef": "main",
-      "pinnedRef": "e561fa1d7118e3d29267cc3b6ce1130d6581f387",
-      "computedHash": "73fc17cc4497b3e21b3d6c6d8dead26bb1e0b601c72c5568a60b775c6063010e"
+      "computedHash": "e508e5a82d7eb15cc7fcbf16763f6c270cd0be31bfb0d80d51eb2cbb43eacaca"
     },
-    "tanstack-router-core": {
+    "router-core": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/router-core/skills/router-core/SKILL.md",
-      "references": [
-        "auth-and-guards/SKILL.md",
-        "code-splitting/SKILL.md",
-        "data-loading/SKILL.md",
-        "navigation/SKILL.md",
-        "not-found-and-errors/SKILL.md",
-        "path-params/SKILL.md",
-        "search-params/SKILL.md",
-        "search-params/references/validation-patterns.md",
-        "ssr/SKILL.md",
-        "type-safety/SKILL.md"
-      ],
-      "trackingRef": "main",
-      "pinnedRef": "e561fa1d7118e3d29267cc3b6ce1130d6581f387",
-      "computedHash": "ba3dc3d59471d665a7d0361e77055004948204b73e31841e5eed2328c58ac441"
+      "computedHash": "62eb2d9340f84c2eb01294935d9e707ca2e95cc31c17c1f2754f4f1245790218"
     },
-    "tanstack-router-query": {
+    "router-query": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/react-router/skills/compositions/router-query/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "e561fa1d7118e3d29267cc3b6ce1130d6581f387",
-      "computedHash": "83b8c66d29a36df2a174643566570e602fc232c2daf7fab020c26ab7d06e80ae"
+      "computedHash": "63fc32c213852863cb237c83c783a46d77f87e1551ef3e48abdda4c3667ba1e2"
     },
-    "tanstack-start-core": {
+    "start-core": {
       "source": "TanStack/router",
       "sourceType": "github",
       "skillPath": "packages/start-client-core/skills/start-core/SKILL.md",
-      "references": [
-        "auth-server-primitives/SKILL.md",
-        "deployment/SKILL.md",
-        "execution-model/SKILL.md",
-        "middleware/SKILL.md",
-        "server-functions/SKILL.md",
-        "server-routes/SKILL.md"
-      ],
-      "trackingRef": "main",
-      "pinnedRef": "e561fa1d7118e3d29267cc3b6ce1130d6581f387",
-      "computedHash": "57116f0c57e2a687b9e3f0f5071f5cb86c3d5f86cf13b5845267be54de1de514"
+      "computedHash": "cfeffe68b82aa6aa0f70d1ee0184d517423385a7b55917fc91aeedd160109d9f"
     },
     "two-factor-authentication-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/twoFactor/SKILL.md",
-      "trackingRef": "main",
-      "pinnedRef": "20c9e88a5c007461a703f1c213572b073196113e",
-      "computedHash": "a9d80a07fcedb8298277356f8dcc2ea4f1bddfc8341075edee675f886ea57d5b"
+      "computedHash": "5bc3051aef5060db013f0b3cbe812c40dbae5c22d6ba3ddde4b941158362a197"
     },
     "web-design-guidelines": {
-      "source": "vercel-labs/web-interface-guidelines",
+      "source": "vercel-labs/agent-skills",
       "sourceType": "github",
-      "skillPath": "AGENTS.md",
-      "frontmatter": {
-        "name": "web-design-guidelines",
-        "description": "Web Interface Guidelines from Vercel — MUST/SHOULD/NEVER rules for keyboard and focus behaviour, hit targets, forms, animation, layout, content and accessibility, performance, dark mode and hydration. Use when building or reviewing any UI component, page or interaction, and when asked to audit accessibility, focus states, touch targets, motion or perceived performance. Pairs with frontend-design, which covers aesthetic direction rather than interface correctness.",
-        "license": "MIT"
-      },
-      "trackingRef": "main",
-      "pinnedRef": "e3d624baaf29dc1fc645aff3e38f03e564d2d6b1",
-      "computedHash": "cc844425b881a666c4cf783d5a153bc88760c37f7977119c0e8b2941fcbc606c"
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
     }
   }
 }

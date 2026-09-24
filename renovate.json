@@ -11,6 +11,11 @@
       "groupName": "non-major"
     },
     {
+      "description": "The Convex family moves together: a component built against an older convex peer stops type-checking (KNOWN_ISSUES.md § Bumping convex is never one package).",
+      "matchPackageNames": ["convex", "@convex-dev/**", "convex-test"],
+      "groupName": "convex"
+    },
+    {
       "description": "Auto-merge dev dependencies on green CI.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],

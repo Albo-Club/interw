@@ -48,12 +48,13 @@ export function useAuthState() {
 // `/register`): send an already-authenticated visitor into the app instead of
 // showing them the landing/sign-in screen. Keys off the BA session alone (not
 // Convex) so the redirect fires as soon as a session is confirmed; the `/app`
-// guard then covers the Convex-JWT loading gap.
-export function useRedirectWhenAuthenticated() {
+// guard then covers the Convex-JWT loading gap. `enabled: false` lets a page
+// that has something to say to a signed-in visitor keep them.
+export function useRedirectWhenAuthenticated(enabled = true) {
   const navigate = useNavigate()
   const { user } = useAuthState()
 
   useEffect(() => {
-    if (user) navigate({ to: '/app' })
-  }, [user, navigate])
+    if (enabled && user) navigate({ to: '/app' })
+  }, [enabled, user, navigate])
 }

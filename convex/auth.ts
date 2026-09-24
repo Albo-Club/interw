@@ -76,13 +76,20 @@ export const verificationRequiresCredential = createAuthMiddleware(
     if (ctx.path === '/verify-email') {
       const query = ctx.query ?? {}
       const { token, callbackURL } = query
-      // A missing, bad or expired token is Better Auth's to reject.
+      // A missing token is Better Auth's to reject.
       if (typeof token !== 'string') return
       const payload = await verifyJWT(token, ctx.context.secret)
-      if (!payload) return
+      const login = new URL('/login', ctx.context.baseURL)
+      if (!payload) {
+        // Expired or bad: Better Auth would bounce to `${callbackURL}?error=`,
+        // and the /app guard drops the error on its way to a bare /login.
+        // Say it on /login instead, where the Resend button lives.
+        login.searchParams.set('verifyExpired', '1')
+        if (callbackURL) login.searchParams.set('redirect', callbackURL)
+        throw ctx.redirect(login.toString())
+      }
       // Approving an email change only mails the new address.
       if (payload.requestType === 'change-email-confirmation') return
-      const login = new URL('/login', ctx.context.baseURL)
       if (!payload.updateTo) {
         // Sign-up verification: completed by `/sign-in/email` below, once the
         // clicker has typed the account's password.

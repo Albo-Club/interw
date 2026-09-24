@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "verification-link-guidance": {
+      "title": "Clearer email verification",
+      "body": "Opening a verification link while signed in to another account, or after it has expired, now tells you what to do next instead of leaving you on a plain sign-in page. Sign-up also asks you to type your password twice."
+    },
     "verification-needs-password": {
       "title": "Confirming your email now asks for your password",
       "body": "We strengthened email verification: after clicking the link, you now sign in with your password to confirm your address. That way a verification link can only ever complete an account you set up yourself."

@@ -16,6 +16,7 @@ import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Spinner } from '~/components/ui/spinner'
 import { AuthShell } from '~/components/auth/auth-shell'
+import { ConfirmPasswordField } from '~/components/auth/confirm-password-field'
 import { PasswordInput } from '~/components/auth/password-input'
 import { PasswordStrength } from '~/components/auth/password-strength'
 import { SocialAuthButtons } from '~/components/auth/social-auth-buttons'
@@ -53,11 +54,17 @@ function RegisterPage() {
   const te = (k: string) => t(`errors:${k}`)
   const schema = useMemo(
     () =>
-      z.object({
-        name: z.string().min(1, t('validation:name.required')),
-        email: z.email(t('validation:email.invalid')),
-        password: z.string().min(12, t('validation:password.min12')),
-      }),
+      z
+        .object({
+          name: z.string().min(1, t('validation:name.required')),
+          email: z.email(t('validation:email.invalid')),
+          password: z.string().min(12, t('validation:password.min12')),
+          confirmPassword: z.string().min(1, t('validation:password.confirm')),
+        })
+        .refine((v) => v.password === v.confirmPassword, {
+          message: t('validation:password.mismatch'),
+          path: ['confirmPassword'],
+        }),
     [t],
   )
   const { redirect } = Route.useSearch()
@@ -73,9 +80,9 @@ function RegisterPage() {
   const [resendLoading, setResendLoading] = useState(false)
 
   const form = useForm({
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
     validators: { onChange: schema, onSubmit: schema },
-    onSubmit: async ({ value }) => {
+    onSubmit: async ({ value: { confirmPassword: _, ...value } }) => {
       setLoading(true)
       const { error } = await authClient.signUp.email({
         ...value,
@@ -306,6 +313,21 @@ function RegisterPage() {
                   </Field>
                 )
               }}
+            </form.Field>
+            <form.Field name="confirmPassword">
+              {(field) => (
+                <form.Subscribe selector={(s) => s.values.password}>
+                  {(password) => (
+                    <ConfirmPasswordField
+                      id={field.name}
+                      password={password}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      onBlur={field.handleBlur}
+                    />
+                  )}
+                </form.Subscribe>
+              )}
             </form.Field>
           </FieldGroup>
         </CardContent>

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { betterAuth } from 'better-auth/minimal'
 import { memoryAdapter } from 'better-auth/adapters/memory'
 import { magicLink } from 'better-auth/plugins/magic-link'
@@ -140,6 +140,29 @@ describe('sign-up verification link', () => {
     expect((await t.signIn(ATTACKER, ATTACKER_PASSWORD, victimToken)).status).toBe(403)
     expect((await t.findUser(ATTACKER))?.user.emailVerified).toBe(false)
     expect((await t.findUser(VICTIM))?.user.emailVerified).toBe(false)
+  })
+
+  it('sends an expired link to /login with a notice, not to the app', async () => {
+    const t = buildAuth()
+    await t.signUp(VICTIM, VICTIM_PASSWORD)
+    const link = t.lastMailTo(VICTIM)
+    vi.useFakeTimers({ now: Date.now() + 2 * 60 * 60 * 1000, toFake: ['Date'] })
+    try {
+      const login = location(await t.get(link))
+      expect(login.pathname).toBe('/login')
+      expect(login.searchParams.get('verifyExpired')).toBe('1')
+      expect(login.searchParams.get('redirect')).toBe('/app')
+      expect(login.searchParams.has('verifyToken')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('treats a forged token like an expired one', async () => {
+    const t = buildAuth()
+    const login = location(await t.get('/api/auth/verify-email?token=forged&callbackURL=%2Fapp'))
+    expect(login.pathname).toBe('/login')
+    expect(login.searchParams.get('verifyExpired')).toBe('1')
   })
 })
 

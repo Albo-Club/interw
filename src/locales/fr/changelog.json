@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "verification-link-guidance": {
+      "title": "Une vérification d’e-mail plus claire",
+      "body": "Ouvrir un lien de vérification alors que vous êtes connecté à un autre compte, ou après son expiration, vous indique désormais quoi faire au lieu de vous laisser sur une simple page de connexion. L’inscription vous demande aussi de saisir votre mot de passe deux fois."
+    },
     "verification-needs-password": {
       "title": "Confirmer votre e-mail demande désormais votre mot de passe",
       "body": "Nous avons renforcé la vérification des e-mails : après avoir cliqué sur le lien, vous vous connectez avec votre mot de passe pour confirmer votre adresse. Ainsi, un lien de vérification ne peut finaliser qu’un compte que vous avez créé vous-même."

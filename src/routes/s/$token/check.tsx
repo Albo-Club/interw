@@ -32,6 +32,7 @@ import {
   CandidateShell,
   candidateAction,
 } from '~/components/candidate/CandidateShell'
+import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
 
 export const Route = createFileRoute('/s/$token/check')({
@@ -54,6 +55,7 @@ function DeviceCheck() {
 
   const [now] = useState(() => Date.now())
   const data = useConvexQuery(api.candidate.landing, { token, now })
+  const languageReady = useCandidateLanguage(data?.project.language)
   const logEvent = useConvexMutation(api.interview.logEvent)
 
   const [phase, setPhase] = useState<Phase>('starting')
@@ -164,12 +166,12 @@ function DeviceCheck() {
     return teardown
   }, [support.usable, startPreview, teardown])
 
-  if (data === undefined) {
+  if (data === undefined || !languageReady) {
     return (
       <CandidateShell>
         <div className="space-y-6">
           <Skeleton className="h-9 w-72" />
-          <Skeleton className="aspect-video w-full rounded-lg" />
+          <Skeleton className="aspect-[3/4] w-full rounded-lg sm:aspect-video" />
         </div>
       </CandidateShell>
     )
@@ -200,7 +202,10 @@ function DeviceCheck() {
   }
 
   return (
-    <CandidateShell organisationName={data.organisationName}>
+    <CandidateShell
+      organisationName={data.organisationName}
+      privacyToken={token}
+    >
       <div className="space-y-8">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -284,6 +289,8 @@ function DeviceCheck() {
                   </p>
                   <MicMeter level={level} verdict={verdict} />
                   <p
+                    role="status"
+                    aria-live="polite"
                     className={cn(
                       'text-sm',
                       verdict === 'good'

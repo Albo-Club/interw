@@ -19,7 +19,11 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { introModeValidator, sessionEventKindValidator } from './schema'
+import {
+  introModeValidator,
+  languageValidator,
+  sessionEventKindValidator,
+} from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
@@ -96,6 +100,8 @@ export const questions = query({
     /** Where the interview picks up. The client computes no resume point of
      *  its own; see `nextQuestionIndex` in convex/lib/sessionState.ts. */
     nextQuestionIndex: v.number(),
+    /** The role's language, which the whole candidate surface speaks. */
+    language: languageValidator,
     introMode: introModeValidator,
     introText: v.union(v.string(), v.null()),
     hasIntroMedia: v.boolean(),
@@ -127,6 +133,7 @@ export const questions = query({
         rows.map((question) => question._id),
         segments,
       ),
+      language: project.language,
       introMode: project.introMode,
       introText: project.introText ?? null,
       hasIntroMedia: project.introMediaKey !== undefined,

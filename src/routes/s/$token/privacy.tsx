@@ -23,6 +23,7 @@ import {
   CandidateShell,
   candidateAction,
 } from '~/components/candidate/CandidateShell'
+import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
 export const Route = createFileRoute('/s/$token/privacy')({
   component: CandidatePrivacy,
@@ -44,6 +45,7 @@ function CandidatePrivacy() {
     erasure === 'idle' ? { token, now } : 'skip',
   )
   const deleteMyData = useConvexAction(api.candidate.deleteMyData)
+  const languageReady = useCandidateLanguage(summary?.language)
 
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ function CandidatePrivacy() {
     )
   }
 
-  if (summary === undefined) {
+  if (summary === undefined || !languageReady) {
     return (
       <CandidateShell>
         <Skeleton className="h-64 w-full rounded-lg" />

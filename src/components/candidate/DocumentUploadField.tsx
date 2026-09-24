@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Check, Paperclip } from 'lucide-react'
 
 import { api } from '../../../convex/_generated/api'
+import { candidateAction } from './CandidateShell'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { uploadToSignedUrl } from '~/lib/media/upload'
 import { Button } from '~/components/ui/button'
@@ -96,6 +97,7 @@ export function DocumentUploadField({
         <Button
           type="button"
           variant="outline"
+          className={candidateAction}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
         >

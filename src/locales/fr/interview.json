@@ -1,8 +1,7 @@
 {
   "metaTitle": "Votre entretien",
   "shell": {
-    "privacy": "Vos données",
-    "help": "Un problème ?"
+    "privacy": "Vos données"
   },
   "state": {
     "notFound": {
@@ -47,8 +46,6 @@
     "yourDetails": "Vos informations",
     "detailsHint": "Uniquement ce que {{org}} a demandé. Tout est facultatif, sauf mention contraire.",
     "fields": {
-      "name": "Nom",
-      "email": "E-mail",
       "phone": "Numéro de téléphone",
       "linkedin": "Profil LinkedIn",
       "cv": "Votre CV",
@@ -102,12 +99,8 @@
       "title": "Un mot avant de commencer",
       "continue": "Je suis prêt"
     },
-    "playQuestion": "Écouter la question",
-    "replayQuestion": "Réécouter",
-    "readQuestion": "La question",
     "hint": "Un conseil",
     "audioOnly": "Audio uniquement — votre caméra n'est pas disponible, cet entretien enregistre donc votre voix. Cela suffit pour participer.",
-    "notRecording": "Enregistrement pas encore démarré",
     "startAnswer": "Commencer ma réponse",
     "recording": "Enregistrement",
     "finishAnswer": "J'ai terminé ma réponse",
@@ -132,9 +125,7 @@
       "body": "Rien n'a été capté, il n'y a donc rien à envoyer. Enregistrez à nouveau cette réponse.",
       "rerecord": "L'enregistrer à nouveau"
     },
-    "networkPoor": "Votre connexion semble instable. L'enregistrement fonctionne toujours — l'envoi peut simplement prendre plus de temps.",
     "offline": "Vous êtes hors ligne. Votre réponse sera envoyée dès le retour de la connexion.",
-    "next": "Question suivante",
     "finishInterview": "Terminer l'entretien",
     "finishing": "Finalisation…",
     "review": {
@@ -147,7 +138,6 @@
       "answer": "Y répondre maintenant",
       "next": "Une fois l'entretien terminé, il est envoyé et vos réponses ne peuvent plus être modifiées."
     },
-    "leaveWarning": "Votre réponse est encore en cours d'envoi. Si vous quittez maintenant, elle sera perdue.",
     "crash": {
       "title": "Un problème est survenu sur cette page",
       "body": "Vos réponses enregistrées sont intactes. Rechargez pour reprendre là où vous en étiez.",
@@ -161,8 +151,7 @@
     "whatNext": "La suite",
     "nextSteps": {
       "review": "{{org}} va examiner vos réponses.",
-      "contact": "Vous serez contacté directement, à l'adresse {{email}}.",
-      "noReply": "Cette adresse n'accepte pas de réponse — répondez plutôt à l'e-mail qui vous a invité."
+      "contact": "Vous serez contacté directement, à l'adresse {{email}}."
     },
     "privacy": "Voir les données conservées, et les supprimer"
   },

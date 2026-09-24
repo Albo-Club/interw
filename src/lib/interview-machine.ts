@@ -45,8 +45,14 @@ export type InterviewState = {
   hasRecording: boolean
   /** An i18n key, resolved by the screen. */
   error: string | null
-  /** Bytes sent of the current answer, across its audio and video files. */
-  progress: { loaded: number; total: number } | null
+  /** Bytes sent of the current answer, across its audio and video files,
+   *  and which attempt this is when the connection forced a retry. */
+  progress: {
+    loaded: number
+    total: number
+    attempt: number
+    maxAttempts: number
+  } | null
   stopReason: StopReason | null
   /** The last answer was saved as audio only: its video did not arrive. */
   videoLost: boolean
@@ -67,7 +73,13 @@ export type InterviewEvent =
   | { type: 'stopRequested'; reason: StopReason }
   | { type: 'recorded' }
   | { type: 'stopFailed'; error: string }
-  | { type: 'progress'; loaded: number; total: number }
+  | {
+      type: 'progress'
+      loaded: number
+      total: number
+      attempt: number
+      maxAttempts: number
+    }
   | {
       type: 'saved'
       /** Live from the server, one flag per question. */
@@ -182,10 +194,11 @@ export function interviewReducer(
           }
         : state
 
-    case 'progress':
-      return state.phase === 'saving'
-        ? { ...state, progress: { loaded: event.loaded, total: event.total } }
-        : state
+    case 'progress': {
+      if (state.phase !== 'saving') return state
+      const { loaded, total, attempt, maxAttempts } = event
+      return { ...state, progress: { loaded, total, attempt, maxAttempts } }
+    }
 
     case 'saved': {
       if (state.phase !== 'saving') return state

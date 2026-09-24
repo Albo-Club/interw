@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 
 import { cn } from '~/lib/utils'
@@ -20,14 +22,16 @@ export const candidateAction = 'min-h-11 touch-manipulation'
 export function CandidateShell({
   organisationName,
   children,
-  footer,
+  privacyToken,
   width = 'narrow',
 }: {
   organisationName?: string
   children: ReactNode
-  footer?: ReactNode
+  /** Links the footer to this candidate's data page. */
+  privacyToken?: string
   width?: 'narrow' | 'wide'
 }) {
+  const { t } = useTranslation('interview')
   return (
     <div className="bg-background flex min-h-svh flex-col">
       <header className="border-b">
@@ -52,7 +56,7 @@ export function CandidateShell({
         {children}
       </main>
 
-      {footer && (
+      {privacyToken && (
         <footer className="border-t">
           <div
             className={cn(
@@ -60,7 +64,13 @@ export function CandidateShell({
               width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
             )}
           >
-            {footer}
+            <Link
+              to="/s/$token/privacy"
+              params={{ token: privacyToken }}
+              className="underline underline-offset-4"
+            >
+              {t('shell.privacy')}
+            </Link>
           </div>
         </footer>
       )}

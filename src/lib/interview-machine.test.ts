@@ -152,15 +152,25 @@ describe('recording', () => {
   })
 
   it('reports upload progress only while saving', () => {
-    const saving = run([boot(0), { type: 'recordingStarted' }, { type: 'stopRequested', reason: 'finished' }])
-    expect(
-      interviewReducer(saving, { type: 'progress', loaded: 5, total: 10 })
-        .progress,
-    ).toEqual({ loaded: 5, total: 10 })
-    expect(
-      interviewReducer(run([boot(0)]), { type: 'progress', loaded: 5, total: 10 })
-        .progress,
-    ).toBeNull()
+    const progress = {
+      type: 'progress',
+      loaded: 5,
+      total: 10,
+      attempt: 2,
+      maxAttempts: 3,
+    } as const
+    const saving = run([
+      boot(0),
+      { type: 'recordingStarted' },
+      { type: 'stopRequested', reason: 'finished' },
+    ])
+    expect(interviewReducer(saving, progress).progress).toEqual({
+      loaded: 5,
+      total: 10,
+      attempt: 2,
+      maxAttempts: 3,
+    })
+    expect(interviewReducer(run([boot(0)]), progress).progress).toBeNull()
   })
 })
 

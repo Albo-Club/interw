@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { Check, Clock, MessageSquare, Video } from 'lucide-react'
+import { Check, Clock, MessageSquare, Mic, Monitor, Video } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
 import { errorMessageKey } from '~/lib/convex-errors'
@@ -13,8 +13,12 @@ import { Checkbox } from '~/components/ui/checkbox'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
-import { CandidateShell } from '~/components/candidate/CandidateShell'
+import {
+  CandidateShell,
+  candidateAction,
+} from '~/components/candidate/CandidateShell'
 import { DocumentUploadField } from '~/components/candidate/DocumentUploadField'
+import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
 export const Route = createFileRoute('/s/$token/')({
   component: CandidateWelcome,
@@ -36,6 +40,7 @@ function CandidateWelcome() {
   }, [])
 
   const data = useConvexQuery(api.candidate.landing, { token, now })
+  const languageReady = useCandidateLanguage(data?.project.language)
   const updateProfile = useConvexMutation(api.candidate.updateProfile)
   const acceptConsent = useConvexMutation(api.candidate.acceptConsent)
 
@@ -51,7 +56,7 @@ function CandidateWelcome() {
     return state === 'ready' || state === 'resumable' ? null : state
   }, [data])
 
-  if (data === undefined) {
+  if (data === undefined || !languageReady) {
     return (
       <CandidateShell>
         <div className="space-y-6">
@@ -115,7 +120,10 @@ function CandidateWelcome() {
     !submitting && !missingRequired && (consented || !gate.needsConsent)
 
   return (
-    <CandidateShell organisationName={data.organisationName}>
+    <CandidateShell
+      organisationName={data.organisationName}
+      privacyToken={token}
+    >
       <div className="space-y-10">
         <header className="space-y-3">
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -163,6 +171,23 @@ function CandidateWelcome() {
             </Point>
             <Point icon={<Check className="size-4" />}>
               {t('interview:welcome.steps.alone')}
+            </Point>
+          </ul>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-sm font-semibold tracking-wide uppercase">
+            {t('interview:welcome.whatYouNeed')}
+          </h2>
+          <ul className="space-y-3">
+            <Point icon={<Video className="size-4" />}>
+              {t('interview:welcome.needs.camera')}
+            </Point>
+            <Point icon={<Mic className="size-4" />}>
+              {t('interview:welcome.needs.quiet')}
+            </Point>
+            <Point icon={<Monitor className="size-4" />}>
+              {t('interview:welcome.needs.browser')}
             </Point>
           </ul>
         </section>
@@ -303,7 +328,7 @@ function CandidateWelcome() {
         <div className="flex flex-col gap-3 border-t pt-6">
           <Button
             size="lg"
-            className="w-full sm:w-auto sm:self-start"
+            className={`${candidateAction} w-full sm:w-auto sm:self-start`}
             disabled={!canProceed}
             onClick={() => void proceed()}
           >

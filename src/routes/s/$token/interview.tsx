@@ -31,6 +31,7 @@ import {
   candidateAction,
 } from '~/components/candidate/CandidateShell'
 import { CandidateError } from '~/components/candidate/CandidateError'
+import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
 
 type DeviceChoice = { camera?: string; mic?: string }
@@ -70,6 +71,7 @@ function InterviewRunner() {
 
   const [now] = useState(() => Date.now())
   const data = useConvexQuery(api.interview.questions, { token, now })
+  const languageReady = useCandidateLanguage(data?.language)
   const start = useConvexMutation(api.interview.start)
   const requestUpload = useConvexAction(api.interview.requestSegmentUpload)
   const markUploaded = useConvexMutation(api.interview.markSegmentUploaded)
@@ -236,8 +238,8 @@ function InterviewRunner() {
           url: slot.audio.uploadUrl,
           blob: recording.audio,
           contentType: slot.audio.contentType,
-          onProgress: ({ loaded }) =>
-            dispatch({ type: 'progress', loaded, total }),
+          onProgress: ({ loaded, attempt, maxAttempts }) =>
+            dispatch({ type: 'progress', loaded, total, attempt, maxAttempts }),
         })
         // The answer is the audio — it is what gets transcribed — so it is
         // saved the moment the audio arrives. The video enriches it: losing
@@ -255,11 +257,13 @@ function InterviewRunner() {
               url: slot.video.uploadUrl,
               blob: video,
               contentType: slot.video.contentType,
-              onProgress: ({ loaded }) =>
+              onProgress: ({ loaded, attempt, maxAttempts }) =>
                 dispatch({
                   type: 'progress',
                   loaded: recording.audio.size + loaded,
                   total,
+                  attempt,
+                  maxAttempts,
                 }),
             })
           } catch (cause) {
@@ -399,7 +403,7 @@ function InterviewRunner() {
 
   if (fatal) throw fatal
 
-  if (data === undefined || state.phase === 'loading') {
+  if (data === undefined || !languageReady || state.phase === 'loading') {
     return (
       <CandidateShell width="wide">
         <div className="space-y-6">
@@ -674,12 +678,20 @@ function LastAnswerNotice({ state }: { state: InterviewState }) {
 
 function Saving({ state }: { state: InterviewState }) {
   const { t } = useTranslation('interview')
-  const percent = state.progress
-    ? Math.round((state.progress.loaded / Math.max(1, state.progress.total)) * 100)
+  const { progress } = state
+  const percent = progress
+    ? Math.round((progress.loaded / Math.max(1, progress.total)) * 100)
     : 0
   return (
     <Alert>
-      <AlertTitle>{t('run.sending')}</AlertTitle>
+      <AlertTitle>
+        {progress && progress.attempt > 1
+          ? t('run.retrying', {
+              attempt: progress.attempt,
+              max: progress.maxAttempts,
+            })
+          : t('run.sending')}
+      </AlertTitle>
       <AlertDescription className="space-y-2">
         <Progress
           value={percent}

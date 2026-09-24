@@ -1,8 +1,7 @@
 {
   "metaTitle": "Your interview",
   "shell": {
-    "privacy": "Your data",
-    "help": "Something not working?"
+    "privacy": "Your data"
   },
   "state": {
     "notFound": {
@@ -47,8 +46,6 @@
     "yourDetails": "Your details",
     "detailsHint": "Only what {{org}} asked for. Everything here is optional unless marked.",
     "fields": {
-      "name": "Name",
-      "email": "Email",
       "phone": "Phone number",
       "linkedin": "LinkedIn profile",
       "cv": "Your CV",
@@ -102,12 +99,8 @@
       "title": "A word before we begin",
       "continue": "I'm ready"
     },
-    "playQuestion": "Play the question",
-    "replayQuestion": "Play again",
-    "readQuestion": "The question",
     "hint": "A tip",
     "audioOnly": "Audio only — your camera isn't available, so this interview records your voice. That is enough to take part.",
-    "notRecording": "Not recording yet",
     "startAnswer": "Start my answer",
     "recording": "Recording",
     "finishAnswer": "I've finished my answer",
@@ -132,9 +125,7 @@
       "body": "Nothing reached the recorder, so there is nothing to send. Record this answer again.",
       "rerecord": "Record it again"
     },
-    "networkPoor": "Your connection looks unstable. Recording still works — saving may just take longer.",
     "offline": "You're offline. Your answer will be sent as soon as you're back.",
-    "next": "Next question",
     "finishInterview": "Finish the interview",
     "finishing": "Finishing…",
     "review": {
@@ -147,7 +138,6 @@
       "answer": "Answer it now",
       "next": "When you finish, your interview is sent and your answers can no longer be changed."
     },
-    "leaveWarning": "Your answer is still being saved. Leave now and it will be lost.",
     "crash": {
       "title": "Something went wrong on this page",
       "body": "Your saved answers are safe. Reload to pick up where you left off.",
@@ -161,8 +151,7 @@
     "whatNext": "What happens next",
     "nextSteps": {
       "review": "{{org}} will review your answers.",
-      "contact": "They will contact you directly, at {{email}}.",
-      "noReply": "This address doesn't accept replies — reply to the email that invited you instead."
+      "contact": "They will contact you directly, at {{email}}."
     },
     "privacy": "See what data is kept, and delete it"
   },

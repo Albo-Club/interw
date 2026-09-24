@@ -245,6 +245,20 @@ describe('one resume cursor, on the server', () => {
     ])
   })
 
+  /** M4 (language). The surface followed the browser, not the role. */
+  it('tells every candidate screen the role’s language', async () => {
+    const questions = await t.query(api.interview.questions, {
+      token: s.token,
+      now: Date.now(),
+    })
+    const privacy = await t.query(api.candidate.privacySummary, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(questions.language).toBe('fr')
+    expect(privacy.language).toBe('fr')
+  })
+
   it('announces the same question on the welcome screen', async () => {
     const landing = await t.query(api.candidate.landing, {
       token: s.token,

@@ -351,7 +351,7 @@ export const attachDocument = action({
 export const privacySummary = query({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token }) => {
-    const { session } = await requireSession(ctx, token)
+    const { session, project } = await requireSession(ctx, token)
     const org = await ctx.db.get('organizations', session.orgId)
     const segments = await ctx.db
       .query('segments')
@@ -368,6 +368,7 @@ export const privacySummary = query({
 
     return {
       organisationName: org?.name ?? '',
+      language: project.language,
       candidateName: session.candidateName,
       candidateEmail: session.candidateEmail,
       answerCount: segments.filter((s) => s.uploadState === 'uploaded').length,

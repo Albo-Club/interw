@@ -306,8 +306,8 @@ async function checkEnv() {
   section('Environment hints (best-effort)')
   // The script can't read Convex env directly; we look at side-effects.
   // Transcription, evaluation and the AI chat all run on MISTRAL_API_KEY — if
-  // absent, the pipeline fails in `jobLog` and /api/chat returns 500 on an
-  // authed request. We can't auth from here, so this is informational.
+  // absent, the pipeline fails in `jobLog` and the chat agent's reply fails in
+  // the AI panel. We can't auth from here, so this is informational.
   warn(
     'MISTRAL_API_KEY',
     'run `pnpm exec convex env list` to confirm before testing AI chat or an interview',

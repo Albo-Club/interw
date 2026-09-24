@@ -281,9 +281,11 @@ export const view = query({
 export const recordView = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
-    await consumeLimit(ctx, 'shareView', token)
+    // Resolve first: keyed on the raw argument, the limiter would let an
+    // anonymous caller choose the keys written to its store.
     const resolved = await resolveShare(ctx, token, Date.now())
     if (resolved.state !== 'active') return null
+    await consumeLimit(ctx, 'shareView', resolved.share._id)
     await ctx.db.patch('reportShares', resolved.share._id, {
       lastViewedAt: Date.now(),
       viewCount: resolved.share.viewCount + 1,

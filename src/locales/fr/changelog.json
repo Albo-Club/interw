@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "candidate-page": {
+      "title": "Une fiche candidat qui suit votre rythme",
+      "body": "Les vidéos ne repartent plus de zéro quand vous enregistrez une note, et restent lisibles après une heure sur la page ; si un enregistrement ne se charge pas, vous le voyez et pouvez réessayer. Les moments à regarder s'affichent sous le lecteur, les décisions gardent leur historique, et quand une analyse n'aboutit pas, la personne qui a créé le poste ou un admin peut la relancer. Révoquer un lien de partage demande désormais confirmation, et la lettre de motivation a son propre bouton."
+    },
     "candidate-table": {
       "title": "Comparez les candidats d’un coup d’œil",
       "body": "Le tableau des candidats affiche désormais le score et la recommandation IA de chacun. Triez par score, recommandation, date ou durée, et filtrez par statut ou par votre décision. Une invitation rejetée ou signalée comme spam est signalée sur sa ligne, et les propriétaires, administrateurs et le créateur du poste peuvent copier le lien d’un candidat pour l’envoyer eux-mêmes. Quand vous collez une liste, les adresses en double sont affichées avant tout envoi."

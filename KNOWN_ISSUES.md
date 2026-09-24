@@ -2258,3 +2258,22 @@ vendors document — or leave `DEPLOY_CONVEX` off that branch, point
 another route. The second works, at the cost of front end and back end no
 longer shipping together: a push updates the site and not the functions,
 silently.
+
+## Signed playback URLs: sign on what there is to play, never on the query
+
+A Convex query result changes identity on **every** write to the rows it read.
+An effect that re-signs playback URLs whenever `forSession` changes therefore
+re-signs on a note, a decision, a `jobLog` row — and a SigV4 URL differs on
+every signature (`X-Amz-Date`), so the `<video>` gets a new `src` and restarts
+at 0:00. The opposite mistake (sign once) leaves every citation dead after the
+URLs' hour. Both lived in the same effect (audit 2026-09-15, recruiter E3).
+
+The pattern is `src/hooks/useSessionMedia.ts`: signing depends on a key naming
+only what there is to play (`sessionMediaKey`: segment ids with an upload,
+documents, `mediaPurgedAt`), re-signs on a 50-minute timer and on the player's
+`error` event — except within 30 s of a fresh signature, which is a file that
+cannot play, not an expiry, and shows an error instead of looping.
+
+Trap: swapping a `<video>`'s `src` resets it to 0:00, paused, even for the
+same file. `AnswerPlayer` sets `src` imperatively and restores `currentTime`
+(and playback) on `loadedmetadata`; don't move `src` back into JSX.

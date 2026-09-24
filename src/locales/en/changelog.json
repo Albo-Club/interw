@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "candidate-page": {
+      "title": "A candidate page that keeps up with you",
+      "body": "Videos no longer restart when you save a note, and keep playing after an hour on the page; if a recording cannot load, you are told and can retry. The moments worth watching sit under the player, decisions keep their history, and when an analysis does not finish, the role's creator or an admin can relaunch it. Revoking a share link now asks first, and the cover letter has its own button."
+    },
     "candidate-table": {
       "title": "Compare candidates at a glance",
       "body": "The candidate table now shows each candidate's score and AI recommendation. Sort by score, recommendation, date or length, and filter by status or by your decision. An invitation that bounced or was marked as spam is flagged on its row, and owners, admins and the role's creator can copy a candidate's link to send it themselves. When you paste a list, repeated addresses are shown before anything is sent."

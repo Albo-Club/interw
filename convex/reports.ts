@@ -113,7 +113,10 @@ export const forSession = query({
             segmentId: segment._id,
             questionIndex: segment.questionIndex,
             question: question?.content ?? '',
-            durationSeconds: segment.durationSeconds ?? null,
+            // What the server measured first. The browser's own figure only
+            // for answers transcribed before `measuredSeconds` existed.
+            durationSeconds:
+              segment.measuredSeconds ?? segment.durationSeconds ?? null,
             uploadState: segment.uploadState,
             hasVideo: segment.videoKey !== undefined,
             transcript: transcript?.text ?? null,

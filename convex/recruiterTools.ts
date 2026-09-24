@@ -10,6 +10,12 @@
  * Every tool re-derives org membership from the thread scope (see
  * lib/agentScope.ts) and re-applies project visibility, so a confidential
  * role does not become readable just because it was asked about in a chat.
+ *
+ * The two tools that return candidate data run as mutations for one write:
+ * a `chatThreadSessions` row naming the thread the data is about to land in,
+ * so erasing the candidate can delete that thread. It is bookkeeping for
+ * erasure, not recruiting data — no decision, invitation or role is
+ * reachable from here, which is what "read only" protects.
  */
 
 import { ConvexError, v } from 'convex/values'
@@ -17,13 +23,43 @@ import { createTool } from '@convex-dev/agent'
 import { z } from 'zod/v3'
 
 import { internal } from './_generated/api'
-import { internalQuery } from './_generated/server'
+import { internalMutation, internalQuery } from './_generated/server'
 import { parseScope, readMembership } from './lib/agentScope'
 import { canSeeProject } from './lib/projectAccess'
 import { normalizeWeights } from './lib/weights'
-import type { Id } from './_generated/dataModel'
+import type { GenericMutationCtx } from 'convex/server'
+import type { DataModel, Id } from './_generated/dataModel'
 
 const LIST_CAP = 50
+
+/**
+ * Record that these sessions' data is being read into `threadId`, in the
+ * transaction that reads it: the data cannot reach the thread without the
+ * row that lets erasure find it.
+ */
+async function recordThreadReads(
+  ctx: GenericMutationCtx<DataModel>,
+  threadId: string,
+  sessionIds: Array<Id<'sessions'>>,
+): Promise<void> {
+  for (const sessionId of sessionIds) {
+    const known = await ctx.db
+      .query('chatThreadSessions')
+      .withIndex('by_thread_and_session', (q) =>
+        q.eq('threadId', threadId).eq('sessionId', sessionId),
+      )
+      .unique()
+    if (!known) {
+      await ctx.db.insert('chatThreadSessions', { threadId, sessionId })
+    }
+  }
+}
+
+/** The thread a tool writes into; without one, nothing could erase what it reads. */
+function requireThreadId(threadId: string | undefined): string {
+  if (!threadId) throw new ConvexError('agent_tools_missing_thread')
+  return threadId
+}
 
 export const listRolesInternal = internalQuery({
   args: { orgId: v.id('organizations'), actorUserId: v.id('users') },
@@ -52,13 +88,14 @@ export const listRolesInternal = internalQuery({
   },
 })
 
-export const listCandidatesInternal = internalQuery({
+export const listCandidatesInternal = internalMutation({
   args: {
     orgId: v.id('organizations'),
     actorUserId: v.id('users'),
+    threadId: v.string(),
     projectSlug: v.optional(v.string()),
   },
-  handler: async (ctx, { orgId, actorUserId, projectSlug }) => {
+  handler: async (ctx, { orgId, actorUserId, threadId, projectSlug }) => {
     const member = await readMembership(ctx, orgId, actorUserId)
 
     let sessions
@@ -105,17 +142,19 @@ export const listCandidatesInternal = internalQuery({
         recruiterDecision: session.recruiterDecision ?? null,
       })
     }
+    await recordThreadReads(ctx, threadId, rows.map((row) => row.sessionId))
     return rows
   },
 })
 
-export const readReportInternal = internalQuery({
+export const readReportInternal = internalMutation({
   args: {
     orgId: v.id('organizations'),
     actorUserId: v.id('users'),
+    threadId: v.string(),
     sessionId: v.id('sessions'),
   },
-  handler: async (ctx, { orgId, actorUserId, sessionId }) => {
+  handler: async (ctx, { orgId, actorUserId, threadId, sessionId }) => {
     const member = await readMembership(ctx, orgId, actorUserId)
     const session = await ctx.db.get('sessions', sessionId)
     // Scoping to the caller's org before anything else: a session id is
@@ -126,6 +165,7 @@ export const readReportInternal = internalQuery({
     if (!(await canSeeProject(ctx, project, actorUserId, member.role))) {
       throw new ConvexError('not_found')
     }
+    await recordThreadReads(ctx, threadId, [sessionId])
 
     const report = await ctx.db
       .query('reports')
@@ -203,11 +243,15 @@ const listCandidates = createTool({
   }),
   execute: async (ctx, input): Promise<unknown> => {
     const { orgId, userId } = parseScope(ctx.userId)
-    return await ctx.runQuery(internal.recruiterTools.listCandidatesInternal, {
-      orgId,
-      actorUserId: userId,
-      projectSlug: input.projectSlug,
-    })
+    return await ctx.runMutation(
+      internal.recruiterTools.listCandidatesInternal,
+      {
+        orgId,
+        actorUserId: userId,
+        threadId: requireThreadId(ctx.threadId),
+        projectSlug: input.projectSlug,
+      },
+    )
   },
 })
 
@@ -221,9 +265,10 @@ const readReport = createTool({
   }),
   execute: async (ctx, input): Promise<unknown> => {
     const { orgId, userId } = parseScope(ctx.userId)
-    return await ctx.runQuery(internal.recruiterTools.readReportInternal, {
+    return await ctx.runMutation(internal.recruiterTools.readReportInternal, {
       orgId,
       actorUserId: userId,
+      threadId: requireThreadId(ctx.threadId),
       sessionId: input.sessionId as Id<'sessions'>,
     })
   },

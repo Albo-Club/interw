@@ -133,8 +133,12 @@ describe('the retention clock', () => {
     })
     const sessionId = results[0].sessionId
     const invited = await t.run(async (ctx) => ctx.db.get('sessions', sessionId))
+    const token = invited!.accessToken
 
-    await t.mutation(api.interview.finish, { token: invited!.accessToken })
+    // Only an interview that was actually sat can be finished.
+    await t.mutation(api.candidate.acceptConsent, { token })
+    await t.mutation(api.interview.start, { token })
+    await t.mutation(api.interview.finish, { token })
 
     const finished = await t.run(async (ctx) =>
       ctx.db.get('sessions', sessionId),

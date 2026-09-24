@@ -9,6 +9,22 @@
       "title": "Confirmer votre e-mail demande désormais votre mot de passe",
       "body": "Nous avons renforcé la vérification des e-mails : après avoir cliqué sur le lien, vous vous connectez avec votre mot de passe pour confirmer votre adresse. Ainsi, un lien de vérification ne peut finaliser qu’un compte que vous avez créé vous-même."
     },
+    "job-import-pinned": {
+      "title": "L’import d’annonces renforcé",
+      "body": "Nous avons renforcé la façon dont l’import d’annonces accède au web : chaque page n’est désormais récupérée qu’à l’adresse que nous avons vérifiée."
+    },
+    "erasure-reaches-copies": {
+      "title": "Supprimer un candidat efface chaque copie",
+      "body": "Nous avons renforcé la suppression des données candidats : lorsqu’elles sont effacées, les copies conservées par nos services d’e-mail et d’assistant disparaissent aussi — immédiatement pour les conversations de l’assistant qui les ont lues, automatiquement sous 30 jours au plus pour les e-mails."
+    },
+    "candidate-interview-hardening": {
+      "title": "Un entretien clos le reste, et une suppression est complète",
+      "body": "Nous avons renforcé l’entretien candidat. Une invitation annulée ou clôturée le reste désormais à chaque étape, y compris la dernière. Les mesures de diction d’un rapport sont désormais calculées uniquement à partir de ce que nos propres systèmes ont mesuré. Et la suppression des données d’un candidat efface désormais chacun de ses enregistrements, y compris une réponse ré-enregistrée depuis un autre navigateur."
+    },
+    "team-access-hardening": {
+      "title": "Les postes confidentiels le restent, et un retrait met fin à l’accès",
+      "body": "Nous avons renforcé les contrôles sur qui peut voir et modifier les postes confidentiels, et garanti qu’un membre retiré de votre organisation perd entièrement son accès — y compris les e-mails qu’il recevait sur les candidats. Restaurer un poste archivé demande désormais les mêmes droits que l’archiver."
+    },
     "assistant-images-and-role-actions": {
       "title": "Des réponses de l’assistant plus sûres, des actions plus claires",
       "body": "Nous avons renforcé l’assistant : les images de ses réponses ne sont plus chargées, seulement décrites. Et les actions Partager, Archiver et Restaurer d’un poste ne sont plus proposées qu’aux personnes autorisées à les utiliser."

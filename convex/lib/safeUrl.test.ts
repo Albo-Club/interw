@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { assertPublicHttpUrl, isPrivateHost } from './safeUrl'
+import { assertPublicHttpUrl, isPrivateAddress } from './safeUrl'
 
 /**
  * This table is the specification of what "import a job ad" refuses to fetch.
@@ -38,6 +38,10 @@ const REFUSED: Array<[string, string]> = [
   ['IPv4-mapped IPv6 hiding metadata', 'http://[::ffff:169.254.169.254]/'],
   ['IPv6 unique local', 'http://[fd12:3456::1]/'],
   ['IPv6 link-local', 'http://[fe80::1]/'],
+  ['NAT64 onto loopback', 'http://[64:ff9b::127.0.0.1]/'],
+  ['NAT64 onto metadata, in hex', 'http://[64:ff9b::a9fe:a9fe]/'],
+  ['local-use NAT64', 'http://[64:ff9b:1::8.8.8.8]/'],
+  ['6to4 onto RFC 1918', 'http://[2002:c0a8:101::1]/'],
   ['mDNS', 'http://printer.local/'],
   ['cloud-internal suffix', 'http://db.internal/'],
   ['home.arpa', 'http://router.home.arpa/'],
@@ -54,6 +58,8 @@ const ALLOWED: Array<[string, string]> = [
   ['plain http', 'http://example.com/jobs/42'],
   ['a public address written as a literal', 'https://93.184.216.34/'],
   ['a public IPv6 literal', 'https://[2606:2800:220:1:248:1893:25c8:1946]/'],
+  ['NAT64 onto a public address', 'https://[64:ff9b::8.8.8.8]/'],
+  ['6to4 onto a public address', 'https://[2002:808:808::1]/'],
   // `nip.io` resolves to a loopback address, but it IS a public name. The
   // lexical check cannot know; convex/jobImportFetch.ts resolves it and
   // refuses it there.
@@ -71,10 +77,11 @@ describe('assertPublicHttpUrl', () => {
 })
 
 /**
- * The same predicate runs again in jobImportFetch.ts, over the addresses a
- * hostname resolves to — which is what catches `127.0.0.1.nip.io`.
+ * What jobImportFetch.ts runs over the addresses a hostname resolves to —
+ * which is what catches `127.0.0.1.nip.io`. Unlike a hostname, an answer
+ * that is not an address at all is refused.
  */
-describe('isPrivateHost, as applied to a resolved address', () => {
+describe('isPrivateAddress', () => {
   it.each([
     ['127.0.0.1', true],
     ['169.254.169.254', true],
@@ -83,6 +90,12 @@ describe('isPrivateHost, as applied to a resolved address', () => {
     ['::1', true],
     ['fd00::1', true],
     ['::ffff:10.0.0.1', true],
+    ['64:ff9b::7f00:1', true],
+    ['2002:a00:1::', true],
+    ['fe80::1%eth0', true],
+    ['example.com', true],
+    ['', true],
+    ['64:ff9b::808:808', false],
     ['93.184.216.34', false],
     ['2606:2800:220:1:248:1893:25c8:1946', false],
     ['8.8.8.8', false],
@@ -90,6 +103,6 @@ describe('isPrivateHost, as applied to a resolved address', () => {
     ['172.15.0.1', false],
     ['172.32.0.1', false],
   ] as Array<[string, boolean]>)('%s → %s', (address, expected) => {
-    expect(isPrivateHost(address)).toBe(expected)
+    expect(isPrivateAddress(address)).toBe(expected)
   })
 })

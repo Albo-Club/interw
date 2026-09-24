@@ -1616,6 +1616,42 @@ Same family as the Better Auth trigger cycle documented above. When `tsc`
 starts reporting implicit `any` in unrelated files, look for a new function
 reference in a module-level initialiser.
 
+## Convex storage ids have no owner — our rows are the ownership record
+
+`_storage` carries no owner field and `ctx.storage.delete` accepts any id. So a
+mutation that takes an `Id<'_storage'>` from a client must refuse an id another
+row already references, and must delete a blob only when no other row still
+points at it — `claim` in `convex/files.ts`, `heldElsewhere` / `release` in
+`convex/lib/storage.ts`. And a raw storage id
+never reaches a client: resolve it to a URL server-side.
+`organizations.bySlug` used to spread the whole row, handing every member the
+logo's handle, which `setMyAvatar` then accepted and `removeMyAvatar` deleted
+(audit 2026-09-22, `convex/files.ts:setMyAvatar:storageId-unbound-to-caller`).
+
+Every path that clears an avatar or a logo — `setMyAvatar`, `removeMyAvatar`,
+`setOrgLogo`, `removeOrgLogo` and `users.cascadeDelete` — goes through
+`release`, never a bare `ctx.storage.delete`, so a blob two rows already shared
+before `claim` existed survives until its last holder lets go.
+
+## Components keep their own copies of candidate data
+
+`@convex-dev/resend` stores recipient, subject and the full body of every email
+(`emails` / `content` / `deliveryEvents`) and forgets only when the app
+schedules `cleanupOldEmails` / `cleanupAbandonedEmails` — the README says so,
+and nothing did until `convex/crons.ts` `cleanupResend` (7 days after the
+outcome, 30 days absolute). 0.2.8 has no per-email delete, so erasure of that
+copy cannot be immediate; and once a component row is gone, a late webhook
+event for it is ignored and never reaches `emailLog`.
+
+`@convex-dev/agent` threads hold tool results — and the answers written from
+them — where the app cannot search. So the candidate-reading tools record a
+`chatThreadSessions` row in the same transaction as the read, and
+`purge.deleteChildRows` deletes those whole threads. Any new tool that returns
+candidate data must record the same row, or its output survives erasure.
+Threads created before this change carry no row and are not covered.
+`chat.listMessages` answers an empty page for a thread that no longer exists,
+because erasure may delete a thread a recruiter has open.
+
 ## Candidate recordings are NOT in Convex file storage
 
 `ctx.storage.getUrl()` returns a **permanent, unauthenticated** URL. Convex's
@@ -1706,6 +1742,15 @@ which the pipeline's idempotency requires.
 
 If an audio-capable model is added later, extend the dimension union in
 `convex/schema.ts` — do not quietly start generating the existing six.
+
+The answer length those figures are divided by is `segments.measuredSeconds`,
+written by `saveTranscript` from the provider's `usage.total_seconds` (fallback:
+the end of the last timed word; else absent, and the answer is left out of the
+profile). `segments.durationSeconds` is what the candidate's browser reported:
+a clamped display hint that nothing in the report may read. It used to feed
+pace, concision, engagement and every quote anchor — the person being assessed
+chose their own measurement (audit 2026-09-22,
+`convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`).
 
 ## The shadcn CLI rewrites files you did not ask it to
 
@@ -1900,6 +1945,30 @@ The fetch now identifies itself (`InterwBot/1.0 (+SITE_URL)`) rather than
 impersonating a browser, and `401 / 403 / 429` gets its own `page_blocked`
 code. Some sites bot-wall everything regardless; the point is that the recruiter
 is told the site said no, instead of being sent hunting for a typo.
+
+### Rebinding: `fetch` can't be told which address to connect to
+
+Checking a hostname with `dns.lookup` and then calling `fetch(hostname)`
+resolves the name twice, so whoever controls the record can answer the check
+with a public address and the connection with `127.0.0.1` (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 7). `fetch` has no public way to choose the
+address; the only other route is an undici `Agent({ connect: { lookup } })` as
+`dispatcher`, i.e. a second undici kept in step with the one inside Node. So
+`convex/jobImportFetch.ts` uses `http(s).get` with a `lookup` that answers only
+the checked addresses, and `agent: false` so no pooled socket is reused. The
+hostname stays the host, so `Host`, SNI and certificate validation are
+unchanged. Two traps:
+
+- A pinned `lookup` must answer asynchronously (`setImmediate`). Answered
+  synchronously, an immediate connection failure throws before `http` has
+  attached its socket error handler.
+- Resolver answers go through `isPrivateAddress`, not `isPrivateHost`: an
+  answer that is not a well-formed address must fail closed, which a hostname
+  predicate cannot do.
+
+Responses are requested with `Accept-Encoding: identity` and not decompressed,
+so the 2 MiB cap counts what is read; a server that compresses anyway yields
+unreadable text and the import fails as too thin.
 
 ### Its other neighbour: parse work must be linear, not just capped
 

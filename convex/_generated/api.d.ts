@@ -36,7 +36,6 @@ import type * as lib_htmlText from "../lib/htmlText.js";
 import type * as lib_instructions from "../lib/instructions.js";
 import type * as lib_invitations from "../lib/invitations.js";
 import type * as lib_objectStore from "../lib/objectStore.js";
-import type * as lib_paraverbal from "../lib/paraverbal.js";
 import type * as lib_projectAccess from "../lib/projectAccess.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_reportBuilder from "../lib/reportBuilder.js";
@@ -101,7 +100,6 @@ declare const fullApi: ApiFromModules<{
   "lib/instructions": typeof lib_instructions;
   "lib/invitations": typeof lib_invitations;
   "lib/objectStore": typeof lib_objectStore;
-  "lib/paraverbal": typeof lib_paraverbal;
   "lib/projectAccess": typeof lib_projectAccess;
   "lib/prompts": typeof lib_prompts;
   "lib/reportBuilder": typeof lib_reportBuilder;

@@ -144,7 +144,6 @@ function serializeReport(report: Doc<'reports'>) {
     strengths: report.strengths,
     concerns: report.concerns,
     fitMatrix: report.fitMatrix ?? null,
-    paraverbal: report.paraverbal ?? null,
     highlights: report.highlights ?? null,
     model: report.model,
     generatedAt: report.generatedAt,

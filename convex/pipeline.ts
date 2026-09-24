@@ -17,12 +17,6 @@
  *     outcome, so "where did this session get stuck" is a query, not a guess.
  *   Self-healing — a failure is retried by the pool with backoff. If a step can
  *     fail, the queue picks it up again; nothing waits for a human to notice.
- *
- * Para-verbal analysis is computed inside `generateReport` rather than as the
- * parallel job the original design had. There it was a second model call; here
- * it is a deterministic computation over transcripts we already hold (see
- * lib/paraverbal.ts), so a separate job would add a failure mode and a partial
- * state for no gain at all.
  */
 
 import { ConvexError, v } from 'convex/values'
@@ -30,14 +24,9 @@ import { ConvexError, v } from 'convex/values'
 import { vOnCompleteValidator } from '@convex-dev/workpool'
 import { internalAction, internalMutation, internalQuery } from './_generated/server'
 import { internal } from './_generated/api'
-import schema, {
-  jobOutcomeValidator,
-  jobStepValidator,
-  paraverbalValidator,
-} from './schema'
+import schema, { jobOutcomeValidator, jobStepValidator } from './schema'
 import { complete, transcribe  } from './lib/ai'
 import { getObjectStream } from './lib/objectStore'
-import { computeParaverbal } from './lib/paraverbal'
 import { reportPrompt } from './lib/prompts'
 import { buildReport } from './lib/reportBuilder'
 import { reportOutputSchema } from './lib/reportSchema'
@@ -258,8 +247,7 @@ export const saveTranscript = internalMutation({
     // The answer's length, as the server observed it. The candidate's browser
     // reports one too, and the report must not be computed from a number the
     // assessed person chose. The provider's measure first; else the end of
-    // the last timed word; else nothing, and the answer is left out of the
-    // para-verbal profile rather than measured against a guess.
+    // the last timed word; else nothing, rather than a guess.
     const measuredSeconds =
       audioSeconds !== undefined &&
       Number.isFinite(audioSeconds) &&
@@ -524,7 +512,6 @@ export const reportInputs = internalQuery({
           questionIndex: segment.questionIndex,
           // What the server measured, never the client's `durationSeconds`.
           durationSeconds: segment.measuredSeconds ?? null,
-          maxResponseSeconds: question?.maxResponseSeconds ?? 120,
           question: question?.content ?? '',
           text: transcript?.text ?? '',
           chunks: transcript?.words ?? [],
@@ -556,7 +543,8 @@ export const saveReport = internalMutation({
     sessionId: v.id('sessions'),
     // What `buildReport` produces, derived from the table so the two cannot
     // drift. The fields this mutation owns are left out, so a report can
-    // never carry its own `orgId` past the spread below.
+    // never carry its own `orgId` past the spread below. `paraverbal` is
+    // left out too: it is retired, and nothing may write it again.
     report: schema.tables.reports.validator.omit(
       'orgId',
       'sessionId',
@@ -565,11 +553,10 @@ export const saveReport = internalMutation({
       'model',
       'generatedAt',
     ),
-    paraverbal: v.union(paraverbalValidator, v.null()),
     model: v.string(),
     partial: v.boolean(),
   },
-  handler: async (ctx, { sessionId, report, paraverbal, model, partial }) => {
+  handler: async (ctx, { sessionId, report, model, partial }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
     const existing = await ctx.db
@@ -583,7 +570,6 @@ export const saveReport = internalMutation({
       sessionId,
       ...report,
       partial,
-      paraverbal: paraverbal ?? undefined,
       model,
       generatedAt: Date.now(),
     })
@@ -676,18 +662,10 @@ export const generateReport = internalAction({
         criteria: inputs.criteria,
         answers: inputs.answers,
       })
-      const paraverbal = computeParaverbal(
-        inputs.answers.map((answer) => ({
-          chunks: answer.chunks,
-          durationSeconds: answer.durationSeconds ?? 0,
-          maxResponseSeconds: answer.maxResponseSeconds,
-        })),
-      )
 
       await ctx.runMutation(internal.pipeline.saveReport, {
         sessionId,
         report: built,
-        paraverbal,
         model,
         partial: inputs.missingAnswers > 0,
       })

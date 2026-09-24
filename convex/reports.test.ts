@@ -173,3 +173,42 @@ describe('the pipeline trail shown to the recruiter', () => {
     ])
   })
 })
+
+/**
+ * Audit 2026-09-15, Pipe M9, and product decision n° 2 of 2026-09-24. A
+ * report written before the removal still holds its para-verbal figures; the
+ * recruiter's page must not show them.
+ */
+describe('para-verbal figures on an older report', () => {
+  it('are not served to the recruiter', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.sessionId))!
+      await ctx.db.insert('reports', {
+        orgId: session.orgId,
+        sessionId: s.sessionId,
+        overallScore: 72,
+        recommendation: 'yes',
+        executiveSummary: 'Strong.',
+        criteriaScores: [],
+        strengths: [],
+        concerns: [],
+        paraverbal: {
+          dimensions: [{ key: 'pace', score: 8, measure: 140 }],
+          wordsPerMinute: 140,
+          totalSpeakingSeconds: 9,
+        },
+        model: 'test',
+        generatedAt: 1,
+      })
+    })
+
+    const view = await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .query(api.reports.forSession, { sessionId: s.sessionId })
+
+    expect(view.report?.overallScore).toBe(72)
+    expect(view.report).not.toHaveProperty('paraverbal')
+  })
+})

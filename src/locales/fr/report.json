@@ -22,7 +22,6 @@
     "strengths": "Points forts",
     "concerns": "Points de vigilance",
     "answers": "Réponse par réponse",
-    "delivery": "Élocution",
     "highlights": "À regarder",
     "documents": "Documents",
     "note": "Vos notes"
@@ -51,21 +50,6 @@
     "hideTranscript": "Masquer la transcription",
     "notAnswered": "Aucune réponse enregistrée",
     "uploadFailed": "Le candidat a enregistré une réponse, mais elle ne nous est jamais parvenue. C'est une défaillance technique de notre côté, pas une question esquivée."
-  },
-  "delivery": {
-    "subtitle": "Mesuré à partir des horodatages de la transcription, non jugé par un modèle.",
-    "pace": "Débit",
-    "paceUnit": "{{value}} mots / min",
-    "fluency": "Hésitations",
-    "fluencyUnit": "{{value}} pour 100 mots",
-    "pauses": "Silences",
-    "pausesUnit": "{{value}} % du temps",
-    "concision": "Temps utilisé",
-    "concisionUnit": "{{value}} % du temps accordé",
-    "consistency": "Régularité",
-    "consistencyUnit": "{{value}} % de variation",
-    "engagement": "Temps de parole",
-    "engagementUnit": "{{value}} s parlées"
   },
   "note": {
     "placeholder": "Votre impression, ce qu'il faudra creuser…",

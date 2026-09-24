@@ -617,7 +617,7 @@ verification is in `TESTING.md`.
   anchors) comes from data the server observed itself — provider output, the
   stored transcript — never from a number the candidate's client sent. A client
   value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
-  § "Para-verbal analysis is computed, not generated".
+  § "Para-verbal analysis was removed".
 
 ## Model output
 

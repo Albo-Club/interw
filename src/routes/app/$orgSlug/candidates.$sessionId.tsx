@@ -483,7 +483,7 @@ function CandidateReportPage() {
           </section>
         </div>
 
-        {/* ── Sidebar: the video, the delivery figures, the decision. ──── */}
+        {/* ── Sidebar: the video, the decision. ──── */}
         <aside className="space-y-6">
           {media && media.segments.length > 0 && (
             <AnswerPlayer
@@ -548,34 +548,6 @@ function CandidateReportPage() {
               )}
             </CardContent>
           </Card>
-
-          {report?.paraverbal && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {t('report:sections.delivery')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-muted-foreground text-xs">
-                  {t('report:delivery.subtitle')}
-                </p>
-                {report.paraverbal.dimensions.map((dimension) => (
-                  <div key={dimension.key} className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span>{t(`report:delivery.${dimension.key}`)}</span>
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {t(`report:delivery.${dimension.key}Unit`, {
-                          value: dimension.measure,
-                        })}
-                      </span>
-                    </div>
-                    <Progress value={dimension.score * 10} />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
 
           {(media?.cv || media?.coverLetter) && (
             <Card>

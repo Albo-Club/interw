@@ -22,7 +22,6 @@ import { internal } from './_generated/api'
 import {
   criteriaScoresValidator,
   fitMatrixValidator,
-  paraverbalValidator,
   recommendationValidator,
 } from './schema'
 import { effectiveNow } from './lib/clock'
@@ -188,7 +187,6 @@ const shareViewReturns = v.object({
       // the report IS what the report holds, and a second copy would drift.
       criteriaScores: criteriaScoresValidator,
       fitMatrix: v.union(fitMatrixValidator, v.null()),
-      paraverbal: v.union(paraverbalValidator, v.null()),
       answers: v.array(
         v.object({
           segmentId: v.id('segments'),
@@ -263,7 +261,6 @@ export const view = query({
         ),
         criteriaScores: report.criteriaScores,
         fitMatrix: report.fitMatrix ?? null,
-        paraverbal: report.paraverbal ?? null,
         answers: segments
           .sort((a, b) => a.questionIndex - b.questionIndex)
           .map((segment) => ({

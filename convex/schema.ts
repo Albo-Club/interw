@@ -97,27 +97,6 @@ export const depthLevelValidator = v.union(
   v.literal('expert'),
 )
 
-/**
- * The six para-verbal dimensions — HOW an answer was delivered, as opposed to
- * what it said.
- *
- * All six are computed from the timestamped transcript, deterministically, by
- * convex/lib/paraverbal.ts. No model is asked to score them. The stack has no
- * audio-capable model, so a "vocal warmth" or "confidence" score would be an
- * invention dressed as a measurement — and this product must not invent
- * anything about a candidate. Speaking rate, hesitation, pausing and length
- * discipline are genuinely measurable from what we already hold, and they are
- * the substance of para-verbal analysis anyway.
- */
-export const paraverbalDimensionValidator = v.union(
-  v.literal('pace'),
-  v.literal('fluency'),
-  v.literal('pauses'),
-  v.literal('concision'),
-  v.literal('consistency'),
-  v.literal('engagement'),
-)
-
 export const highlightKindValidator = v.union(
   v.literal('strength'),
   v.literal('personality'),
@@ -204,21 +183,6 @@ export const fitMatrixValidator = v.object({
       evidence: v.optional(evidenceValidator),
     }),
   ),
-})
-
-/** Computed, not generated — see paraverbalDimensionValidator. */
-export const paraverbalValidator = v.object({
-  dimensions: v.array(
-    v.object({
-      key: paraverbalDimensionValidator,
-      /** 0..10. */
-      score: v.number(),
-      /** The measurement behind the score, e.g. words per minute. */
-      measure: v.number(),
-    }),
-  ),
-  wordsPerMinute: v.number(),
-  totalSpeakingSeconds: v.number(),
 })
 
 /** One scored criterion, with the quotes behind the score. */
@@ -470,7 +434,7 @@ export default defineSchema({
      *  to the report. */
     durationSeconds: v.optional(v.number()),
     /** The answer's length as the server observed it at transcription. What
-     *  the para-verbal measures and the quote anchors are computed from. */
+     *  the duration the recruiter is served and the quote anchors come from. */
     measuredSeconds: v.optional(v.number()),
     uploadState: uploadStateValidator,
     uploadAttempts: v.number(),
@@ -518,8 +482,19 @@ export default defineSchema({
     /** Criterion × question grid. Typed rather than `v.any()`: an untyped
      *  blob here is how a model's malformed output reaches the UI. */
     fitMatrix: v.optional(fitMatrixValidator),
-    /** Computed, not generated — see paraverbalDimensionValidator. */
-    paraverbal: v.optional(paraverbalValidator),
+    /** Retired: the para-verbal figures are no longer computed, written or
+     *  read (see KNOWN_ISSUES.md § "Para-verbal analysis was removed"). Kept
+     *  optional only so reports written before the removal still validate;
+     *  the field can go once a migration has cleared it. */
+    paraverbal: v.optional(
+      v.object({
+        dimensions: v.array(
+          v.object({ key: v.string(), score: v.number(), measure: v.number() }),
+        ),
+        wordsPerMinute: v.number(),
+        totalSpeakingSeconds: v.number(),
+      }),
+    ),
     highlights: v.optional(
       v.array(
         v.object({

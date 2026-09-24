@@ -127,6 +127,23 @@ describe('shares.view', () => {
     expect(serialised).not.toContain('INTERNAL')
   })
 
+  // Audit 2026-09-15, Pipe M9: retired, and an older report still holds them.
+  it('withholds the para-verbal figures of an older report', async () => {
+    await t.run(async (ctx) => {
+      const share = (await ctx.db.get('reportShares', s.shareId))!
+      await ctx.db.patch('reports', share.reportId, {
+        paraverbal: {
+          dimensions: [{ key: 'pace', score: 8, measure: 140 }],
+          wordsPerMinute: 140,
+          totalSpeakingSeconds: 9,
+        },
+      })
+    })
+    const result = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(result.report?.overallScore).toBe(72)
+    expect(result.report).not.toHaveProperty('paraverbal')
+  })
+
   it('stops serving once revoked', async () => {
     await t.run(async (ctx) => {
       await ctx.db.patch('reportShares', s.shareId, { revokedAt: NOW - 1 })

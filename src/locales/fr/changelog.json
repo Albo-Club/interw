@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "delivery-figures-removed": {
+      "title": "Les indicateurs d’élocution quittent les rapports",
+      "body": "Les rapports n’affichent plus la section Élocution (débit, hésitations, silences, etc.). Ces indicateurs n’étaient pas assez fiables pour éclairer une décision de recrutement : nous les avons retirés. Scores, citations, réponses et enregistrements ne changent pas, y compris sur les rapports déjà reçus."
+    },
     "sturdier-interview": {
       "title": "Un entretien plus solide pour vos candidats",
       "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."

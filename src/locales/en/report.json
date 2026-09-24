@@ -22,7 +22,6 @@
     "strengths": "Strengths",
     "concerns": "Watch-outs",
     "answers": "Answer by answer",
-    "delivery": "Delivery",
     "highlights": "Worth watching",
     "documents": "Documents",
     "note": "Your notes"
@@ -51,21 +50,6 @@
     "hideTranscript": "Hide the transcript",
     "notAnswered": "No answer recorded",
     "uploadFailed": "The candidate recorded an answer, but it never reached us. This is a technical failure on our side, not a skipped question."
-  },
-  "delivery": {
-    "subtitle": "Measured from the transcript timings, not judged by a model.",
-    "pace": "Speaking rate",
-    "paceUnit": "{{value}} words / min",
-    "fluency": "Hesitation",
-    "fluencyUnit": "{{value}} per 100 words",
-    "pauses": "Silence",
-    "pausesUnit": "{{value}}% of the time",
-    "concision": "Time used",
-    "concisionUnit": "{{value}}% of what was allowed",
-    "consistency": "Consistency",
-    "consistencyUnit": "{{value}}% variation",
-    "engagement": "Engagement",
-    "engagementUnit": "{{value}}s spoken"
   },
   "note": {
     "placeholder": "What you thought, what to ask next time…",

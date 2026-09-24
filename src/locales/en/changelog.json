@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "delivery-figures-removed": {
+      "title": "Delivery figures removed from reports",
+      "body": "Reports no longer include the Delivery section (speaking rate, hesitation, silence and the rest). Those figures were not reliable enough to inform a hiring decision, so we removed them. Scores, evidence, answers and recordings are unchanged, including on reports you have already received."
+    },
     "sturdier-interview": {
       "title": "A sturdier interview for your candidates",
       "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."

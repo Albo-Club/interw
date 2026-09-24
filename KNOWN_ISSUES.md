@@ -1772,28 +1772,42 @@ broken feature rather than a race.
 clicking the same quote twice must replay it and a plain
 `{ segmentId, seconds }` object would compare equal.
 
-## Para-verbal analysis is computed, not generated
+## Para-verbal analysis was removed
 
-The six delivery figures (speaking rate, hesitation, silence, time used,
-consistency, speaking time) come from `convex/lib/paraverbal.ts`, computed
-deterministically from the transcript's timestamps. No model scores them.
+Reports used to carry six "delivery" figures (speaking rate, hesitation,
+silence, time used, consistency, speaking time), computed from the transcript's
+timestamps by a `convex/lib/paraverbal.ts` that no longer exists. They were
+retired on 2026-09-24 (audit 2026-09-15, Pipe M9): nothing computes, writes or
+reads them any more, and neither the recruiter page nor a share link shows them.
 
-This stack has no audio-capable model. A "vocal warmth" or "confidence" score
-would therefore be an invention wearing the clothes of a measurement — and
-nothing in a hiring report may be invented. Rate, hesitation and pausing are
-the measurable substance of para-verbal delivery anyway, they cost nothing
-extra, and being deterministic they are unit-tested and identical on a replay,
-which the pipeline's idempotency requires.
+Deterministic was not the same as right. The audit found the rate divided by
+recording time rather than speaking time, silence before the first word never
+counted, a perfect "pauses" score on a transcript with no timings at all, two
+dimensions scoring the same quantity, and a hesitation list full of ordinary
+words (`genre`, `enfin`, `actually`) applied regardless of the interview
+language — penalising registers of speech, which is a fairness problem in a
+hiring report, not a rounding one. Fixing all of that would have produced
+better-computed figures about how someone talks, and nobody could say what a
+recruiter should do with them. Removing them was the product call.
 
-If an audio-capable model is added later, extend the dimension union in
-`convex/schema.ts` — do not quietly start generating the existing six.
+Traps if it ever comes back:
 
-The answer length those figures are divided by is `segments.measuredSeconds`,
-written by `saveTranscript` from the provider's `usage.total_seconds` (fallback:
-the end of the last timed word; else absent, and the answer is left out of the
-profile). `segments.durationSeconds` is what the candidate's browser reported:
-a clamped display hint that nothing in the report may read. It used to feed
-pace, concision, engagement and every quote anchor — the person being assessed
+- `reports.paraverbal` is still in `convex/schema.ts`, optional and loosely
+  typed, only so reports written before the removal keep validating. Do not
+  read it: the values are the flawed ones above. Drop it after a migration has
+  cleared it from existing rows.
+- `saveReport` omits the field from its `report` validator, so a new write
+  fails loudly instead of reviving it.
+- The stack still has no audio-capable model. A "confidence" or "vocal warmth"
+  score would be an invention dressed as a measurement.
+
+What stays is the rule it taught, in `CLAUDE.md` § Access control: a measurement
+never depends on an argument. The answer length served to the recruiter's page and
+used to anchor quotes is `segments.measuredSeconds`, written by `saveTranscript` from
+the provider's `usage.total_seconds` (fallback: the end of the last timed word;
+else absent). `segments.durationSeconds` is what the candidate's browser
+reported: a clamped display hint that nothing in the report may read. It used
+to feed the delivery figures and every quote anchor — the person being assessed
 chose their own measurement (audit 2026-09-22,
 `convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`).
 

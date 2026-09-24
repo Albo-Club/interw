@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "recordings-play-everywhere": {
+      "title": "Answers that play everywhere, and a phone that stays awake",
+      "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included, so jumping to a quote in a report lands where it should. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."
+    },
     "sturdier-interview": {
       "title": "A sturdier interview for your candidates",
       "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."

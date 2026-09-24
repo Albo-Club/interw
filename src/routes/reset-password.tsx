@@ -169,14 +169,24 @@ function ResetPasswordPage() {
             </form.Field>
             <form.Field name="confirmPassword">
               {(field) => (
-                <form.Subscribe selector={(s) => s.values.newPassword}>
-                  {(newPassword) => (
+                <form.Subscribe
+                  selector={(s) => ({
+                    newPassword: s.values.newPassword,
+                    submitted: s.submissionAttempts > 0,
+                  })}
+                >
+                  {({ newPassword, submitted }) => (
                     <ConfirmPasswordField
                       id={field.name}
                       password={newPassword}
                       value={field.state.value}
                       onChange={field.handleChange}
                       onBlur={field.handleBlur}
+                      errors={
+                        field.state.meta.isBlurred || submitted
+                          ? field.state.meta.errors
+                          : undefined
+                      }
                     />
                   )}
                 </form.Subscribe>

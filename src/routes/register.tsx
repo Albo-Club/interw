@@ -316,14 +316,24 @@ function RegisterPage() {
             </form.Field>
             <form.Field name="confirmPassword">
               {(field) => (
-                <form.Subscribe selector={(s) => s.values.password}>
-                  {(password) => (
+                <form.Subscribe
+                  selector={(s) => ({
+                    password: s.values.password,
+                    submitted: s.submissionAttempts > 0,
+                  })}
+                >
+                  {({ password, submitted }) => (
                     <ConfirmPasswordField
                       id={field.name}
                       password={password}
                       value={field.state.value}
                       onChange={field.handleChange}
                       onBlur={field.handleBlur}
+                      errors={
+                        field.state.meta.isBlurred || submitted
+                          ? field.state.meta.errors
+                          : undefined
+                      }
                     />
                   )}
                 </form.Subscribe>

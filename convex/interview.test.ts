@@ -648,3 +648,25 @@ describe('the completion email', () => {
     expect(sent).toHaveLength(0)
   })
 })
+
+describe('the browser test fixtures', () => {
+  it('seed a fresh open session each time, on one org', async () => {
+    const t = newTest()
+    const first = await t.mutation(internal.interview.seedE2eSession, {})
+    const second = await t.mutation(internal.interview.seedE2eSession, {})
+    expect(first.token).not.toBe(second.token)
+
+    const landing = await t.query(api.candidate.landing, {
+      token: second.token,
+      now: Date.now(),
+    })
+    expect(landing.gate.state).toBe('ready')
+    const orgs = await t.run((ctx) => ctx.db.query('organizations').collect())
+    expect(orgs).toHaveLength(1)
+    expect(
+      await t.query(internal.interview.e2eSessionState, {
+        token: second.token,
+      }),
+    ).toEqual({ status: 'pending', uploadedSegments: 0 })
+  })
+})

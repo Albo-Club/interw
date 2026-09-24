@@ -32,6 +32,54 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # The candidate interview in real browsers (e2e/interview.spec.ts), Chromium
+  # and WebKit, on fake camera and microphone. Its only backend is staging, so
+  # the job first deploys this branch's Convex functions there: a PR run
+  # replaces what `main` put on staging until the next deploy. Only code that
+  # passed `check` gets that far, one run at a time, never cancelled halfway
+  # through a deploy.
+  e2e:
+    needs: check
+    runs-on: ubuntu-latest
+    concurrency:
+      group: e2e-staging
+      cancel-in-progress: false
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+      VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
+      VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
+      MEDIA_ORIGIN: ${{ secrets.MEDIA_ORIGIN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A missing secret fails here, by name, instead of as a blank page three
+      # steps later. Never skip the job when one is missing: say it can't run.
+      - name: Check the staging secrets are set
+        run: |
+          for name in CONVEX_DEPLOY_KEY VITE_CONVEX_URL VITE_CONVEX_SITE_URL MEDIA_ORIGIN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set"
+              exit 1
+            fi
+          done
+      - run: npx convex deploy
+      - run: pnpm build:app
+      - run: pnpm exec playwright install --with-deps chromium webkit
+      - run: pnpm test:e2e
+      # The report carries the recording-screen capture and, on failure, the
+      # trace.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
   # Two jobs, two distinct questions — keep both:
   #   skills-verify  "is my tree intact?"    offline, deterministic
   #   skills-drift   "has upstream moved?"   needs the network

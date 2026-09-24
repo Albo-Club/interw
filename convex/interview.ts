@@ -23,12 +23,13 @@ import {
   introModeValidator,
   languageValidator,
   sessionEventKindValidator,
+  sessionStatusValidator,
 } from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
-import { looksLikeToken } from './lib/tokens'
+import { generateToken, looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
   presignGet,
@@ -635,3 +636,126 @@ export const sendCompletionEmail = internalMutation({
 
 /** 12 months after completion, media is purged. See convex/retention.ts. */
 export const RETENTION_MS = 365 * 24 * 60 * 60 * 1000
+
+/* ── Browser test fixtures (e2e/interview.spec.ts) ─────────────────────────
+ * Internal, so only a deploy key reaches them, through `npx convex run`. The
+ * org has no member who can sign in, and the candidate's address is Resend's
+ * delivery sink: the completion email really goes out.
+ * ------------------------------------------------------------------------ */
+const E2E_ORG_SLUG = 'e2e-interview'
+const E2E_EMAIL = 'delivered@resend.dev'
+
+/** A fresh two-question session; the org and role are created once. */
+export const seedE2eSession = internalMutation({
+  args: {},
+  returns: v.object({ token: v.string() }),
+  handler: async (ctx) => {
+    const now = Date.now()
+    let org = await ctx.db
+      .query('organizations')
+      .withIndex('by_slug', (q) => q.eq('slug', E2E_ORG_SLUG))
+      .unique()
+    if (!org) {
+      const userId = await ctx.db.insert('users', {
+        betterAuthId: `seed:${E2E_ORG_SLUG}`,
+        email: E2E_EMAIL,
+        superAdmin: false,
+        createdAt: now,
+      })
+      const orgId = await ctx.db.insert('organizations', {
+        slug: E2E_ORG_SLUG,
+        name: 'E2E',
+        createdBy: userId,
+        createdAt: now,
+      })
+      await ctx.db.insert('organizationMembers', {
+        orgId,
+        userId,
+        role: 'owner',
+        joinedAt: now,
+      })
+      const projectId = await ctx.db.insert('projects', {
+        orgId,
+        slug: 'interview',
+        title: 'E2E interview',
+        status: 'active',
+        language: 'en',
+        introMode: 'none',
+        maxDurationMinutes: 5,
+        candidateFields: {
+          phone: { enabled: false, required: false },
+          linkedin: { enabled: false, required: false },
+          cv: { enabled: false, required: false },
+          coverLetter: { enabled: false, required: false },
+        },
+        createdBy: userId,
+        createdAt: now,
+        restricted: false,
+        sessionCount: 0,
+        completedSessionCount: 0,
+      })
+      for (const [orderIndex, content] of [
+        'Introduce yourself in one sentence.',
+        'Name one thing you are proud of.',
+      ].entries()) {
+        await ctx.db.insert('questions', {
+          orgId,
+          projectId,
+          orderIndex,
+          content,
+          maxResponseSeconds: 60,
+        })
+      }
+      org = await ctx.db.get('organizations', orgId)
+      if (!org) throw new ConvexError('not_found')
+    }
+
+    const project = await ctx.db
+      .query('projects')
+      .withIndex('by_org', (q) => q.eq('orgId', org._id))
+      .first()
+    if (!project) throw new ConvexError('not_found')
+
+    const token = generateToken()
+    await ctx.db.insert('sessions', {
+      orgId: org._id,
+      projectId: project._id,
+      accessToken: token,
+      candidateName: 'E2E Candidate',
+      candidateEmail: E2E_EMAIL,
+      status: 'pending',
+      lastQuestionIndex: 0,
+      invitedBy: org.createdBy,
+      invitedAt: now,
+    })
+    await ctx.db.patch('projects', project._id, {
+      sessionCount: project.sessionCount + 1,
+    })
+    return { token }
+  },
+})
+
+/** What the browser test checks in the database once the candidate is done. */
+export const e2eSessionState = internalQuery({
+  args: { token: v.string() },
+  returns: v.object({
+    status: sessionStatusValidator,
+    uploadedSegments: v.number(),
+  }),
+  handler: async (ctx, { token }) => {
+    const session = await ctx.db
+      .query('sessions')
+      .withIndex('by_token', (q) => q.eq('accessToken', token))
+      .unique()
+    if (!session) throw new ConvexError('not_found')
+    const segments = await ctx.db
+      .query('segments')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .collect()
+    return {
+      status: session.status,
+      uploadedSegments: segments.filter((s) => s.uploadState === 'uploaded')
+        .length,
+    }
+  },
+})

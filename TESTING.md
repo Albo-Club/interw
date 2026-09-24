@@ -49,9 +49,12 @@ undone later.
 | B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder, para-verbal metrics, locale parity, cross-organisation isolation under `convex-test`, and that the chat agent still resolves to the pipeline's provider and model |
 | B8 | Convex codegen committed | `pnpm codegen:api:check` | `convex/_generated/api.d.ts is up to date.` Fails when a Convex module was added without committing its codegen — CI has no deployment, so `npx convex dev` cannot do it there |
 | B9 | Access audit | `pnpm audit:access:check` | Exit 0. Fails on any **public** Convex function with no access check. Run `pnpm audit:access` to print the full matrix; deliberate exceptions are declared with a `// access: <reason>` comment above the export and are listed in the output |
+| B10 | Candidate interview, real browsers | `pnpm build:app && pnpm test:e2e` | Chromium and WebKit, fake camera and microphone: consent, device check, two answers recorded, the second upload cut (`PUT` aborted) and shown as failed, a reload that resumes at that answer, finish; then `completed` with two `uploaded` segments read back from the database, and the test candidate erased. Needs `CONVEX_DEPLOY_KEY`, `VITE_CONVEX_URL`, `VITE_CONVEX_SITE_URL`, `MEDIA_ORIGIN` for a deployment that already runs this branch's functions (`npx convex deploy`) and whose bucket CORS allows `http://localhost:3000`. The HTML report (`playwright-report/`) carries a capture of the recording screen |
 
 B2–B3, B6, B6b, B7, B8 and B9 also run in CI on every PR (`.github/workflows/ci.yml`,
-B6 via the `skills-verify` job, B6b via `skills-drift`). CI covers B0
+B6 via the `skills-verify` job, B6b via `skills-drift`). B10 runs in the `e2e`
+job, which deploys the branch's functions to staging first — its secrets are
+repository secrets, and the job fails by name when one is missing. CI covers B0
 implicitly: `pnpm/action-setup@v4` is given no `version:`, so it installs the
 `packageManager` version and cannot drift from local.
 B4–B5 remain local: they require a provisioned Convex deployment.

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "job-import-pinned": {
+      "title": "L’import d’annonces renforcé",
+      "body": "Nous avons renforcé la façon dont l’import d’annonces accède au web : chaque page n’est désormais récupérée qu’à l’adresse que nous avons vérifiée."
+    },
     "erasure-reaches-copies": {
       "title": "Supprimer un candidat efface chaque copie",
       "body": "Nous avons renforcé la suppression des données candidats : lorsqu’elles sont effacées, les copies conservées par nos services d’e-mail et d’assistant disparaissent aussi — immédiatement pour les conversations de l’assistant qui les ont lues, automatiquement sous 30 jours au plus pour les e-mails."

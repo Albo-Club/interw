@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "job-import-pinned": {
+      "title": "Job-ad import, hardened",
+      "body": "We hardened how job-ad imports reach the web: each page is now fetched only from the address we checked."
+    },
     "erasure-reaches-copies": {
       "title": "Deleting a candidate reaches every copy",
       "body": "We hardened candidate data deletion: when a candidate’s data is erased, the copies kept by our email and assistant services go too — assistant conversations that read it immediately, email copies automatically within 30 days at most."

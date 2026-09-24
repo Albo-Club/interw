@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { internal } from './_generated/api'
 import schema from './schema'
+import { chooseStartSeconds } from './lib/evidence'
+import { computeParaverbal } from './lib/paraverbal'
 import type { Id } from './_generated/dataModel'
 
 const modules = import.meta.glob('./**/*.ts')
@@ -198,6 +200,102 @@ describe('pipeline idempotency', () => {
         error: 'boom',
       }),
     ).resolves.toBeNull()
+  })
+})
+
+/**
+ * Audit 2026-09-22,
+ * `convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`.
+ *
+ * The answer length behind the para-verbal measures and every quote anchor
+ * was the number the candidate's browser reported. It is now what the server
+ * observed at transcription, so the report cannot move with the argument.
+ */
+describe('the answer length the report measures', () => {
+  let t: ReturnType<typeof newTest>
+  let s: Seed
+
+  // Two timed chunks over eight seconds, under a 120-second limit.
+  const words = [
+    { start: 0, end: 3.9, text: 'We migrated the billing service' },
+    { start: 4.1, end: 8, text: 'and cut the release cycle from two weeks' },
+  ]
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seed(t)
+  })
+
+  async function inputsFor(clientSeconds: number) {
+    await t.run(async (ctx) => {
+      await ctx.db.patch('segments', s.segmentId, {
+        durationSeconds: clientSeconds,
+      })
+    })
+    const inputs = await t.query(internal.pipeline.reportInputs, {
+      sessionId: s.sessionId,
+    })
+    if (!inputs || inputs.alreadyGenerated) throw new Error('no inputs')
+    const answer = inputs.answers[0]
+    return {
+      durationSeconds: answer.durationSeconds,
+      paraverbal: computeParaverbal(
+        inputs.answers.map((a) => ({
+          chunks: a.chunks,
+          durationSeconds: a.durationSeconds ?? 0,
+          maxResponseSeconds: a.maxResponseSeconds,
+        })),
+      ),
+      anchor: chooseStartSeconds({
+        chunks: answer.chunks,
+        quote: 'cut the release cycle from two weeks',
+        durationSeconds: answer.durationSeconds,
+      }),
+    }
+  }
+
+  it("does not move with the client's reported duration", async () => {
+    await t.mutation(internal.pipeline.saveTranscript, {
+      segmentId: s.segmentId,
+      text: words.map((w) => w.text).join(' '),
+      words,
+      model: 'voxtral-mini-latest',
+      audioSeconds: 9.5,
+    })
+
+    const results = [
+      await inputsFor(8),
+      await inputsFor(60),
+      await inputsFor(1),
+    ]
+    expect(results[0].durationSeconds).toBe(9.5)
+    expect(results[0].paraverbal).not.toBeNull()
+    expect(results[0].anchor).toBe(4.1)
+    expect(results[1]).toEqual(results[0])
+    expect(results[2]).toEqual(results[0])
+  })
+
+  it('falls back to the end of the last timed word', async () => {
+    await t.mutation(internal.pipeline.saveTranscript, {
+      segmentId: s.segmentId,
+      text: words.map((w) => w.text).join(' '),
+      words,
+      model: 'voxtral-mini-latest',
+    })
+    expect((await inputsFor(60)).durationSeconds).toBe(8)
+  })
+
+  it('is null, not the client number, when nothing was measured', async () => {
+    await t.mutation(internal.pipeline.saveTranscript, {
+      segmentId: s.segmentId,
+      text: 'Une réponse.',
+      words: [],
+      model: 'voxtral-mini-latest',
+    })
+    const result = await inputsFor(60)
+    expect(result.durationSeconds).toBeNull()
+    // Left out of the delivery profile rather than measured against a guess.
+    expect(result.paraverbal).toBeNull()
   })
 })
 

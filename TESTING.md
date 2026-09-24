@@ -312,6 +312,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IB14 | Expiry | Set the role's expiry to yesterday, reopen the link | "This interview has closed" — never a dead end or a raw error |
 | IB15 | Unknown token | Open `/s/aaaa…` (43 chars) and `/s/short` | Both give the **same** "This link doesn't work" |
 | IB16 | Finish | Complete the interview | Lands on the thank-you page; session is `completed`; `jobLog` shows `transcribe · started` |
+| IB17 | **A cancelled link cannot finish** | Mid-interview, cancel the session from the recruiter's candidate page, then press Finish in the candidate tab | The candidate sees the cancelled state; the session stays `cancelled`; no `jobLog` row, no report, no email. Same with the role archived instead |
 
 ## Interw C — Pipeline and report (15 min)
 
@@ -326,7 +327,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IC4 | Idempotent replay | Re-run `internal.pipeline.generateReport` for the same session via the Convex dashboard | Logs `report · skipped`, writes nothing, sends no second email |
 | IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
 | IC6 | Malformed model output | Temporarily set `EVALUATION_MODEL` in `convex/lib/ai.ts` to a model that ignores schemas, and push | The job **fails and retries**; no partial report is written |
-| IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay |
+| IC7 | Para-verbal | Open the Delivery panel | Six measured figures (rate, hesitation, silence, time used, consistency, speaking time). Deterministic — identical on a replay, and independent of the duration the browser reported: the length comes from `segments.measuredSeconds`, set at transcription |
 | IC8 | Recruiter email | Check the inbox of a member of the role's org | "Report ready" with score and recommendation, and the caveat that it is automated |
 | IC9 | Failed upload visible | Mark a segment `failed` by hand, open the report | That answer says the recording never reached us, explicitly as our failure |
 
@@ -359,6 +360,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IE7 | Deleting a role takes its media | Record an intro and a question prompt on a role with no candidates, delete the role | Both objects are gone from the bucket, not just the rows |
 | IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
 | IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
+| IE8 | **A re-recorded answer is erased too** | Record Q1 in Chrome (webm), cut the network before it is marked uploaded, resume in Safari (mp4) and finish, then Delete everything | Both `q0.weba`/`q0.webm` and `q0.m4a`/`q0.mp4` are gone from the bucket — the replaced keys stay named in `segments.supersededKeys` until erasure |
 
 ---
 

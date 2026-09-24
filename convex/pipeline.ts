@@ -209,8 +209,10 @@ export const saveTranscript = internalMutation({
       v.object({ start: v.number(), end: v.number(), text: v.string() }),
     ),
     model: v.string(),
+    /** The provider's own measure of the audio it transcribed. */
+    audioSeconds: v.optional(v.number()),
   },
-  handler: async (ctx, { segmentId, text, words, model }) => {
+  handler: async (ctx, { segmentId, text, words, model, audioSeconds }) => {
     const segment = await ctx.db.get('segments', segmentId)
     if (!segment) throw new ConvexError('not_found')
     const existing = await ctx.db
@@ -227,6 +229,20 @@ export const saveTranscript = internalMutation({
       model,
       createdAt: Date.now(),
     })
+    // The answer's length, as the server observed it. The candidate's browser
+    // reports one too, and the report must not be computed from a number the
+    // assessed person chose. The provider's measure first; else the end of
+    // the last timed word; else nothing, and the answer is left out of the
+    // para-verbal profile rather than measured against a guess.
+    const measuredSeconds =
+      audioSeconds !== undefined &&
+      Number.isFinite(audioSeconds) &&
+      audioSeconds > 0
+        ? audioSeconds
+        : words.reduce((last, word) => Math.max(last, word.end), 0)
+    if (measuredSeconds > 0) {
+      await ctx.db.patch('segments', segmentId, { measuredSeconds })
+    }
     return null
   },
 })
@@ -274,6 +290,7 @@ export const transcribeSegment = internalAction({
         text: result.text,
         words: result.words,
         model: result.model,
+        audioSeconds: result.audioSeconds ?? undefined,
       })
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId: context.sessionId,
@@ -469,7 +486,8 @@ export const reportInputs = internalQuery({
           segmentId: segment._id,
           questionId: segment.questionId,
           questionIndex: segment.questionIndex,
-          durationSeconds: segment.durationSeconds ?? null,
+          // What the server measured, never the client's `durationSeconds`.
+          durationSeconds: segment.measuredSeconds ?? null,
           maxResponseSeconds: question?.maxResponseSeconds ?? 120,
           question: question?.content ?? '',
           text: transcript?.text ?? '',

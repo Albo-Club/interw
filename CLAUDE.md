@@ -612,6 +612,12 @@ verification is in `TESTING.md`.
   so it calls `Date.now()` and ignores whatever `now` it was handed. `now: 0`
   used to resurrect an expired share link and mint an hour of signed URLs on
   the candidate's video.
+- **A measurement presented to a recruiter never depends on an argument
+  either.** Anything a report calls measured (answer length, timings, quote
+  anchors) comes from data the server observed itself — provider output, the
+  stored transcript — never from a number the candidate's client sent. A client
+  value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
+  § "Para-verbal analysis is computed, not generated".
 
 ## Model output
 

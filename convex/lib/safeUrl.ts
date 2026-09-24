@@ -13,12 +13,11 @@
  * re-checking every redirect — lives in convex/jobImportFetch.ts, which needs
  * Node's resolver.
  *
- * What this cannot do: stop an attacker who controls a DNS record and changes
- * it between our resolution and the connection. Closing that needs the
- * connection to be made to the address we checked, which `fetch` does not
- * expose. What it does close is the whole static class — literal addresses in
- * every notation, and hostnames like `127.0.0.1.nip.io` that simply resolve
- * somewhere private.
+ * On its own this closes the static class — literal addresses in every
+ * notation. A hostname like `127.0.0.1.nip.io` that resolves somewhere
+ * private, or a record that changes between the check and the connection, is
+ * jobImportFetch.ts's to refuse: it checks every resolved address with
+ * `isPrivateAddress` and connects only to the ones that passed.
  */
 
 /** Expand an IPv6 host to its eight 16-bit groups, or null if it is not one. */
@@ -83,6 +82,11 @@ function isPrivateIpv4([a, b]: Array<number>): boolean {
   return false
 }
 
+/** An IPv4 address carried in two 16-bit IPv6 groups, judged as IPv4. */
+function isPrivateEmbeddedIpv4(high: number, low: number): boolean {
+  return isPrivateIpv4([high >> 8, high & 0xff, low >> 8, low & 0xff])
+}
+
 function isPrivateIpv6(groups: Array<number>): boolean {
   const isZero = groups.slice(0, 7).every((group) => group === 0)
   if (isZero && groups[7] === 1) return true // ::1, loopback
@@ -90,11 +94,18 @@ function isPrivateIpv6(groups: Array<number>): boolean {
   // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible: judge the v4 inside.
   if (groups.slice(0, 5).every((group) => group === 0)) {
     if (groups[5] === 0xffff || groups[5] === 0) {
-      const [g6, g7] = [groups[6], groups[7]]
-      return isPrivateIpv4([g6 >> 8, g6 & 0xff, g7 >> 8, g7 & 0xff])
+      return isPrivateEmbeddedIpv4(groups[6], groups[7])
     }
   }
-  const first = groups[0]
+  const [first, second] = groups
+  // NAT64 and 6to4 hand the packet to an IPv4 address: judge that one too.
+  if (first === 0x64 && second === 0xff9b) {
+    if (groups[2] === 1) return true // 64:ff9b:1::/48, local-use NAT64
+    if (groups.slice(2, 6).every((group) => group === 0)) {
+      return isPrivateEmbeddedIpv4(groups[6], groups[7]) // 64:ff9b::/96
+    }
+  }
+  if (first === 0x2002) return isPrivateEmbeddedIpv4(second, groups[2]) // 6to4
   if ((first & 0xfe00) === 0xfc00) return true // fc00::/7, unique local
   if ((first & 0xffc0) === 0xfe80) return true // fe80::/10, link-local
   if ((first & 0xff00) === 0xff00) return true // ff00::/8, multicast
@@ -125,6 +136,18 @@ export function isPrivateHost(rawHost: string): boolean {
 
   if (host === 'localhost') return true
   return PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix))
+}
+
+/**
+ * Whether an address a hostname resolved to must not be connected to.
+ * Stricter than `isPrivateHost`, which has to let names through: an answer
+ * that is not a well-formed address is one we cannot vouch for, so it fails.
+ */
+export function isPrivateAddress(address: string): boolean {
+  const v4 = parseIpv4(address)
+  if (v4) return isPrivateIpv4(v4)
+  const v6 = parseIpv6(address)
+  return v6 ? isPrivateIpv6(v6) : true
 }
 
 /**

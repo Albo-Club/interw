@@ -1879,6 +1879,30 @@ impersonating a browser, and `401 / 403 / 429` gets its own `page_blocked`
 code. Some sites bot-wall everything regardless; the point is that the recruiter
 is told the site said no, instead of being sent hunting for a typo.
 
+### Rebinding: `fetch` can't be told which address to connect to
+
+Checking a hostname with `dns.lookup` and then calling `fetch(hostname)`
+resolves the name twice, so whoever controls the record can answer the check
+with a public address and the connection with `127.0.0.1` (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 7). `fetch` has no public way to choose the
+address; the only other route is an undici `Agent({ connect: { lookup } })` as
+`dispatcher`, i.e. a second undici kept in step with the one inside Node. So
+`convex/jobImportFetch.ts` uses `http(s).get` with a `lookup` that answers only
+the checked addresses, and `agent: false` so no pooled socket is reused. The
+hostname stays the host, so `Host`, SNI and certificate validation are
+unchanged. Two traps:
+
+- A pinned `lookup` must answer asynchronously (`setImmediate`). Answered
+  synchronously, an immediate connection failure throws before `http` has
+  attached its socket error handler.
+- Resolver answers go through `isPrivateAddress`, not `isPrivateHost`: an
+  answer that is not a well-formed address must fail closed, which a hostname
+  predicate cannot do.
+
+Responses are requested with `Accept-Encoding: identity` and not decompressed,
+so the 2 MiB cap counts what is read; a server that compresses anyway yields
+unreadable text and the import fails as too thin.
+
 Note that `errors.page_unreachable` still offers to let them "paste the text
 instead", which no screen in the wizard does. Either build it or drop the
 promise — it is copy writing a cheque the product does not cash.

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "job-import-pinned": {
+      "title": "L’import d’annonces renforcé",
+      "body": "Nous avons renforcé la façon dont l’import d’annonces accède au web : chaque page n’est désormais récupérée qu’à l’adresse que nous avons vérifiée."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

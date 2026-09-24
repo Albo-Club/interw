@@ -1,10 +1,12 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
+import { register as registerAgent } from '@convex-dev/agent/test'
+import { createThread, listMessages, saveMessage } from '@convex-dev/agent'
 import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, internal } from './_generated/api'
+import { api, components, internal } from './_generated/api'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -33,6 +35,7 @@ const modules = import.meta.glob('./**/*.ts')
 function newTest() {
   const t = convexTest(schema, modules)
   registerRateLimiter(t, 'rateLimiter')
+  registerAgent(t, 'agent')
   return t
 }
 
@@ -232,6 +235,100 @@ describe('erasure', () => {
     expect(events).toEqual([])
     // Exactly one register entry, written by the pass that removed the row.
     expect(log).toHaveLength(1)
+  })
+
+  /**
+   * A tool result is a copy of the candidate — name, summary, strengths,
+   * concerns — held in the agent component, and so is the answer the model
+   * wrote from it. Erasure used to stop at the app's tables and leave both in
+   * the recruiter's chat history for good.
+   */
+  it('deletes the assistant threads that read the candidate', async () => {
+    const s = await seed(t)
+    const { userId, readThread, otherThread } = await t.run(async (ctx) => {
+      const user = await ctx.db.query('users').first()
+      const scope = `${s.orgId}:${user!._id}`
+      const read = await createThread(ctx, components.agent, { userId: scope })
+      await saveMessage(ctx, components.agent, {
+        threadId: read,
+        message: { role: 'assistant', content: 'Alex Martin: strong delivery.' },
+      })
+      const other = await createThread(ctx, components.agent, { userId: scope })
+      return { userId: user!._id, readThread: read, otherThread: other }
+    })
+
+    const args = { orgId: s.orgId, actorUserId: userId, threadId: readThread }
+    await t.mutation(internal.recruiterTools.listCandidatesInternal, args)
+    await t.mutation(internal.recruiterTools.readReportInternal, {
+      ...args,
+      sessionId: s.sessionId,
+    })
+    const recorded = await t.run(async (ctx) =>
+      ctx.db.query('chatThreadSessions').collect(),
+    )
+    // Two reads of the same candidate into the same thread: one row.
+    expect(recorded).toHaveLength(1)
+
+    await erase(t, s.sessionId)
+
+    const after = await t.run(async (ctx) => ({
+      read: await ctx.runQuery(components.agent.threads.getThread, {
+        threadId: readThread,
+      }),
+      readMessages: await listMessages(ctx, components.agent, {
+        threadId: readThread,
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+      other: await ctx.runQuery(components.agent.threads.getThread, {
+        threadId: otherThread,
+      }),
+      rows: await ctx.db.query('chatThreadSessions').collect(),
+    }))
+    expect(after.read).toBeNull()
+    expect(after.readMessages.page).toEqual([])
+    // A thread that never read the candidate is the recruiter's, untouched.
+    expect(after.other).not.toBeNull()
+    expect(after.rows).toEqual([])
+  })
+
+  /**
+   * The recruiter may have that thread open when it goes. `listMessages` used
+   * to throw on a missing thread, and the panel rendering it has no error
+   * boundary of its own, so the whole app shell fell to the router's fallback.
+   */
+  it('reads an erased thread as empty, and a foreign one as forbidden', async () => {
+    const s = await seed(t)
+    const { gone, foreign } = await t.run(async (ctx) => {
+      const user = await ctx.db.query('users').first()
+      const own = await createThread(ctx, components.agent, {
+        userId: `${s.orgId}:${user!._id}`,
+      })
+      await ctx.runMutation(components.agent.threads.deleteAllForThreadIdAsync, {
+        threadId: own,
+      })
+      return {
+        gone: own,
+        foreign: await createThread(ctx, components.agent, {
+          userId: `${s.orgId}:someone-else`,
+        }),
+      }
+    })
+    const recruiter = t.withIdentity({ subject: 'ba_recruiter' })
+    const read = (threadId: string) =>
+      recruiter.query(api.chat.listMessages, {
+        orgId: s.orgId,
+        threadId,
+        paginationOpts: { numItems: 10, cursor: null },
+        streamArgs: { kind: 'list' },
+      })
+
+    await expect(read(gone)).resolves.toEqual({
+      page: [],
+      isDone: true,
+      continueCursor: '',
+      streams: { kind: 'list', messages: [] },
+    })
+    await expect(read(foreign)).rejects.toThrow(/forbidden/)
   })
 
   /**

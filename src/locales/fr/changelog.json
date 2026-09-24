@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "erasure-reaches-copies": {
+      "title": "Supprimer un candidat efface chaque copie",
+      "body": "Nous avons renforcé la suppression des données candidats : lorsqu’elles sont effacées, les copies conservées par nos services d’e-mail et d’assistant disparaissent aussi — immédiatement pour les conversations de l’assistant qui les ont lues, automatiquement sous 30 jours au plus pour les e-mails."
+    },
     "candidate-interview-hardening": {
       "title": "Un entretien clos le reste, et une suppression est complète",
       "body": "Nous avons renforcé l’entretien candidat. Une invitation annulée ou clôturée le reste désormais à chaque étape, y compris la dernière. Les mesures de diction d’un rapport sont désormais calculées uniquement à partir de ce que nos propres systèmes ont mesuré. Et la suppression des données d’un candidat efface désormais chacun de ses enregistrements, y compris une réponse ré-enregistrée depuis un autre navigateur."

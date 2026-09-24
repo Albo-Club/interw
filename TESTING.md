@@ -361,6 +361,8 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
 | IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
 | IE8 | **A re-recorded answer is erased too** | Record Q1 in Chrome (webm), cut the network before it is marked uploaded, resume in Safari (mp4) and finish, then Delete everything | Both `q0.weba`/`q0.webm` and `q0.m4a`/`q0.mp4` are gone from the bucket — the replaced keys stay named in `segments.supersededKeys` until erasure |
+| IE9 | Assistant threads go with the candidate | Ask the assistant for candidate X's report, keep the panel open, then delete X from another tab | The conversation disappears; the panel switches to the latest remaining thread (or the empty state) and the page does not crash. A conversation that never read X stays. `chatThreadSessions` has no row for the erased session |
+| IE10 | Resend copies expire | Convex dashboard → Crons | "remove old emails from the resend component" runs hourly; in the resend component's tables, no email is older than 30 days |
 
 ---
 

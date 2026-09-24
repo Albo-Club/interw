@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Streamdown } from 'streamdown'
+import { Streamdown, defaultRehypePlugins } from 'streamdown'
 import type { UIMessage } from 'ai'
 import type { ComponentProps, HTMLAttributes, ReactElement } from 'react'
 import { Button } from '~/components/ui/button'
@@ -322,7 +322,7 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>
 // through `readReport`: an image in it is a request the recruiter's browser
 // would make on render, to a URL the model chose — query string included. No
 // image is ever loaded; its alt text stands in for it. Passed after
-// `{...props}` so no caller can bring images back.
+// `{...props}` so no caller can bring images (or foreign links) back.
 const ImageNotShown = ({ alt }: ComponentProps<'img'>) => {
   const { t } = useTranslation('chat')
   return (
@@ -332,23 +332,79 @@ const ImageNotShown = ({ alt }: ComponentProps<'img'>) => {
   )
 }
 
-const responseComponents = { img: ImageNotShown }
+/** The app's own origin; `undefined` during SSR, where no link is kept. */
+function appOrigin(): string | undefined {
+  return typeof window === 'undefined' ? undefined : window.location.origin
+}
+
+type Pluggable = (typeof defaultRehypePlugins)[string]
+
+// Links in assistant output lead into the app and nowhere else: a link is a
+// URL the model chose, and clicking it hands that URL — query string
+// included — to whatever host it names. `rehype-harden` checks http(s) links
+// against the prefix and turns any other into its plain text. It passes
+// `mailto:`, `xmpp:` and a few other schemes through untouched by design, so
+// the `a` renderer below applies the same origin rule to every href it gets.
+// Images keep Streamdown's permissive harden settings on purpose: every
+// image, whatever its URL, is replaced by `ImageNotShown`, whose localised
+// copy the harden indicator would bypass.
+function responsePlugins(origin: string | undefined): Array<Pluggable> {
+  const [harden] = defaultRehypePlugins.harden as [unknown, unknown]
+  return [
+    defaultRehypePlugins.raw,
+    defaultRehypePlugins.sanitize,
+    [
+      harden,
+      {
+        defaultOrigin: origin,
+        allowedLinkPrefixes: origin ? [origin] : [],
+        allowedImagePrefixes: ['*'],
+        allowDataImages: true,
+        linkBlockPolicy: 'text-only',
+      },
+    ] as Pluggable,
+  ]
+}
+
+const AppLink = ({ href, children }: ComponentProps<'a'>) => {
+  const origin = appOrigin()
+  if (
+    !origin ||
+    !href ||
+    !URL.canParse(href, origin) ||
+    new URL(href, origin).origin !== origin
+  ) {
+    return <span>{children}</span>
+  }
+  return (
+    <a href={href} className="text-primary font-medium wrap-anywhere underline">
+      {children}
+    </a>
+  )
+}
+
+const responseComponents = { img: ImageNotShown, a: AppLink }
 
 // Streamdown plugins (@streamdown/code|math|mermaid|cjk) deliberately
 // removed: Shiki + KaTeX + Mermaid would add MBs to the bundle for a finance
 // chat. Re-trim after any reinstall from the registry — see KNOWN_ISSUES.md
 // "Streamdown (AI panel)".
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      className={cn(
-        'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-        className,
-      )}
-      {...props}
-      components={responseComponents}
-    />
-  ),
+  ({ className, ...props }: MessageResponseProps) => {
+    const origin = appOrigin()
+    const rehypePlugins = useMemo(() => responsePlugins(origin), [origin])
+    return (
+      <Streamdown
+        className={cn(
+          'size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+          className,
+        )}
+        {...props}
+        components={responseComponents}
+        rehypePlugins={rehypePlugins}
+      />
+    )
+  },
   (prevProps, nextProps) =>
     prevProps.children === nextProps.children &&
     nextProps.isAnimating === prevProps.isAnimating,

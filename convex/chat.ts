@@ -16,6 +16,7 @@ import { internalAction, mutation, query } from './_generated/server'
 import { requireOrgMember } from './lib/auth'
 import { chatAgent } from './agent'
 import { buildInstructions } from './lib/instructions'
+import { PROMPT_MAX } from './lib/chatLimits'
 import { consumeLimit } from './rateLimiters'
 import type { StreamArgs, SyncStreamsReturnValue } from '@convex-dev/agent'
 import type { DataModel, Id } from './_generated/dataModel'
@@ -48,9 +49,6 @@ function emptyStreams(
 const ROUTE_CONTEXT_MAX = 200
 // Auto-title a thread from its first user message.
 const AUTO_TITLE_MAX = 80
-// A user message is stored and sent to a paid model on every later turn of
-// the thread; the rate limiter counts messages, not their size.
-const PROMPT_MAX = 8_000
 
 async function authorizeThread(
   ctx: AnyCtx,

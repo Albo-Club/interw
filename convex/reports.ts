@@ -15,7 +15,7 @@ import { action, internalQuery, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
 import { recruiterDecisionValidator } from './schema'
 import { requireOrgMember } from './lib/auth'
-import { requireProjectAccess } from './lib/projectAccess'
+import { canSeeProject, requireProjectAccess } from './lib/projectAccess'
 import { normalizeWeights } from './lib/weights'
 import { presignGet } from './lib/objectStore'
 import type { Doc, Id } from './_generated/dataModel'
@@ -289,19 +289,7 @@ export const searchCandidates = query({
       if (!project) continue
       // Project-level visibility applies to search too, otherwise a
       // confidential role leaks through the search box.
-      if (
-        project.restricted &&
-        member.role === 'member' &&
-        project.createdBy !== user._id
-      ) {
-        const share = await ctx.db
-          .query('projectShares')
-          .withIndex('by_project_and_user', (q) =>
-            q.eq('projectId', project._id).eq('userId', user._id),
-          )
-          .unique()
-        if (!share) continue
-      }
+      if (!(await canSeeProject(ctx, project, user._id, member.role))) continue
       visible.push({
         sessionId: session._id,
         candidateName: session.candidateName,

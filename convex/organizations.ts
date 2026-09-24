@@ -8,6 +8,7 @@ import {
   safeAppUser,
 } from './lib/auth'
 import { setLastOrgSlug } from './lib/userPrefs'
+import { revokeMemberGrants } from './lib/projectAccess'
 import { resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 import type { DataModel, Id } from './_generated/dataModel'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
@@ -216,17 +217,11 @@ export const removeMember = mutation({
       if (owners <= 1) throw new ConvexError('last_owner')
     }
 
-    // A project share was only ever legal because the person was a member
-    // (`setShares` rejects a non-member), so it dies with the membership.
-    // Left behind, it silently restores the restricted role if they are ever
-    // re-invited.
-    const shares = await ctx.db
-      .query('projectShares')
-      .withIndex('by_user', (q) => q.eq('userId', target.userId))
-      .collect()
-    for (const share of shares) {
-      if (share.orgId === orgId) await ctx.db.delete('projectShares', share._id)
-    }
+    // A place on a role's team was only ever legal because the person was a
+    // member (`setTeam` rejects a non-member), so it dies with the membership.
+    // Left behind, it silently restores the role if they are ever re-invited.
+    // Their report links go with it (h03).
+    await revokeMemberGrants(ctx, target.userId, orgId)
 
     await ctx.db.delete("organizationMembers", memberId)
     return null

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "role-team": {
+      "title": "Choose who follows each role",
+      "body": "Each role now has a team: you, plus the colleagues you pick when you create it or later from Team. The team sees the role and gets the email when a candidate's report is ready — nobody else in your organisation is emailed any more. Admins and owners still see every role. A role that was open to everyone is now visible to its creator, admins and owners until you add its team."
+    },
     "evaluation-hardening": {
       "title": "AI evaluation, hardened",
       "body": "We hardened how reports are produced: what a candidate says, and the text of an imported job ad, are always treated as material to assess. A report now covers every answer the candidate gave, or is produced again, and it no longer has to name a strength the interview did not show."

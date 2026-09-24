@@ -24,10 +24,9 @@ export type ProjectRow = {
   language: 'fr' | 'en'
   createdAt: number
   expiresAt: number | null
-  restricted: boolean
   sessionCount: number
   completedSessionCount: number
-  /** Share, archive, restore: org owners and admins, and the role's creator. */
+  /** Team, archive, restore: org owners and admins, and the role's creator. */
   canManage: boolean
 }
 
@@ -44,14 +43,14 @@ export function buildProjectColumns({
   locale,
   onArchive,
   onRestore,
-  onShare,
+  onEditTeam,
   t,
 }: {
   orgSlug: string
   locale: string
   onArchive: (project: ProjectRow) => void
   onRestore: (project: ProjectRow) => void
-  onShare: (project: ProjectRow) => void
+  onEditTeam: (project: ProjectRow) => void
   t: TFunction<['projects', 'common']>
 }): Array<ColumnDef<ProjectRow>> {
   return [
@@ -165,8 +164,8 @@ export function buildProjectColumns({
               </DropdownMenuItem>
               {row.original.canManage && (
                 <>
-                  <DropdownMenuItem onSelect={() => onShare(row.original)}>
-                    {t('projects:detail.share')}
+                  <DropdownMenuItem onSelect={() => onEditTeam(row.original)}>
+                    {t('projects:detail.team')}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {row.original.status === 'archived' ? (

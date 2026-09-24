@@ -289,9 +289,10 @@ export default defineSchema({
     createdBy: v.id('users'),
     createdAt: v.number(),
     archivedAt: v.optional(v.number()),
-    /** True once `projectShares` rows exist for this project. Denormalised so
-     *  listing projects does not need one "is this restricted?" query per row. */
-    restricted: v.boolean(),
+    /** Legacy, read by nothing. Every role is now visible to its team only
+     *  (see `projectShares`), so the open/restricted switch is gone; the field
+     *  stays optional only because existing rows still carry it. */
+    restricted: v.optional(v.boolean()),
     /** Denormalised counters, maintained in the same mutation as every session
      *  insert and status change. Convex has no count operator, and
      *  `.collect().length` over a project's sessions does not scale. */
@@ -525,10 +526,16 @@ export default defineSchema({
   })
     .index('by_token', ['token'])
     .index('by_report', ['reportId'])
-    .index('by_org', ['orgId']),
+    .index('by_org', ['orgId'])
+    // A share link acts for whoever created it: when that person leaves the
+    // org or deletes their account, their links are revoked with them.
+    .index('by_creator_and_org', ['createdBy', 'orgId']),
 
-  /** Restricts a project to named colleagues. Absence of any row means the
-   *  project is visible to the whole organisation. */
+  /** A role's team: the colleagues who follow it. One row per member, on top
+   *  of the creator, who is always on the team and never stored here. The
+   *  team decides both who sees the role (with org admins/owners) and who is
+   *  emailed when a report is ready. Named `projectShares` for history: the
+   *  rows of the former "restricted" roles already meant exactly this. */
   projectShares: defineTable({
     orgId: v.id('organizations'),
     projectId: v.id('projects'),

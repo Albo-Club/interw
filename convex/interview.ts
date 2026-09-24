@@ -698,7 +698,6 @@ export const seedE2eSession = internalMutation({
         },
         createdBy: userId,
         createdAt: now,
-        restricted: false,
         sessionCount: 0,
         completedSessionCount: 0,
       })

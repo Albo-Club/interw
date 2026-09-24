@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { Mic, Pencil, Send, Share2, UserPlus, Video } from 'lucide-react'
+import { Mic, Pencil, Send, UserPlus, Users, Video } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
@@ -10,14 +10,13 @@ import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { Button } from '~/components/ui/button'
-import { Badge } from '~/components/ui/badge'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Progress } from '~/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { ProjectStatusBadge } from '~/components/projects/ProjectStatusBadge'
-import { ShareProjectDialog } from '~/components/projects/ShareProjectDialog'
+import { ProjectTeamDialog } from '~/components/projects/ProjectTeamDialog'
 import { CandidatesTable } from '~/components/candidates/CandidatesTable'
 import { InviteCandidatesDialog } from '~/components/candidates/InviteCandidatesDialog'
 import { EmptyState } from '~/components/projects/EmptyState'
@@ -35,7 +34,7 @@ function ProjectDetailPage() {
   const { t } = useTranslation(['projects', 'candidates', 'common'])
   const { orgSlug, projectSlug } = Route.useParams()
   const navigate = useNavigate()
-  const [sharing, setSharing] = useState(false)
+  const [editingTeam, setEditingTeam] = useState(false)
   const [inviting, setInviting] = useState(false)
 
   const me = useConvexQuery(api.users.me)
@@ -91,9 +90,6 @@ function ProjectDetailPage() {
               {project.title}
             </h1>
             <ProjectStatusBadge status={project.status} expired={expired} />
-            {project.restricted && (
-              <Badge variant="secondary">{t('projects:share.restricted')}</Badge>
-            )}
           </div>
           {project.jobTitle && (
             <p className="text-muted-foreground text-sm">{project.jobTitle}</p>
@@ -108,9 +104,9 @@ function ProjectDetailPage() {
             </Button>
           )}
           {canManage && (
-            <Button variant="outline" onClick={() => setSharing(true)}>
-              <Share2 className="size-4" />
-              {t('projects:detail.share')}
+            <Button variant="outline" onClick={() => setEditingTeam(true)}>
+              <Users className="size-4" />
+              {t('projects:detail.team')}
             </Button>
           )}
           {project.status !== 'archived' && (
@@ -319,11 +315,11 @@ function ProjectDetailPage() {
       />
 
       {org && (
-        <ShareProjectDialog
+        <ProjectTeamDialog
           orgId={org._id}
           projectId={project._id}
-          open={sharing}
-          onOpenChange={setSharing}
+          open={editingTeam}
+          onOpenChange={setEditingTeam}
         />
       )}
     </main>

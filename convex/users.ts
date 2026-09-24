@@ -9,6 +9,7 @@ import {
 import { authComponent } from './auth'
 import { provisionAppUser, requireAppUser, safeAppUser } from './lib/auth'
 import { getLastOrgSlug } from './lib/userPrefs'
+import { revokeMemberGrants } from './lib/projectAccess'
 import { release, resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 
 export const me = query({
@@ -169,6 +170,8 @@ export const cascadeDelete = internalMutation({
     for (const m of memberships) {
       await ctx.db.delete("organizationMembers", m._id)
     }
+    // Team places and report links, in every org at once (Back F9, h05).
+    await revokeMemberGrants(ctx, appUser._id)
 
     const prefs = await ctx.db
       .query('userPrefs')
@@ -178,8 +181,12 @@ export const cascadeDelete = internalMutation({
 
     try {
       await release(ctx, appUser.avatarStorageId, appUser._id)
-    } catch {
-      // ignore — storage may already be gone
+    } catch (error) {
+      // Storage may already be gone; the account deletion must not fail on it.
+      console.warn('[cascade-delete] avatar_release_failed', {
+        userId: appUser._id,
+        error: String(error),
+      })
     }
 
     await ctx.db.delete("users", appUser._id)

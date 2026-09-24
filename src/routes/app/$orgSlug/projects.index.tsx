@@ -15,7 +15,7 @@ import { Skeleton } from '~/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { EmptyState } from '~/components/projects/EmptyState'
 import { ProjectsTable } from '~/components/projects/ProjectsTable'
-import { ShareProjectDialog } from '~/components/projects/ShareProjectDialog'
+import { ProjectTeamDialog } from '~/components/projects/ProjectTeamDialog'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/')({
   component: ProjectsPage,
@@ -35,7 +35,7 @@ function ProjectsPage() {
   const { orgSlug } = Route.useParams()
   const locale = getLocale()
   const [filter, setFilter] = useState<StatusFilter>('all')
-  const [sharing, setSharing] = useState<ProjectRow | null>(null)
+  const [editingTeam, setEditingTeam] = useState<ProjectRow | null>(null)
 
   const me = useConvexQuery(api.users.me)
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
@@ -66,7 +66,7 @@ function ProjectsPage() {
     (project: ProjectRow) => void run(restore({ projectId: project._id })),
     [restore, run],
   )
-  const onShare = useCallback((project: ProjectRow) => setSharing(project), [])
+  const onEditTeam = useCallback((project: ProjectRow) => setEditingTeam(project), [])
 
   // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
   // spares a member an action the server would refuse.
@@ -143,7 +143,7 @@ function ProjectsPage() {
             locale={locale}
             onArchive={onArchive}
             onRestore={onRestore}
-            onShare={onShare}
+            onEditTeam={onEditTeam}
             emptyState={
               <EmptyState
                 title={t('projects:list.emptyFiltered.title')}
@@ -154,12 +154,12 @@ function ProjectsPage() {
         </div>
       )}
 
-      {sharing && org && (
-        <ShareProjectDialog
+      {editingTeam && org && (
+        <ProjectTeamDialog
           orgId={org._id}
-          projectId={sharing._id}
+          projectId={editingTeam._id}
           open
-          onOpenChange={(open) => !open && setSharing(null)}
+          onOpenChange={(open) => !open && setEditingTeam(null)}
         />
       )}
     </main>

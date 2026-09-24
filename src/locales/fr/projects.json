@@ -56,7 +56,7 @@
     "archive": "Archiver",
     "restore": "Restaurer",
     "delete": "Supprimer",
-    "share": "Partager",
+    "team": "Équipe",
     "invite": "Inviter des candidats",
     "overview": "Vue d'ensemble",
     "questions": "Questions",
@@ -205,13 +205,14 @@
       "criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer."
     }
   },
-  "share": {
-    "title": "Qui voit ce poste",
-    "subtitle": "Par défaut, tout le monde dans votre organisation. Nommez des personnes pour le restreindre — les administrateurs et vous gardez toujours l'accès.",
-    "everyone": "Toute l'organisation",
-    "restricted": "Uniquement les personnes que je désigne",
-    "save": "Enregistrer les accès",
-    "saved": "Accès mis à jour"
+  "team": {
+    "title": "Équipe du poste",
+    "subtitle": "L'équipe voit ce poste et reçoit un e-mail quand le rapport d'un candidat est prêt. Les administrateurs et propriétaires voient tous les postes, mais ne reçoivent d'e-mail que pour ceux dont ils font partie.",
+    "creator": "Créateur du poste, toujours dans l'équipe",
+    "label": "Équipe",
+    "hint": "Qui suit ce poste avec vous. Modifiable ensuite.",
+    "save": "Enregistrer l'équipe",
+    "saved": "Équipe mise à jour"
   },
   "import": {
     "title": "Importer depuis une offre d'emploi",
@@ -254,6 +255,8 @@
     "invalid_url": "Ce n'est pas une adresse web publique.",
     "unsupported_media_type": "Ce format d'enregistrement n'est pas pris en charge.",
     "media_too_large": "Cet enregistrement est trop volumineux. Limitez les questions à 100 Mo.",
-    "key_mismatch": "L'envoi ne correspond pas à ce qui était attendu. Réessayez l'enregistrement."
+    "key_mismatch": "L'envoi ne correspond pas à ce qui était attendu. Réessayez l'enregistrement.",
+    "team_too_large": "Une équipe compte au maximum 100 personnes.",
+    "not_a_member": "Une des personnes choisies ne fait plus partie de l'organisation. Rechargez la page et réessayez."
   }
 }

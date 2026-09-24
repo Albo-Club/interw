@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "role-team": {
+      "title": "Choisissez qui suit chaque poste",
+      "body": "Chaque poste a désormais une équipe : vous, plus les collègues que vous choisissez à la création ou ensuite depuis Équipe. L’équipe voit le poste et reçoit l’e-mail quand le rapport d’un candidat est prêt — plus personne d’autre dans votre organisation n’est notifié. Les administrateurs et propriétaires voient toujours tous les postes. Un poste ouvert à tous n’est plus visible que de son créateur, des administrateurs et des propriétaires, jusqu’à ce que vous ajoutiez son équipe."
+    },
     "evaluation-hardening": {
       "title": "Évaluation par l’IA renforcée",
       "body": "Nous avons renforcé la production des rapports : les propos du candidat et le texte d’une offre importée sont toujours traités comme la matière à évaluer. Un rapport couvre désormais chacune des réponses du candidat, sinon il est produit à nouveau, et il n’a plus à citer un point fort que l’entretien n’a pas montré."

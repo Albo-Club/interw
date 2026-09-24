@@ -1811,6 +1811,47 @@ to feed the delivery figures and every quote anchor — the person being assesse
 chose their own measurement (audit 2026-09-22,
 `convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`).
 
+## A role's team decides who sees it and who is mailed
+
+Since 2026-09-24 (audit T04, decision 3) every role has a **team**: its creator
+plus the colleagues they tick. The team is the whole visibility model inside an
+organisation:
+
+- **Sees the role**: the team, plus every org admin and owner. Anyone else gets
+  `not_found`, never "forbidden" (`canSeeProject` / `filterVisibleProjects` in
+  `convex/lib/projectAccess.ts` — every project read goes through them).
+- **Is mailed "report ready"**: the team only, membership re-checked at send
+  time. Admins and owners see every role but are mailed only about the ones
+  they are on. The old rule mailed up to 200 members of the org per report.
+- **Edits the team**: the creator, an admin or an owner
+  (`requireProjectOwnerOrAdmin`), at creation or from the Team dialog.
+
+Traps:
+
+- **The creator is never a row.** They are on the team by construction
+  (`project.createdBy`), so they cannot be unticked and the person who opened
+  the search always hears about it. `setTeam` silently drops their id. Code
+  that lists "the team" must add `createdBy` to the `projectShares` rows.
+- **The table is still called `projectShares`.** Renaming a Convex table is a
+  copy migration. The rows of the former "restricted" roles already meant
+  exactly "named colleagues", and a former "open" role had none — so the
+  existing data *is* the team, with no migration, lazy or otherwise.
+- **`projects.restricted` is legacy and read by nothing.** It stays optional in
+  the schema only because existing rows carry it. A role saved as "open to
+  everyone" is now visible to its creator, admins and owners only — accepted
+  before launch. Never read the flag again; drop it once a migration has
+  cleared it.
+- **`setTeam` replaces the whole list.** A client that sends it before loading
+  the current team wipes it; that is how the old dialog de-restricted a
+  confidential role on "open, then Save" (B8). The dialog seeds from
+  `projects.team` and cannot save until it has. The list is capped at 100
+  (`team_too_large`).
+- **Leaving revokes the grants**, in one helper (`revokeMemberGrants`):
+  `removeMember` drops the person's team rows in that org and revokes the
+  report share links they created there; `users.cascadeDelete` does the same in
+  every org. A share link acts for whoever made it, so it must not outlive
+  their membership (h03).
+
 ## The shadcn CLI rewrites files you did not ask it to
 
 `pnpm dlx shadcn@latest add alert-dialog switch` also rewrote

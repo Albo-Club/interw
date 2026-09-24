@@ -7,17 +7,21 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { TeamPicker } from '~/components/projects/TeamPicker'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from '~/components/ui/field'
 import {
   Select,
@@ -48,8 +52,10 @@ function NewProjectPage() {
   const { orgSlug } = Route.useParams()
   const navigate = useNavigate()
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
+  const me = useConvexQuery(api.users.me)
   const create = useConvexMutation(api.projects.create)
   const [submitting, setSubmitting] = useState(false)
+  const [team, setTeam] = useState<Array<Id<'users'>>>([])
 
   const schema = useMemo(
     () =>
@@ -77,6 +83,7 @@ function NewProjectPage() {
           title: value.title,
           jobTitle: value.jobTitle || undefined,
           language: value.language,
+          team,
         })
         // Straight into the wizard: a project with no questions is not yet
         // useful, and sending the recruiter back to a list would hide that.
@@ -184,6 +191,21 @@ function NewProjectPage() {
                   </Field>
                 )}
               </form.Field>
+
+              {org && (
+                <FieldSet className="gap-3">
+                  <FieldLegend variant="label" className="mb-0">
+                    {t('projects:team.label')}
+                  </FieldLegend>
+                  <FieldDescription>{t('projects:team.hint')}</FieldDescription>
+                  <TeamPicker
+                    orgId={org._id}
+                    creatorId={me?.kind === 'ready' ? me.user._id : undefined}
+                    selected={team}
+                    onChange={setTeam}
+                  />
+                </FieldSet>
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" asChild>

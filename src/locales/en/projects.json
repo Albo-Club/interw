@@ -56,7 +56,7 @@
     "archive": "Archive",
     "restore": "Restore",
     "delete": "Delete",
-    "share": "Share",
+    "team": "Team",
     "invite": "Invite candidates",
     "overview": "Overview",
     "questions": "Questions",
@@ -205,13 +205,14 @@
       "criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against."
     }
   },
-  "share": {
-    "title": "Who can see this role",
-    "subtitle": "By default everyone in your organisation can. Name people to restrict it — admins and you always keep access.",
-    "everyone": "Everyone in the organisation",
-    "restricted": "Only the people I name",
-    "save": "Save access",
-    "saved": "Access updated"
+  "team": {
+    "title": "Role team",
+    "subtitle": "The team sees this role and is emailed when a candidate's report is ready. Admins and owners see every role, but are only emailed about the ones they are on.",
+    "creator": "Creator of the role, always on the team",
+    "label": "Team",
+    "hint": "Who follows this role with you. You can change it later.",
+    "save": "Save team",
+    "saved": "Team updated"
   },
   "import": {
     "title": "Import from a job ad",
@@ -254,6 +255,8 @@
     "invalid_url": "That is not a public web address.",
     "unsupported_media_type": "That recording format is not supported.",
     "media_too_large": "That recording is too large. Keep question recordings under 100 MB.",
-    "key_mismatch": "The upload did not match what was expected. Try recording again."
+    "key_mismatch": "The upload did not match what was expected. Try recording again.",
+    "team_too_large": "A team can have at most 100 people.",
+    "not_a_member": "Someone you picked is no longer in the organisation. Reload the page and try again."
   }
 }

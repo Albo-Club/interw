@@ -280,10 +280,12 @@ is cheaper to get wrong.
 | IA7b | Import from a client-rendered board | Same, with an ad from Welcome to the Jungle, Indeed, or an ATS career page | Works. Those pages render the ad in the browser and leave nothing readable in the markup, so the draft comes from the `JobPosting` JSON-LD they publish for Google for Jobs — not from `page_too_thin` |
 | IA7c | A board that refuses to be read | Paste an ad from a site behind a bot wall | Refused with "refuses automatic reading" (`page_blocked`), never "check the link" — the link is fine, the site said no |
 | IA8 | Import SSRF guard | Paste `http://127.0.0.1:8080/`, `http://169.254.169.254/`, `http://2130706433/` and a URL that 302s to one of them | All refused as "not a public web address". See S10 and `convex/lib/safeUrl.test.ts` for the full table |
-| IA9 | Restrict a role | Share → name one colleague → Save | A different member (non-admin) no longer sees the role in the list, in search, or by URL — and gets **not found**, not "forbidden" |
+| IA9 | Role team | Create a role ticking one colleague A in **Team**, then open it as A and as another plain member B | A sees it; B does not see it in the list, in search, or by URL — and gets **not found**, not "forbidden". An admin who is not on the team still sees it. Your own row is ticked and locked ("Creator of the role") |
+| IA9b | **Team dialog keeps the team** (B8) | On that role, Team → change nothing → Save team; reopen | A is still ticked. Save stays disabled while the dialog shows its skeleton — it never opens empty |
+| IA9c | Team bound | Call `projects:setTeam` with 101 ids | Refused with `team_too_large` |
 | IA10 | Archive | Archive an active role | Becomes read-only; editing is refused; restoring returns it to **Draft**, never straight to Active |
 | IA11 | Archiving needs owner or admin | As a plain member of the org, try to archive a live role | Refused. Archiving closes the link of every candidate mid-interview at once, so it is no longer less protected than deleting an empty role |
-| IA11b | Actions follow the tier | As a plain member, open ⋯ on a role someone else created, then that role's page | Only **Edit**: no Share, Archive or Restore. On a role you created, they are shown; admins and owners see them everywhere. The server refuses the member anyway (`insufficient_role`) — this row checks the UI does not offer what will fail |
+| IA11b | Actions follow the tier | As a plain member, open ⋯ on a role someone else created, then that role's page | Only **Edit**: no Team, Archive or Restore. On a role you created, they are shown; admins and owners see them everywhere. The server refuses the member anyway (`insufficient_role`) — this row checks the UI does not offer what will fail |
 
 ### Editing a role that already has candidates
 
@@ -339,7 +341,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IC5 | Replay after killing a job | Delete the report row, re-run the chain | Produces a report again; no duplicate transcripts; no duplicate email |
 | IC6 | Malformed model output | Temporarily set `EVALUATION_MODEL` in `convex/lib/ai.ts` to a model that ignores schemas, and push | The job **fails and retries**; no partial report is written |
 | IC7 | No para-verbal | Open a report, including one generated before 2026-09-24, and its share link | No Delivery panel on either, and the rest of the report is unchanged. Quote timestamps still jump to the right moment: they are anchored against `segments.measuredSeconds`, set at transcription |
-| IC8 | Recruiter email | Check the inbox of a member of the role's org | "Report ready" with score and recommendation, and the caveat that it is automated |
+| IC8 | Recruiter email | Check the inboxes of the role's creator, of a team member, of an admin off the team and of a plain member off the team | Only the creator and the team member get "Report ready", with score and recommendation, and the caveat that it is automated. The admin sees the report in the app but is not mailed |
 | IC9 | Failed upload visible | Mark a segment `failed` by hand, open the report | That answer says the recording never reached us, explicitly as our failure |
 
 ## Interw D — Reports, sharing and decisions (10 min)
@@ -354,10 +356,11 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID6 | Expiry | Create a link, set `expiresAt` to the past | "This link has expired" |
 | ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions` on a closed role |
 | ID6c | Unresolved tokens never reach the limiter | Call `shares:recordView` with 40 random tokens | Each returns `null`; the share's `viewCount` is unchanged and no rate-limiter row is written for them — the bucket is keyed on the resolved share |
-| ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
-| ID8 | **Removal ends access** | Share a restricted role with member B, have B create another role, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed, and after re-invite does **not** see the restricted role (its share row went with the membership) |
+| ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who is not on a role's team does **not** see its candidates here |
+| ID8 | **Removal ends access** | Put member B on a role's team, have B create another role and a report share link, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed; B's share link now shows "This link was revoked" (h03); after re-invite B does **not** see the first role (the team row went with the membership) |
+| ID8b | Account deletion clears the same | Same setup, but B deletes their account | No `projectShares` row names B; B's report links are revoked |
 | ID9 | Restore is admin-tier | As a plain member who did not create it, restore an archived role | Refused (`insufficient_role`), stays archived. Owner, admin and the role's creator succeed — same tier as Archive |
-| ID10 | Deliverability respects restricted roles | As a member not named on a restricted role, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
+| ID10 | Deliverability respects role teams | As a member not on a role's team, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
 
 ## Interw E — Retention and erasure (10 min)
 

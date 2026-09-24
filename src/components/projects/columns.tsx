@@ -27,6 +27,8 @@ export type ProjectRow = {
   restricted: boolean
   sessionCount: number
   completedSessionCount: number
+  /** Archive and restore: the org's owners and admins, and the role's creator. */
+  canArchive: boolean
 }
 
 function formatDate(timestamp: number, locale: string) {
@@ -164,15 +166,19 @@ export function buildProjectColumns({
               <DropdownMenuItem onSelect={() => onShare(row.original)}>
                 {t('projects:detail.share')}
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              {row.original.status === 'archived' ? (
-                <DropdownMenuItem onSelect={() => onRestore(row.original)}>
-                  {t('projects:detail.restore')}
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onSelect={() => onArchive(row.original)}>
-                  {t('projects:detail.archive')}
-                </DropdownMenuItem>
+              {row.original.canArchive && (
+                <>
+                  <DropdownMenuSeparator />
+                  {row.original.status === 'archived' ? (
+                    <DropdownMenuItem onSelect={() => onRestore(row.original)}>
+                      {t('projects:detail.restore')}
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onSelect={() => onArchive(row.original)}>
+                      {t('projects:detail.archive')}
+                    </DropdownMenuItem>
+                  )}
+                </>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

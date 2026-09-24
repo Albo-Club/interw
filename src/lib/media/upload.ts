@@ -20,7 +20,6 @@ export type UploadProgress = {
   maxAttempts: number
   /** Bytes of this attempt that have left the browser. */
   loaded: number
-  total: number
 }
 
 export class UploadError extends Error {
@@ -66,7 +65,7 @@ export type UploadOptions = {
  * failure mode, not a cosmetic one: a 40 MB answer over 4G looks frozen, the
  * candidate reloads, and the answer is gone.
  */
-export const xhrPut: SendImpl = ({
+const xhrPut: SendImpl = ({
   url,
   body,
   contentType,
@@ -109,7 +108,7 @@ export async function uploadToSignedUrl(options: UploadOptions): Promise<void> {
   } = options
 
   const report = (phase: UploadPhase, attempt: number, loaded: number) =>
-    onProgress?.({ phase, attempt, maxAttempts, loaded, total: blob.size })
+    onProgress?.({ phase, attempt, maxAttempts, loaded })
 
   let lastError: UploadError | undefined
 

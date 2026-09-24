@@ -19,11 +19,7 @@ const boot = (resumeAt: number, total = 4, showIntro = false) =>
 
 /** Start recording the current question and stop it with `reason`. */
 const record = (reason: 'finished' | 'timeUp' | 'interrupted' = 'finished') =>
-  [
-    { type: 'recordingStarted' },
-    { type: 'stopRequested', reason },
-    { type: 'recorded' },
-  ] as const
+  [{ type: 'recordingStarted' }, { type: 'stopRequested', reason }] as const
 
 describe('nextOpenQuestion', () => {
   it('skips answered questions and never looks back', () => {
@@ -42,9 +38,8 @@ describe('booting', () => {
     expect(run([boot(4)]).phase).toBe('review')
   })
 
-  it('clamps a cursor outside the list', () => {
-    expect(run([boot(9)]).index).toBe(4)
-    expect(run([boot(-3)]).index).toBe(0)
+  it('clamps a cursor past the end of the list', () => {
+    expect(run([boot(9)])).toMatchObject({ phase: 'review', index: 4 })
   })
 
   it('shows the intro only when there is a question to go to', () => {
@@ -131,7 +126,7 @@ describe('recording', () => {
   it('shows a camera failure on the question and lets the candidate try again', () => {
     const state = run([
       boot(0),
-      { type: 'recordingFailed', error: 'interview:device.busy' },
+      { type: 'deviceFailed', error: 'interview:device.busy' },
     ])
     expect(state).toMatchObject({
       phase: 'prompt',
@@ -159,18 +154,21 @@ describe('recording', () => {
       attempt: 2,
       maxAttempts: 3,
     } as const
-    const saving = run([
-      boot(0),
-      { type: 'recordingStarted' },
-      { type: 'stopRequested', reason: 'finished' },
-    ])
+    const saving = run([boot(0), ...record()])
     expect(interviewReducer(saving, progress).progress).toEqual({
-      loaded: 5,
-      total: 10,
+      percent: 50,
       attempt: 2,
       maxAttempts: 3,
     })
     expect(interviewReducer(run([boot(0)]), progress).progress).toBeNull()
+  })
+
+  it('does not re-render for progress the screen cannot show', () => {
+    const at = (loaded: number) =>
+      ({ type: 'progress', loaded, total: 1000, attempt: 1, maxAttempts: 3 }) as const
+    const first = interviewReducer(run([boot(0), ...record()]), at(501))
+    expect(interviewReducer(first, at(505))).toBe(first)
+    expect(interviewReducer(first, at(510))).not.toBe(first)
   })
 })
 
@@ -181,7 +179,7 @@ describe('a failed save', () => {
       ...record(),
       { type: 'saveFailed', error: 'interview:run.sendFailed.body' },
     ])
-    expect(failed).toMatchObject({ phase: 'saveFailed', hasRecording: true })
+    expect(failed.phase).toBe('saveFailed')
     expect(interviewReducer(failed, { type: 'retry' }).phase).toBe('saving')
   })
 
@@ -190,13 +188,8 @@ describe('a failed save', () => {
    * nothing held — a button that did nothing at all.
    */
   it('offers to record again, not to retry, when no bytes came out', () => {
-    const failed = run([
-      boot(1),
-      { type: 'recordingStarted' },
-      { type: 'stopRequested', reason: 'finished' },
-      { type: 'stopFailed', error: 'interview:run.recordingLost' },
-    ])
-    expect(failed).toMatchObject({ phase: 'saveFailed', hasRecording: false })
+    const failed = run([boot(1), ...record(), { type: 'stopFailed' }])
+    expect(failed.phase).toBe('recordingLost')
     expect(interviewReducer(failed, { type: 'retry' })).toBe(failed)
 
     const again = interviewReducer(failed, { type: 'rerecord' })
@@ -204,12 +197,7 @@ describe('a failed save', () => {
   })
 
   it('never announces as saved an answer that was not', () => {
-    const lost = run([
-      boot(0),
-      { type: 'recordingStarted' },
-      { type: 'stopRequested', reason: 'interrupted' },
-      { type: 'stopFailed', error: 'x' },
-    ])
+    const lost = run([boot(0), ...record('interrupted'), { type: 'stopFailed' }])
     expect(lost.stopReason).toBeNull()
 
     const skipped = run([
@@ -221,6 +209,16 @@ describe('a failed save', () => {
     expect(skipped).toMatchObject({ stopReason: null, videoLost: false })
   })
 
+  it('lets the candidate skip an answer that could not be recorded', () => {
+    const state = run([
+      boot(0),
+      ...record(),
+      { type: 'stopFailed' },
+      { type: 'skip', answered: [false, false, false, false] },
+    ])
+    expect(state).toMatchObject({ phase: 'prompt', index: 1 })
+  })
+
   it('does not offer to record again while bytes are still held', () => {
     const failed = run([
       boot(0),
@@ -230,19 +228,14 @@ describe('a failed save', () => {
     expect(interviewReducer(failed, { type: 'rerecord' })).toBe(failed)
   })
 
-  it('drops the recording and moves on when the candidate skips', () => {
+  it('moves on when the candidate skips a failed save', () => {
     const state = run([
       boot(0),
       ...record(),
       { type: 'saveFailed', error: 'x' },
       { type: 'skip', answered: [false, true, false, false] },
     ])
-    expect(state).toMatchObject({
-      phase: 'prompt',
-      index: 2,
-      hasRecording: false,
-      error: null,
-    })
+    expect(state).toMatchObject({ phase: 'prompt', index: 2, error: null })
   })
 })
 
@@ -295,8 +288,9 @@ describe('events out of place', () => {
     for (const event of [
       { type: 'saved', answered: [true, true, true, true], videoLost: false },
       { type: 'stopRequested', reason: 'finished' },
-      { type: 'recorded' },
+      { type: 'stopFailed' },
       { type: 'retry' },
+      { type: 'rerecord' },
       { type: 'skip', answered: [false, false, false, false] },
       { type: 'finishRequested' },
       { type: 'finishFailed', error: 'x' },

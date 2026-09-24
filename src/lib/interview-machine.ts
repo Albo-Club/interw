@@ -1,21 +1,19 @@
 /**
  * The candidate's interview, as a pure state machine.
  *
- * This used to be eight `useState`, five `useRef` and an implicit phase spread
- * over four callbacks in the route component. Three bugs came from that shape
- * rather than from inattention: an error rendered inside a branch the finish
- * screen never reached, two resume cursors that disagreed, and a failure
- * branch that offered a retry with nothing to retry. Here every transition is
- * one line of `interviewReducer`, tested without a browser, and an event that
- * makes no sense in the current phase is ignored instead of half-applied.
+ * One state object, one case per transition, tested without a browser. An
+ * event that makes no sense in the current phase is ignored rather than
+ * half-applied: the runner's worst bugs — an error rendered in a branch the
+ * finish screen never reached, a retry offered with nothing to retry — were
+ * transitions nobody had written down.
  *
  * Side effects — the recorder, the upload, the Convex calls — stay in the
  * component. It performs them and reports what happened as events.
  *
  * Where the interview resumes is not decided here. The server derives it from
- * the segments it holds (`nextQuestionIndex` in convex/interview.ts) and this
- * machine starts from that value; moving forward only ever skips questions the
- * server says are answered.
+ * the segments it holds (`nextQuestionIndex` in convex/lib/sessionState.ts);
+ * this machine starts from that value, and moving forward only ever skips
+ * questions the server says are answered.
  */
 
 export type Phase =
@@ -26,8 +24,10 @@ export type Phase =
   | 'recording'
   /** Stopping the recorder, then uploading. */
   | 'saving'
-  /** The answer did not reach the server. */
+  /** The recording is held, and did not reach the server. */
   | 'saveFailed'
+  /** The recorder produced nothing, so there is nothing to send. */
+  | 'recordingLost'
   /** Past the last question: what is missing, and the finish button. */
   | 'review'
   | 'finishing'
@@ -41,18 +41,11 @@ export type InterviewState = {
   /** Position in the question list; `total` once past the last question. */
   index: number
   total: number
-  /** A finished recording is held, so "Try again" has bytes to re-send. */
-  hasRecording: boolean
   /** An i18n key, resolved by the screen. */
   error: string | null
-  /** Bytes sent of the current answer, across its audio and video files,
-   *  and which attempt this is when the connection forced a retry. */
-  progress: {
-    loaded: number
-    total: number
-    attempt: number
-    maxAttempts: number
-  } | null
+  /** How much of the current answer is sent, and which attempt this is when
+   *  the connection forced a retry. */
+  progress: { percent: number; attempt: number; maxAttempts: number } | null
   stopReason: StopReason | null
   /** The last answer was saved as audio only: its video did not arrive. */
   videoLost: boolean
@@ -67,12 +60,11 @@ export type InterviewEvent =
       showIntro: boolean
     }
   | { type: 'introDone' }
+  /** The camera or microphone could not be opened, or the recorder not started. */
   | { type: 'deviceFailed'; error: string }
   | { type: 'recordingStarted' }
-  | { type: 'recordingFailed'; error: string }
   | { type: 'stopRequested'; reason: StopReason }
-  | { type: 'recorded' }
-  | { type: 'stopFailed'; error: string }
+  | { type: 'stopFailed' }
   | {
       type: 'progress'
       loaded: number
@@ -98,7 +90,6 @@ export const initialInterviewState: InterviewState = {
   phase: 'loading',
   index: 0,
   total: 0,
-  hasRecording: false,
   error: null,
   progress: null,
   stopReason: null,
@@ -125,10 +116,12 @@ function moveTo(state: InterviewState, index: number): InterviewState {
     ...state,
     index,
     phase: index >= state.total ? 'review' : 'prompt',
-    hasRecording: false,
     progress: null,
   }
 }
+
+/** Nothing about the previous answer carries over to a question it did not save. */
+const cleared = { error: null, stopReason: null, videoLost: false } as const
 
 export function interviewReducer(
   state: InterviewState,
@@ -139,7 +132,7 @@ export function interviewReducer(
       if (state.phase !== 'loading') return state
       const booted = moveTo(
         { ...state, total: event.total },
-        Math.min(Math.max(0, event.resumeAt), event.total),
+        Math.min(event.resumeAt, event.total),
       )
       return event.showIntro && booted.phase === 'prompt'
         ? { ...booted, phase: 'intro' }
@@ -149,23 +142,16 @@ export function interviewReducer(
     case 'introDone':
       return state.phase === 'intro' ? { ...state, phase: 'prompt' } : state
 
-    // A camera that could not be opened is shown on the question screen, and
-    // "Start my answer" tries again; it is not a reason to leave the page.
+    // Shown on the question screen, and "Start my answer" tries again; a
+    // camera that could not be opened is not a reason to leave the page.
     case 'deviceFailed':
-    case 'recordingFailed':
       return state.phase === 'intro' || state.phase === 'prompt'
         ? { ...state, error: event.error }
         : state
 
     case 'recordingStarted':
       return state.phase === 'prompt'
-        ? {
-            ...state,
-            phase: 'recording',
-            error: null,
-            stopReason: null,
-            videoLost: false,
-          }
+        ? { ...state, ...cleared, phase: 'recording' }
         : state
 
     case 'stopRequested':
@@ -178,26 +164,31 @@ export function interviewReducer(
           }
         : state
 
-    case 'recorded':
-      return state.phase === 'saving' ? { ...state, hasRecording: true } : state
-
-    // No bytes came out of the recorder. The screen must still offer a way
-    // on — recording the answer again — rather than a retry of nothing.
+    // No bytes came out of the recorder. The screen offers to record the
+    // answer again — never a retry of nothing.
     case 'stopFailed':
       return state.phase === 'saving'
-        ? {
-            ...state,
-            phase: 'saveFailed',
-            hasRecording: false,
-            error: event.error,
-            stopReason: null,
-          }
+        ? { ...state, ...cleared, phase: 'recordingLost' }
         : state
 
+    // Upload progress fires every few dozen milliseconds; the screen shows a
+    // whole percentage, so anything finer would re-render it for nothing.
     case 'progress': {
       if (state.phase !== 'saving') return state
-      const { loaded, total, attempt, maxAttempts } = event
-      return { ...state, progress: { loaded, total, attempt, maxAttempts } }
+      const percent = Math.floor(
+        (event.loaded / Math.max(1, event.total)) * 100,
+      )
+      return state.progress?.percent === percent &&
+        state.progress.attempt === event.attempt
+        ? state
+        : {
+            ...state,
+            progress: {
+              percent,
+              attempt: event.attempt,
+              maxAttempts: event.maxAttempts,
+            },
+          }
     }
 
     case 'saved': {
@@ -220,23 +211,21 @@ export function interviewReducer(
         : state
 
     case 'retry':
-      return state.phase === 'saveFailed' && state.hasRecording
+      return state.phase === 'saveFailed'
         ? { ...state, phase: 'saving', error: null, progress: null }
         : state
 
     case 'rerecord':
-      return state.phase === 'saveFailed' && !state.hasRecording
-        ? { ...state, phase: 'prompt', error: null, progress: null }
+      return state.phase === 'recordingLost'
+        ? { ...state, phase: 'prompt' }
         : state
 
     // Nothing was saved, so nothing may be announced as saved.
     case 'skip':
-      return state.phase === 'saveFailed'
+      return state.phase === 'saveFailed' || state.phase === 'recordingLost'
         ? {
             ...moveTo(state, nextOpenQuestion(event.answered, state.index)),
-            error: null,
-            stopReason: null,
-            videoLost: false,
+            ...cleared,
           }
         : state
 
@@ -244,12 +233,7 @@ export function interviewReducer(
       return (state.phase === 'review' || state.phase === 'finishFailed') &&
         event.index >= 0 &&
         event.index < state.total
-        ? {
-            ...moveTo(state, event.index),
-            error: null,
-            stopReason: null,
-            videoLost: false,
-          }
+        ? { ...moveTo(state, event.index), ...cleared }
         : state
 
     case 'finishRequested':

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   useConvexAction,
@@ -7,15 +14,16 @@ import {
 } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { CircleAlert, Mic, Play, Square, WifiOff } from 'lucide-react'
+import { CircleAlert, Play, Square, WifiOff } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
+import type { FunctionArgs } from 'convex/server'
 import type { Id } from '../../../../convex/_generated/dataModel'
 import type { Recording } from '~/lib/media/recorder'
+import type { UploadProgress } from '~/lib/media/upload'
 import type { InterviewState, StopReason } from '~/lib/interview-machine'
 import { fireAndForget } from '~/lib/fire-and-forget'
-import { convexErrorCode } from '~/lib/convex-errors'
-import { classifyMediaError, openInterviewStream } from '~/lib/media/devices'
+import { openInterviewStream } from '~/lib/media/devices'
 import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
 import { uploadToSignedUrl } from '~/lib/media/upload'
 import {
@@ -26,39 +34,25 @@ import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
-import {
-  CandidateShell,
-  candidateAction,
-} from '~/components/candidate/CandidateShell'
-import { CandidateError } from '~/components/candidate/CandidateError'
+import { CandidateShell } from '~/components/candidate/CandidateShell'
+import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
-import { cn } from '~/lib/utils'
 
 type DeviceChoice = { camera?: string; mic?: string }
+type EventKind = FunctionArgs<typeof api.interview.logEvent>['kind']
 
 export const Route = createFileRoute('/s/$token/interview')({
-  // The devices picked on the check screen. They travel in the URL because
-  // the check and the interview are two routes, and without them the
-  // interview reopened the system defaults — recording on the microphone
-  // the candidate had just rejected.
+  // The devices picked on the check screen; see `openInterviewStream`.
   validateSearch: (search: Record<string, unknown>): DeviceChoice => ({
     camera: typeof search.camera === 'string' ? search.camera : undefined,
     mic: typeof search.mic === 'string' ? search.mic : undefined,
   }),
   component: InterviewRunner,
-  errorComponent: CandidateError,
 })
 
 /** The countdown appears for the last 30 seconds, never before. */
 const COUNTDOWN_THRESHOLD_SECONDS = 30
-
-/** The i18n key for a failure, whichever layer it came from. */
-function errorKey(cause: unknown): string {
-  const media = classifyMediaError(cause)
-  if (media) return `interview:device.${media}`
-  const code = convexErrorCode(cause)
-  return code ? `interview:errors.${code}` : 'interview:errors.unexpected'
-}
 
 const detail = (cause: unknown) =>
   cause instanceof Error ? cause.message : 'unknown'
@@ -81,8 +75,8 @@ function InterviewRunner() {
   const promptMedia = useConvexAction(api.interview.promptMediaUrls)
 
   const [state, dispatch] = useReducer(interviewReducer, initialInterviewState)
-  // A boot failure goes to the route's error boundary, which knows how to
-  // say "this interview has closed" as well as "something broke".
+  // A boot failure goes to the error boundary, which knows how to say "this
+  // interview has closed" as well as "something broke".
   const [fatal, setFatal] = useState<unknown>(null)
   const [elapsed, setElapsed] = useState(0)
   const [online, setOnline] = useState(true)
@@ -103,8 +97,22 @@ function InterviewRunner() {
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bootedRef = useRef(false)
 
-  const questions = data?.questions ?? []
+  const questions = useMemo(() => data?.questions ?? [], [data])
+  const answered = useMemo(
+    () => questions.map((question) => question.answered),
+    [questions],
+  )
   const current = questions.at(state.index)
+
+  /** Candidate-side diagnostics: never allowed to interrupt the interview. */
+  const log = useCallback(
+    (kind: EventKind, eventDetail?: string) =>
+      fireAndForget(
+        logEvent({ token, kind, detail: eventDetail }),
+        'candidate event log',
+      ),
+    [logEvent, token],
+  )
 
   /* ── Connectivity. A candidate who goes offline mid-answer must be told,
         while it is happening, not after they press finish. ───────────────── */
@@ -112,7 +120,7 @@ function InterviewRunner() {
     const goOnline = () => setOnline(true)
     const goOffline = () => {
       setOnline(false)
-      fireAndForget(logEvent({ token, kind: 'network_degraded' }), 'candidate event log')
+      log('network_degraded')
     }
     setOnline(navigator.onLine)
     window.addEventListener('online', goOnline)
@@ -121,7 +129,7 @@ function InterviewRunner() {
       window.removeEventListener('online', goOnline)
       window.removeEventListener('offline', goOffline)
     }
-  }, [logEvent, token])
+  }, [log])
 
   /* ── Closing the tab mid-upload loses the answer, so say so. ───────────── */
   useEffect(() => {
@@ -152,9 +160,9 @@ function InterviewRunner() {
   }, [devices.camera, devices.mic])
 
   // The preview is attached whenever both the stream and the element exist,
-  // whichever arrives last. It used to be attached once, at acquisition —
-  // which happened while the skeleton was on screen and the element did not
-  // exist yet, so the candidate recorded their whole interview to a black box.
+  // whichever arrives last. Attached once at acquisition, it missed the
+  // element — the stream opens while the skeleton is still on screen — and
+  // the candidate recorded their whole interview to a black box.
   useEffect(() => {
     if (!preview || !stream) return
     preview.srcObject = stream
@@ -169,21 +177,33 @@ function InterviewRunner() {
     }
   }, [])
 
-  /* ── Boot, once: mark the session started, resolve the question media, and
-        start where the server says. The client has no resume logic. ─────── */
+  /* ── Boot, once: mark the session started, sign the question media, open
+        the camera — all at once — and start where the server says. The
+        client has no resume logic. ─────────────────────────────────────── */
   useEffect(() => {
     if (!data || bootedRef.current) return
     bootedRef.current = true
+    const needsMedia =
+      data.hasIntroMedia || data.questions.some((question) => question.hasMedia)
+    // Reported once booted, into a phase that shows it.
+    const deviceFailure = openStream().then(
+      () => null,
+      (cause: unknown) => cause,
+    )
     void (async () => {
       try {
-        await start({ token })
-        const urls = await promptMedia({ token })
-        setMedia({
-          intro: urls.intro,
-          questions: Object.fromEntries(
-            urls.questions.map((q) => [q.questionId, q.url]),
-          ),
-        })
+        const [, urls] = await Promise.all([
+          start({ token }),
+          needsMedia ? promptMedia({ token }) : null,
+        ])
+        if (urls) {
+          setMedia({
+            intro: urls.intro,
+            questions: Object.fromEntries(
+              urls.questions.map((q) => [q.questionId, q.url]),
+            ),
+          })
+        }
       } catch (cause) {
         setFatal(cause)
         return
@@ -195,18 +215,12 @@ function InterviewRunner() {
         showIntro:
           data.introMode !== 'none' && data.questions.every((q) => !q.answered),
       })
-      try {
-        await openStream()
-      } catch (cause) {
-        dispatch({ type: 'deviceFailed', error: errorKey(cause) })
+      const failure = await deviceFailure
+      if (failure) {
+        dispatch({ type: 'deviceFailed', error: candidateErrorKey(failure) })
       }
     })()
   }, [data, start, promptMedia, openStream, token])
-
-  const answered = useCallback(
-    () => questions.map((question) => question.answered),
-    [questions],
-  )
 
   /** Send (or re-send) the recording held for `question`. */
   const send = useCallback(
@@ -230,16 +244,31 @@ function InterviewRunner() {
                 }
               : undefined,
         })
+        // An earlier attempt landed and only its response was lost.
+        if (slot.status === 'answered') {
+          recordingRef.current = null
+          dispatch({ type: 'saved', answered, videoLost: false })
+          return
+        }
         segmentId = slot.segmentId
         const video = slot.video && recording.video ? recording.video : null
         const total = recording.audio.size + (video?.size ?? 0)
+        const progressFrom =
+          (offset: number) =>
+          ({ loaded, attempt, maxAttempts }: UploadProgress) =>
+            dispatch({
+              type: 'progress',
+              loaded: offset + loaded,
+              total,
+              attempt,
+              maxAttempts,
+            })
 
         await uploadToSignedUrl({
           url: slot.audio.uploadUrl,
           blob: recording.audio,
           contentType: slot.audio.contentType,
-          onProgress: ({ loaded, attempt, maxAttempts }) =>
-            dispatch({ type: 'progress', loaded, total, attempt, maxAttempts }),
+          onProgress: progressFrom(0),
         })
         // The answer is the audio — it is what gets transcribed — so it is
         // saved the moment the audio arrives. The video enriches it: losing
@@ -257,38 +286,17 @@ function InterviewRunner() {
               url: slot.video.uploadUrl,
               blob: video,
               contentType: slot.video.contentType,
-              onProgress: ({ loaded, attempt, maxAttempts }) =>
-                dispatch({
-                  type: 'progress',
-                  loaded: recording.audio.size + loaded,
-                  total,
-                  attempt,
-                  maxAttempts,
-                }),
+              onProgress: progressFrom(recording.audio.size),
             })
           } catch (cause) {
             videoLost = true
-            fireAndForget(
-              logEvent({
-                token,
-                kind: 'upload_failed',
-                detail: `video: ${detail(cause)}`,
-              }),
-              'candidate event log',
-            )
+            log('upload_failed', `video: ${detail(cause)}`)
           }
         }
         recordingRef.current = null
-        dispatch({ type: 'saved', answered: answered(), videoLost })
+        dispatch({ type: 'saved', answered, videoLost })
       } catch (cause) {
-        // The server already holds this answer: an earlier attempt landed
-        // and only its response was lost. That is a success.
-        if (convexErrorCode(cause) === 'already_answered') {
-          recordingRef.current = null
-          dispatch({ type: 'saved', answered: answered(), videoLost: false })
-          return
-        }
-        dispatch({ type: 'saveFailed', error: errorKey(cause) })
+        dispatch({ type: 'saveFailed', error: candidateErrorKey(cause) })
         // Recorded against the reserved segment as well as the event log, so
         // a recruiter looking at a short interview can see that an answer was
         // attempted and did not arrive, rather than assume it was skipped.
@@ -298,13 +306,10 @@ function InterviewRunner() {
             'segment failure report',
           )
         }
-        fireAndForget(
-          logEvent({ token, kind: 'upload_failed', detail: detail(cause) }),
-          'candidate event log',
-        )
+        log('upload_failed', detail(cause))
       }
     },
-    [requestUpload, markUploaded, markFailed, logEvent, answered, token],
+    [requestUpload, markUploaded, markFailed, log, answered, token],
   )
 
   const stopAndSave = useCallback(
@@ -318,21 +323,13 @@ function InterviewRunner() {
       try {
         recordingRef.current = await recorder.stop()
       } catch (cause) {
-        dispatch({ type: 'stopFailed', error: 'interview:run.recordingLost.body' })
-        fireAndForget(
-          logEvent({
-            token,
-            kind: 'upload_failed',
-            detail: `recorder: ${detail(cause)}`,
-          }),
-          'candidate event log',
-        )
+        dispatch({ type: 'stopFailed' })
+        log('upload_failed', `recorder: ${detail(cause)}`)
         return
       }
-      dispatch({ type: 'recorded' })
       await send(current)
     },
-    [current, send, logEvent, token],
+    [current, send, log],
   )
 
   /* ── A phone that goes to the background, or a headset unplugged, keeps
@@ -366,7 +363,7 @@ function InterviewRunner() {
       recorderRef.current = recorder
       setElapsed(0)
       dispatch({ type: 'recordingStarted' })
-      fireAndForget(logEvent({ token, kind: 'recording_started' }), 'candidate event log')
+      log('recording_started')
 
       // Hard stop at the limit the recruiter set. Without silence detection in
       // scope, this and the finish button are the only two ways an answer ends.
@@ -375,7 +372,7 @@ function InterviewRunner() {
         current.maxResponseSeconds * 1000,
       )
     } catch (cause) {
-      dispatch({ type: 'recordingFailed', error: errorKey(cause) })
+      dispatch({ type: 'deviceFailed', error: candidateErrorKey(cause) })
     }
   }
 
@@ -387,7 +384,7 @@ function InterviewRunner() {
 
   const skip = () => {
     recordingRef.current = null
-    dispatch({ type: 'skip', answered: answered() })
+    dispatch({ type: 'skip', answered })
   }
 
   const finishInterview = async () => {
@@ -397,7 +394,7 @@ function InterviewRunner() {
       streamRef.current?.getTracks().forEach((track) => track.stop())
       await navigate({ to: '/s/$token/done', params: { token } })
     } catch (cause) {
-      dispatch({ type: 'finishFailed', error: errorKey(cause) })
+      dispatch({ type: 'finishFailed', error: candidateErrorKey(cause) })
     }
   }
 
@@ -432,11 +429,7 @@ function InterviewRunner() {
           ) : (
             <p className="max-w-prose leading-relaxed">{data.introText}</p>
           )}
-          <Button
-            size="lg"
-            className={candidateAction}
-            onClick={() => dispatch({ type: 'introDone' })}
-          >
+          <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
             {t('interview:run.intro.continue')}
           </Button>
         </div>
@@ -448,6 +441,13 @@ function InterviewRunner() {
     state.phase === 'review' ||
     state.phase === 'finishing' ||
     state.phase === 'finishFailed'
+  const remaining = current
+    ? Math.max(0, current.maxResponseSeconds - elapsed)
+    : 0
+  const countdown =
+    state.phase === 'recording' && remaining <= COUNTDOWN_THRESHOLD_SECONDS
+      ? remaining
+      : null
 
   return (
     <CandidateShell width="wide">
@@ -466,9 +466,7 @@ function InterviewRunner() {
         {inReview ? (
           <ReviewScreen
             state={state}
-            missing={questions.flatMap((question, index) =>
-              question.answered ? [] : [index],
-            )}
+            missing={answered.flatMap((done, index) => (done ? [] : [index]))}
             onRevisit={(index) => dispatch({ type: 'revisit', index })}
             onFinish={() => void finishInterview()}
           />
@@ -511,7 +509,7 @@ function InterviewRunner() {
                 ref={setPreview}
                 audioOnly={audioOnly}
                 recording={state.phase === 'recording'}
-                remaining={Math.max(0, current.maxResponseSeconds - elapsed)}
+                countdown={countdown}
               />
 
               {state.error && state.phase === 'prompt' && (
@@ -525,9 +523,10 @@ function InterviewRunner() {
                 </Alert>
               )}
 
-              {state.phase === 'saveFailed' && (
+              {(state.phase === 'saveFailed' ||
+                state.phase === 'recordingLost') && (
                 <SaveFailed
-                  hasRecording={state.hasRecording}
+                  lost={state.phase === 'recordingLost'}
                   onRetry={retry}
                   onRerecord={() => dispatch({ type: 'rerecord' })}
                   onSkip={skip}
@@ -540,18 +539,13 @@ function InterviewRunner() {
                   it is always in the same place and never below the fold. */}
               <div className="bg-background sticky bottom-0 flex flex-wrap gap-3 border-t py-4">
                 {state.phase === 'recording' ? (
-                  <Button
-                    size="lg"
-                    className={candidateAction}
-                    onClick={() => void stopAndSave('finished')}
-                  >
+                  <Button size="lg" onClick={() => void stopAndSave('finished')}>
                     <Square className="size-4" />
                     {t('interview:run.finishAnswer')}
                   </Button>
                 ) : (
                   <Button
                     size="lg"
-                    className={candidateAction}
                     onClick={() => void beginRecording()}
                     disabled={state.phase !== 'prompt'}
                   >
@@ -559,79 +553,17 @@ function InterviewRunner() {
                     {t('interview:run.startAnswer')}
                   </Button>
                 )}
-                {state.phase === 'recording' &&
-                  current.maxResponseSeconds - elapsed <=
-                    COUNTDOWN_THRESHOLD_SECONDS && (
-                    <p className="text-warning-strong self-center text-sm tabular-nums">
-                      {t('interview:run.timeUpSoon', {
-                        seconds: Math.max(
-                          0,
-                          current.maxResponseSeconds - elapsed,
-                        ),
-                      })}
-                    </p>
-                  )}
+                {countdown !== null && (
+                  <p className="text-warning-strong self-center text-sm tabular-nums">
+                    {t('interview:run.timeUpSoon', { seconds: countdown })}
+                  </p>
+                )}
               </div>
             </>
           )
         )}
       </div>
     </CandidateShell>
-  )
-}
-
-/**
- * Portrait on a phone, landscape from `sm` up: a phone held upright gives a
- * portrait stream, and a 16:9 box cropped the candidate to a strip of face —
- * the only feedback they have on their framing.
- */
-function CameraPreview({
-  ref,
-  audioOnly,
-  recording,
-  remaining,
-}: {
-  ref: (element: HTMLVideoElement | null) => void
-  audioOnly: boolean
-  recording: boolean
-  remaining: number
-}) {
-  const { t } = useTranslation('interview')
-  return (
-    <div
-      className={cn(
-        'bg-muted relative aspect-[3/4] w-full overflow-hidden rounded-lg sm:aspect-video',
-        recording && 'ring-destructive ring-2',
-      )}
-    >
-      {audioOnly ? (
-        <div className="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 p-6 text-center text-sm">
-          <Mic className="size-8" />
-          <p className="max-w-sm leading-relaxed">{t('run.audioOnly')}</p>
-        </div>
-      ) : (
-        <video
-          ref={ref}
-          muted
-          playsInline
-          className="size-full scale-x-[-1] object-cover"
-        />
-      )}
-      {recording && (
-        <div className="bg-destructive text-destructive-foreground absolute top-3 left-3 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium">
-          {/* The dot pulses to say "live". It stops under
-              prefers-reduced-motion — a candidate is looking at this screen
-              for minutes, and the badge still reads as recording without it. */}
-          <span className="size-2 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
-          {t('run.recording')}
-        </div>
-      )}
-      {recording && remaining <= COUNTDOWN_THRESHOLD_SECONDS && (
-        <div className="bg-warning text-warning-foreground absolute top-3 right-3 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums">
-          {t('run.timeLeft', { seconds: remaining })}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -679,9 +611,7 @@ function LastAnswerNotice({ state }: { state: InterviewState }) {
 function Saving({ state }: { state: InterviewState }) {
   const { t } = useTranslation('interview')
   const { progress } = state
-  const percent = progress
-    ? Math.round((progress.loaded / Math.max(1, progress.total)) * 100)
-    : 0
+  const percent = progress?.percent ?? 0
   return (
     <Alert>
       <AlertTitle>
@@ -712,18 +642,18 @@ function Saving({ state }: { state: InterviewState }) {
  * retry of nothing.
  */
 function SaveFailed({
-  hasRecording,
+  lost,
   onRetry,
   onRerecord,
   onSkip,
 }: {
-  hasRecording: boolean
+  lost: boolean
   onRetry: () => void
   onRerecord: () => void
   onSkip: () => void
 }) {
   const { t } = useTranslation('interview')
-  const copy = hasRecording ? 'run.sendFailed' : 'run.recordingLost'
+  const copy = lost ? 'run.recordingLost' : 'run.sendFailed'
   return (
     <Alert variant="destructive">
       <CircleAlert className="size-4" />
@@ -731,21 +661,10 @@ function SaveFailed({
       <AlertDescription className="space-y-3">
         <p>{t(`${copy}.body`)}</p>
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="lg"
-            className={candidateAction}
-            onClick={hasRecording ? onRetry : onRerecord}
-          >
-            {hasRecording
-              ? t('run.sendFailed.retry')
-              : t('run.recordingLost.rerecord')}
+          <Button size="lg" onClick={lost ? onRerecord : onRetry}>
+            {lost ? t('run.recordingLost.rerecord') : t('run.sendFailed.retry')}
           </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            className={candidateAction}
-            onClick={onSkip}
-          >
+          <Button size="lg" variant="outline" onClick={onSkip}>
             {t('run.sendFailed.skip')}
           </Button>
         </div>
@@ -796,7 +715,6 @@ function ReviewScreen({
                 </span>
                 <Button
                   variant="outline"
-                  className={candidateAction}
                   onClick={() => onRevisit(index)}
                   disabled={state.phase === 'finishing'}
                 >
@@ -816,17 +734,14 @@ function ReviewScreen({
         <Alert variant="destructive">
           <CircleAlert className="size-4" />
           <AlertDescription>
-            {t(state.error, { defaultValue: t('errors.unexpected') })}
-          </AlertDescription>
+                    {t(state.error, {
+                      defaultValue: t('interview:errors.unexpected'),
+                    })}
+                  </AlertDescription>
         </Alert>
       )}
 
-      <Button
-        size="lg"
-        className={candidateAction}
-        onClick={onFinish}
-        disabled={state.phase === 'finishing'}
-      >
+      <Button size="lg" onClick={onFinish} disabled={state.phase === 'finishing'}>
         {state.phase === 'finishing'
           ? t('run.finishing')
           : t('run.finishInterview')}

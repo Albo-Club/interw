@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateSessionGate, nextQuestionIndex } from './sessionState'
+import {
+  answeredQuestionIds,
+  evaluateSessionGate,
+  nextQuestionIndex,
+} from './sessionState'
 import type { ProjectLike, SessionLike } from './sessionState'
 
 const NOW = 1_700_000_000_000
@@ -94,10 +98,12 @@ describe('nextQuestionIndex', () => {
     questionId,
     uploadState,
   })
+  const next = (segments: Array<ReturnType<typeof segment>>) =>
+    nextQuestionIndex(ids, answeredQuestionIds(segments))
 
   it('is the first question without a saved answer', () => {
     expect(
-      nextQuestionIndex(ids, [
+      next([
         segment('q0', 'uploaded'),
         segment('q1', 'failed'),
         segment('q2', 'uploaded'),
@@ -106,15 +112,10 @@ describe('nextQuestionIndex', () => {
   })
 
   it('does not count a pending or failed upload as an answer', () => {
-    expect(nextQuestionIndex(ids, [segment('q0', 'pending')])).toBe(0)
+    expect(next([segment('q0', 'pending')])).toBe(0)
   })
 
   it('is past the end once every question is answered', () => {
-    expect(
-      nextQuestionIndex(
-        ids,
-        ids.map((id) => segment(id, 'uploaded')),
-      ),
-    ).toBe(4)
+    expect(next(ids.map((id) => segment(id, 'uploaded')))).toBe(4)
   })
 })

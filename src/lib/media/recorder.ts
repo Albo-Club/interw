@@ -181,17 +181,15 @@ export class SegmentRecorder {
     // nothing.
     if (audioBlob.size === 0) throw new Error('empty recording')
 
-    const hasVideo =
-      video.status === 'fulfilled' &&
-      this.videoChunks.length > 0 &&
-      this.support.video !== null
+    const videoType =
+      video.status === 'fulfilled' && this.videoChunks.length > 0
+        ? this.support.video
+        : null
     return {
       audio: audioBlob,
       audioMimeType: this.support.audio,
-      video: hasVideo
-        ? new Blob(this.videoChunks, { type: this.support.video ?? undefined })
-        : null,
-      videoMimeType: hasVideo ? this.support.video : null,
+      video: videoType ? new Blob(this.videoChunks, { type: videoType }) : null,
+      videoMimeType: videoType,
       durationSeconds: Math.round(durationSeconds),
     }
   }

@@ -54,11 +54,11 @@ describe('uploadToSignedUrl', () => {
       return ok()
     })
     await promise
-    expect(progress.map((p) => [p.phase, p.loaded, p.total])).toEqual([
-      ['uploading', 0, 10],
-      ['uploading', 4, 10],
-      ['uploading', 10, 10],
-      ['done', 10, 10],
+    expect(progress.map((p) => [p.phase, p.loaded])).toEqual([
+      ['uploading', 0],
+      ['uploading', 4],
+      ['uploading', 10],
+      ['done', 10],
     ])
   })
 

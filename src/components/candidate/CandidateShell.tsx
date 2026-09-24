@@ -5,11 +5,14 @@ import type { ReactNode } from 'react'
 import { cn } from '~/lib/utils'
 
 /**
- * For every button a candidate presses. `lg` is 40 px and `sm` 32 px, and the
- * two smallest used to be "Try again" and "Skip" — the buttons that decide
- * whether an answer is saved. A thumb needs 44 px, and no double-tap zoom.
+ * Every button a candidate presses is at least 44 px tall and ignores
+ * double-tap zoom. Set once on the frame rather than button by button: the
+ * two smallest buttons on the surface used to be "Try again" and "Skip" — the
+ * ones that decide whether an answer is saved. Anything rendered outside the
+ * frame, such as a dialog's portal, takes the same class.
  */
-export const candidateAction = 'min-h-11 touch-manipulation'
+export const candidateTouchTargets =
+  'touch-manipulation [&_[data-slot=button]]:min-h-11'
 
 /**
  * The frame every candidate screen sits in.
@@ -33,7 +36,12 @@ export function CandidateShell({
 }) {
   const { t } = useTranslation('interview')
   return (
-    <div className="bg-background flex min-h-svh flex-col">
+    <div
+      className={cn(
+        'bg-background flex min-h-svh flex-col',
+        candidateTouchTargets,
+      )}
+    >
       <header className="border-b">
         <div
           className={cn(

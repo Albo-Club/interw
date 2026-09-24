@@ -13,6 +13,9 @@
  * who cannot guess 32 bytes in the first place.
  */
 
+import type { GenericQueryCtx } from 'convex/server'
+import type { DataModel, Doc } from '../_generated/dataModel'
+
 export type SessionGateState =
   | 'ready'
   | 'resumable'
@@ -79,6 +82,17 @@ export function evaluateSessionGate({
   }
 }
 
+/** By id, never by index: `orderIndex` is a display order, the id is the question. */
+export function answeredQuestionIds(
+  segments: ReadonlyArray<{ questionId: string; uploadState: string }>,
+): Set<string> {
+  return new Set(
+    segments
+      .filter((segment) => segment.uploadState === 'uploaded')
+      .map((segment) => segment.questionId),
+  )
+}
+
 /**
  * Where the interview picks up: the first question, in order, that has no
  * answer on the server. The only resume cursor there is.
@@ -91,20 +105,37 @@ export function evaluateSessionGate({
  */
 export function nextQuestionIndex(
   questionIds: ReadonlyArray<string>,
-  segments: ReadonlyArray<{ questionId: string; uploadState: string }>,
+  answered: ReadonlySet<string>,
 ): number {
-  const answered = answeredQuestionIds(segments)
   const index = questionIds.findIndex((id) => !answered.has(id))
   return index === -1 ? questionIds.length : index
 }
 
-/** By id, never by index: `orderIndex` is a display order, the id is the question. */
-export function answeredQuestionIds(
-  segments: ReadonlyArray<{ questionId: string; uploadState: string }>,
-): Set<string> {
-  return new Set(
-    segments
-      .filter((segment) => segment.uploadState === 'uploaded')
-      .map((segment) => segment.questionId),
-  )
+/**
+ * A session's position in its role: the questions in order, which ones the
+ * server holds an answer for, and where to pick up. The welcome screen and the
+ * runner both read it from here — the one read in this module, kept beside the
+ * rule it feeds so the two screens cannot compute it differently.
+ */
+export async function loadProgress(
+  ctx: GenericQueryCtx<DataModel>,
+  session: Doc<'sessions'>,
+) {
+  const questions = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', session.projectId))
+    .collect()
+  const segments = await ctx.db
+    .query('segments')
+    .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+    .collect()
+  const answered = answeredQuestionIds(segments)
+  return {
+    questions,
+    answered,
+    nextQuestionIndex: nextQuestionIndex(
+      questions.map((question) => question._id),
+      answered,
+    ),
+  }
 }

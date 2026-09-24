@@ -27,12 +27,8 @@ import {
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
-import {
-  answeredQuestionIds,
-  evaluateSessionGate,
-  nextQuestionIndex,
-} from './lib/sessionState'
-import { generateToken, looksLikeToken } from './lib/tokens'
+import { evaluateSessionGate, loadProgress } from './lib/sessionState'
+import { looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
   presignGet,
@@ -116,25 +112,14 @@ export const questions = query({
       token,
       effectiveNow(now),
     )
-    const rows = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', project._id))
-      .collect()
-    const segments = await ctx.db
-      .query('segments')
-      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
-      .collect()
-    const answered = answeredQuestionIds(segments)
+    const progress = await loadProgress(ctx, session)
 
     return {
-      questions: rows.map((question) => ({
+      questions: progress.questions.map((question) => ({
         ...toCandidateQuestionView(question),
-        answered: answered.has(question._id),
+        answered: progress.answered.has(question._id),
       })),
-      nextQuestionIndex: nextQuestionIndex(
-        rows.map((question) => question._id),
-        segments,
-      ),
+      nextQuestionIndex: progress.nextQuestionIndex,
       language: project.language,
       introMode: project.introMode,
       introText: project.introText ?? null,
@@ -248,9 +233,11 @@ function validateMedia(
  *
  * Re-requesting the same question replaces the reservation in place, which is
  * what makes a retry after a dropped connection safe — unless the answer is
- * already saved. A candidate gets one attempt, and the old runner used to walk
- * into a saved answer after a resume and record over it under the same key.
- * The client treats `already_answered` as "saved" and moves on.
+ * already saved. A candidate gets one attempt: an answer the server holds is
+ * never reserved again, so it cannot be recorded over. That is an outcome,
+ * not an error — typically an earlier attempt landed and only its response
+ * was lost — so it comes back as `answered`, like `finish`'s
+ * `alreadyCompleted`.
  */
 export const reserveSegment = internalMutation({
   args: {
@@ -308,9 +295,7 @@ export const reserveSegment = internalMutation({
         q.eq('sessionId', session._id).eq('questionIndex', questionIndex),
       )
       .unique()
-    if (existing?.uploadState === 'uploaded') {
-      throw new ConvexError('already_answered')
-    }
+    if (existing?.uploadState === 'uploaded') return { status: 'answered' as const }
 
     const fields = {
       audioKey,
@@ -350,6 +335,7 @@ export const reserveSegment = internalMutation({
 
     await ctx.db.patch('sessions', session._id, { lastActivityAt: now })
     return {
+      status: 'reserved' as const,
       segmentId,
       audio: { key: audioKey, contentType: audioMedia.contentType },
       video: videoSlot,
@@ -369,13 +355,19 @@ export const requestSegmentUpload = action({
   handler: async (
     ctx,
     args,
-  ): Promise<{
-    segmentId: Id<'segments'>
-    audio: { uploadUrl: string; contentType: string }
-    video: { uploadUrl: string; contentType: string } | null
-  }> => {
+  ): Promise<
+    | { status: 'answered' }
+    | {
+        status: 'reserved'
+        segmentId: Id<'segments'>
+        audio: { uploadUrl: string; contentType: string }
+        video: { uploadUrl: string; contentType: string } | null
+      }
+  > => {
     const slot = await ctx.runMutation(internal.interview.reserveSegment, args)
+    if (slot.status === 'answered') return slot
     return {
+      status: 'reserved',
       segmentId: slot.segmentId,
       audio: {
         uploadUrl: await presignPut(
@@ -554,9 +546,10 @@ const COMPLETED_TEMPLATE = 'candidate-completed'
  * lets them erase it later — the data page, which until now they could only
  * reach from the screen they had just closed.
  *
- * Scheduled by `finish` rather than sent inline, so a provider outage cannot
- * fail the transaction that completes the interview. Idempotent on the
- * session's own `emailLog` rows: a retried job must not mail twice.
+ * Its own scheduled job rather than part of `finish`, so nothing about the
+ * email — a missing `SITE_URL`, a template that throws — can fail the
+ * transaction that completes the interview. `finish` schedules it once, and a
+ * scheduled mutation runs exactly once.
  */
 export const sendCompletionEmail = internalMutation({
   args: { sessionId: v.id('sessions') },
@@ -564,13 +557,6 @@ export const sendCompletionEmail = internalMutation({
     // Erased between `finish` and this job: there is nobody left to write to.
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) return null
-    const logged = await ctx.db
-      .query('emailLog')
-      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-      .collect()
-    if (logged.some((entry) => entry.template === COMPLETED_TEMPLATE)) {
-      return null
-    }
 
     const project = await ctx.db.get('projects', session.projectId)
     if (!project) return null
@@ -607,106 +593,3 @@ export const sendCompletionEmail = internalMutation({
 
 /** 12 months after completion, media is purged. See convex/retention.ts. */
 export const RETENTION_MS = 365 * 24 * 60 * 60 * 1000
-
-/* ───────────────────────────── End-to-end seed ─────────────────────────── */
-
-/** Resend's test sink: accepted and discarded, so a test run mails nobody. */
-const E2E_EMAIL = 'delivered@resend.dev'
-const E2E_ORG_SLUG = 'e2e-interview'
-
-/**
- * A fresh candidate session on a fixed two-question role, for the browser
- * test in `e2e/`. Internal: only a deploy key can run it (`npx convex run`),
- * and a deploy key can already do everything this does. The organisation and
- * role are created once and reused, so a run adds a session, not a tenant —
- * and the test erases that session through the candidate's own erasure path
- * when it is done.
- */
-export const seedE2eSession = internalMutation({
-  args: {},
-  returns: v.object({ token: v.string() }),
-  handler: async (ctx) => {
-    const now = Date.now()
-    let org = await ctx.db
-      .query('organizations')
-      .withIndex('by_slug', (q) => q.eq('slug', E2E_ORG_SLUG))
-      .unique()
-    if (!org) {
-      const userId = await ctx.db.insert('users', {
-        betterAuthId: `seed:${E2E_ORG_SLUG}`,
-        email: E2E_EMAIL,
-        superAdmin: false,
-        createdAt: now,
-      })
-      const orgId = await ctx.db.insert('organizations', {
-        slug: E2E_ORG_SLUG,
-        name: 'E2E',
-        createdBy: userId,
-        createdAt: now,
-      })
-      await ctx.db.insert('organizationMembers', {
-        orgId,
-        userId,
-        role: 'owner',
-        joinedAt: now,
-      })
-      const projectId = await ctx.db.insert('projects', {
-        orgId,
-        slug: 'interview',
-        title: 'E2E interview',
-        status: 'active',
-        language: 'en',
-        introMode: 'none',
-        maxDurationMinutes: 5,
-        candidateFields: {
-          phone: { enabled: false, required: false },
-          linkedin: { enabled: false, required: false },
-          cv: { enabled: false, required: false },
-          coverLetter: { enabled: false, required: false },
-        },
-        createdBy: userId,
-        createdAt: now,
-        restricted: false,
-        sessionCount: 0,
-        completedSessionCount: 0,
-      })
-      for (const [orderIndex, content] of [
-        'Introduce yourself in one sentence.',
-        'Name one thing you are proud of.',
-      ].entries()) {
-        await ctx.db.insert('questions', {
-          orgId,
-          projectId,
-          orderIndex,
-          content,
-          maxResponseSeconds: 60,
-        })
-      }
-      org = await ctx.db.get('organizations', orgId)
-      if (!org) throw new ConvexError('not_found')
-    }
-
-    const project = await ctx.db
-      .query('projects')
-      .withIndex('by_org', (q) => q.eq('orgId', org._id))
-      .first()
-    if (!project) throw new ConvexError('not_found')
-
-    const token = generateToken()
-    await ctx.db.insert('sessions', {
-      orgId: org._id,
-      projectId: project._id,
-      accessToken: token,
-      candidateName: 'E2E Candidate',
-      candidateEmail: E2E_EMAIL,
-      status: 'pending',
-      lastQuestionIndex: 0,
-      invitedBy: org.createdBy,
-      invitedAt: now,
-    })
-    await ctx.db.patch('projects', project._id, {
-      sessionCount: project.sessionCount + 1,
-    })
-    return { token }
-  },
-})

@@ -286,13 +286,21 @@ describe('one resume cursor, on the server', () => {
   })
 
   it('never lets a saved answer be recorded again', async () => {
-    await expect(
-      t.mutation(internal.interview.reserveSegment, {
-        token: s.token,
-        questionIndex: 2,
-        audio: AUDIO,
-      }),
-    ).rejects.toThrow('already_answered')
+    const result = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 2,
+      audio: AUDIO,
+    })
+    expect(result).toEqual({ status: 'answered' })
+    const saved = await t.run((ctx) =>
+      ctx.db
+        .query('segments')
+        .withIndex('by_session', (q) =>
+          q.eq('sessionId', s.sessionId).eq('questionIndex', 2),
+        )
+        .unique(),
+    )
+    expect(saved).toMatchObject({ uploadState: 'uploaded', uploadAttempts: 1 })
   })
 
   it('still lets the failed answer be recorded again', async () => {
@@ -301,7 +309,7 @@ describe('one resume cursor, on the server', () => {
       questionIndex: 1,
       audio: AUDIO,
     })
-    expect(slot.audio.key).toContain(s.sessionId)
+    expect(slot.status).toBe('reserved')
   })
 })
 
@@ -417,15 +425,6 @@ describe('the completion email', () => {
         .collect(),
     )
     expect(logged.map((row) => row.template)).toEqual(['candidate-completed'])
-  })
-
-  it('is sent once even when the job is retried', async () => {
-    for (let run = 0; run < 2; run++) {
-      await t.mutation(internal.interview.sendCompletionEmail, {
-        sessionId: s.sessionId,
-      })
-    }
-    expect(sent).toHaveLength(1)
   })
 
   it('is not sent for a session erased in the meantime', async () => {

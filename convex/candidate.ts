@@ -40,7 +40,7 @@ import {
   candidateSessionReturns,
   sessionGateReturns,
 } from './lib/candidateReturns'
-import { evaluateSessionGate, nextQuestionIndex } from './lib/sessionState'
+import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
   candidateDocumentKey,
@@ -104,27 +104,18 @@ export const landing = query({
   handler: async (ctx, { token, now }) => {
     const { session, project } = await requireSession(ctx, token)
     const org = await ctx.db.get('organizations', session.orgId)
-    const questions = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', project._id))
-      .collect()
-    const segments = await ctx.db
-      .query('segments')
-      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
-      .collect()
+    const progress = await loadProgress(ctx, session)
 
     return {
       organisationName: org?.name ?? '',
       session: toCandidateSessionView(session),
-      project: toCandidateProjectView(project, questions.length),
+      project: toCandidateProjectView(project, progress.questions.length),
       gate: {
         ...evaluateSessionGate({ session, project, now }),
-        // The same value `interview.questions` resumes at, so the welcome
-        // screen cannot announce one question and the interview open another.
-        resumeAtIndex: nextQuestionIndex(
-          questions.map((question) => question._id),
-          segments,
-        ),
+        // The value `interview.questions` resumes at, from the same loader,
+        // so the welcome screen cannot announce one question and the
+        // interview open another.
+        resumeAtIndex: progress.nextQuestionIndex,
       },
     }
   },

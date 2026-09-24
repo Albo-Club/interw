@@ -21,7 +21,7 @@ import {
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
 import {
   CandidateShell,
-  candidateAction,
+  candidateTouchTargets,
 } from '~/components/candidate/CandidateShell'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
@@ -139,7 +139,6 @@ function CandidatePrivacy() {
           <Button
             variant="destructive"
             size="lg"
-            className={candidateAction}
             onClick={() => setConfirming(true)}
           >
             {t('interview:privacy.delete')}
@@ -148,7 +147,7 @@ function CandidatePrivacy() {
       </div>
 
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
-        <AlertDialogContent>
+        <AlertDialogContent className={candidateTouchTargets}>
           <AlertDialogHeader>
             <AlertDialogTitle>
               {t('interview:privacy.deleteConfirm.title')}

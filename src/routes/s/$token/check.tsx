@@ -10,7 +10,6 @@ import type { MicVerdict } from '~/lib/media/devices'
 import { fireAndForget } from '~/lib/fire-and-forget'
 import {
   assessMicLevels,
-  classifyMediaError,
   detectBrowserSupport,
   levelFromTimeDomain,
   openInterviewStream,
@@ -28,10 +27,9 @@ import {
 } from '~/components/ui/select'
 import { Label } from '~/components/ui/label'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
-import {
-  CandidateShell,
-  candidateAction,
-} from '~/components/candidate/CandidateShell'
+import { CandidateShell } from '~/components/candidate/CandidateShell'
+import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
 
@@ -39,14 +37,7 @@ export const Route = createFileRoute('/s/$token/check')({
   component: DeviceCheck,
 })
 
-type Phase =
-  | 'starting'
-  | 'live'
-  | 'denied'
-  | 'busy'
-  | 'nodevice'
-  | 'failed'
-  | 'unsupported'
+type Phase = 'starting' | 'live' | 'failed' | 'unsupported'
 
 function DeviceCheck() {
   const { t } = useTranslation(['interview', 'common'])
@@ -59,15 +50,18 @@ function DeviceCheck() {
   const logEvent = useConvexMutation(api.interview.logEvent)
 
   const [phase, setPhase] = useState<Phase>('starting')
+  /** i18n key for why the devices could not be opened. */
+  const [failure, setFailure] = useState<string | null>(null)
   const [cameras, setCameras] = useState<Array<MediaDeviceInfo>>([])
   const [microphones, setMicrophones] = useState<Array<MediaDeviceInfo>>([])
   const [cameraId, setCameraId] = useState<string>('')
   const [micId, setMicId] = useState<string>('')
   const [audioOnly, setAudioOnly] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [preview, setPreview] = useState<HTMLVideoElement | null>(null)
   const [level, setLevel] = useState(0)
   const [verdict, setVerdict] = useState<MicVerdict>('silent')
 
-  const videoRef = useRef<HTMLVideoElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -83,8 +77,16 @@ function DeviceCheck() {
     audioContextRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
-    if (videoRef.current) videoRef.current.srcObject = null
+    setStream(null)
   }, [])
+
+  // Attached whenever both exist, whichever comes last. The stream is opened
+  // on mount, while the skeleton is still on screen and the element is not.
+  useEffect(() => {
+    if (!preview || !stream) return
+    preview.srcObject = stream
+    fireAndForget(preview.play(), 'camera preview autoplay')
+  }, [preview, stream])
 
   const startPreview = useCallback(async () => {
     teardown()
@@ -93,19 +95,14 @@ function DeviceCheck() {
     try {
       // The very call the interview makes, so what is checked here is what
       // will be recorded — the audio-only fallback included.
-      const { stream, audioOnly: withoutCamera } = await openInterviewStream({
+      const opened = await openInterviewStream({
         cameraId: cameraId || undefined,
         micId: micId || undefined,
         video: recorderSupport.video !== null,
       })
-      streamRef.current = stream
-      setAudioOnly(withoutCamera)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        // Autoplay rejection is expected, not an error: browsers refuse it
-      // without a user gesture, and the preview still renders the stream.
-      await videoRef.current.play().catch(() => undefined)
-      }
+      streamRef.current = opened.stream
+      setStream(opened.stream)
+      setAudioOnly(opened.audioOnly)
 
       // Labels are only populated once permission has been granted, so the
       // pickers are filled after getUserMedia, never before.
@@ -124,7 +121,7 @@ function DeviceCheck() {
       audioContextRef.current = context
       const analyser = context.createAnalyser()
       analyser.fftSize = 1024
-      context.createMediaStreamSource(stream).connect(analyser)
+      context.createMediaStreamSource(opened.stream).connect(analyser)
       const buffer = new Uint8Array(analyser.fftSize)
 
       const tick = () => {
@@ -139,16 +136,8 @@ function DeviceCheck() {
       rafRef.current = requestAnimationFrame(tick)
       setPhase('live')
     } catch (error) {
-      const failure = classifyMediaError(error)
-      setPhase(
-        failure === 'permissionDenied'
-          ? 'denied'
-          : failure === 'busy'
-            ? 'busy'
-            : failure === 'noDevices'
-              ? 'nodevice'
-              : 'failed',
-      )
+      setFailure(candidateErrorKey(error))
+      setPhase('failed')
       fireAndForget(logEvent({
         token,
         kind: 'device_check_failed',
@@ -231,21 +220,7 @@ function DeviceCheck() {
           </Alert>
         ) : (
           <>
-            <div className="bg-muted relative aspect-[3/4] w-full overflow-hidden rounded-lg sm:aspect-video">
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                className="size-full scale-x-[-1] object-cover"
-              />
-              {phase === 'live' && audioOnly && (
-                <div className="bg-muted text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center text-sm">
-                  <Mic className="size-8" />
-                  <p className="max-w-sm leading-relaxed">
-                    {t('interview:run.audioOnly')}
-                  </p>
-                </div>
-              )}
+            <CameraPreview ref={setPreview} audioOnly={phase === 'live' && audioOnly}>
               {phase !== 'live' && (
                 <div className="text-muted-foreground absolute inset-0 flex items-center justify-center text-sm">
                   {phase === 'starting'
@@ -253,31 +228,18 @@ function DeviceCheck() {
                     : t('interview:device.preview')}
                 </div>
               )}
-            </div>
+            </CameraPreview>
 
-            {phase === 'denied' && (
+            {phase === 'failed' && failure && (
               <Alert variant="destructive">
                 <AlertTitle>
-                  {t('interview:device.permissionDenied')}
+                  {t(failure, { defaultValue: t('interview:errors.unexpected') })}
                 </AlertTitle>
-                <AlertDescription>
-                  {t('interview:device.permissionHelp')}
-                </AlertDescription>
-              </Alert>
-            )}
-            {phase === 'busy' && (
-              <Alert variant="destructive">
-                <AlertTitle>{t('interview:device.busy')}</AlertTitle>
-              </Alert>
-            )}
-            {phase === 'nodevice' && (
-              <Alert variant="destructive">
-                <AlertTitle>{t('interview:device.noDevices')}</AlertTitle>
-              </Alert>
-            )}
-            {phase === 'failed' && (
-              <Alert variant="destructive">
-                <AlertTitle>{t('interview:errors.unexpected')}</AlertTitle>
+                {failure === 'interview:device.permissionDenied' && (
+                  <AlertDescription>
+                    {t('interview:device.permissionHelp')}
+                  </AlertDescription>
+                )}
               </Alert>
             )}
 
@@ -337,7 +299,6 @@ function DeviceCheck() {
               would be worse than a quiet recording. */}
           <Button
             size="lg"
-            className={candidateAction}
             onClick={proceed}
             disabled={!recorderSupport.usable}
           >
@@ -353,7 +314,6 @@ function DeviceCheck() {
           <Button
             variant="outline"
             size="lg"
-            className={candidateAction}
             onClick={() => void startPreview()}
           >
             {t('interview:device.retry')}

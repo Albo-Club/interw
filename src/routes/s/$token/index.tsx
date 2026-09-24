@@ -13,10 +13,7 @@ import { Checkbox } from '~/components/ui/checkbox'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
-import {
-  CandidateShell,
-  candidateAction,
-} from '~/components/candidate/CandidateShell'
+import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { DocumentUploadField } from '~/components/candidate/DocumentUploadField'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 
@@ -328,7 +325,7 @@ function CandidateWelcome() {
         <div className="flex flex-col gap-3 border-t pt-6">
           <Button
             size="lg"
-            className={`${candidateAction} w-full sm:w-auto sm:self-start`}
+            className="w-full sm:w-auto sm:self-start"
             disabled={!canProceed}
             onClick={() => void proceed()}
           >

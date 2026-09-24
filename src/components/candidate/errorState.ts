@@ -1,9 +1,19 @@
-import { convexErrorCode } from '~/lib/convex-errors'
+import type { SessionGateState } from '../../../convex/lib/sessionState'
+import { convexErrorCode, errorMessageKey } from '~/lib/convex-errors'
+import { classifyMediaError } from '~/lib/media/devices'
 
 /** A closed or unknown link, as the candidate copy names it (`interview:state.*`). */
 export type LinkState = 'notFound' | 'expired' | 'closed' | 'cancelled' | 'completed'
 
-const STATES: Record<string, LinkState> = {
+/**
+ * Every state the server can refuse a link with. Typed against the gate, so a
+ * state added there fails to compile here instead of reaching the crash
+ * screen.
+ */
+const STATES: Record<
+  Exclude<SessionGateState, 'ready' | 'resumable'> | 'not_found',
+  LinkState
+> = {
   not_found: 'notFound',
   expired: 'expired',
   closed: 'closed',
@@ -23,5 +33,15 @@ const STATES: Record<string, LinkState> = {
  */
 export function linkStateFromError(error: unknown): LinkState | null {
   const code = convexErrorCode(error)
-  return code !== null && code in STATES ? STATES[code] : null
+  return code !== null && code in STATES
+    ? STATES[code as keyof typeof STATES]
+    : null
+}
+
+/** The i18n key for a failure on the candidate surface, device or server. */
+export function candidateErrorKey(cause: unknown): string {
+  const media = classifyMediaError(cause)
+  return media
+    ? `interview:device.${media}`
+    : errorMessageKey(cause, 'interview').key
 }

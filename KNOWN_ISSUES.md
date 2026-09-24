@@ -1685,6 +1685,15 @@ which the pipeline's idempotency requires.
 If an audio-capable model is added later, extend the dimension union in
 `convex/schema.ts` — do not quietly start generating the existing six.
 
+The answer length those figures are divided by is `segments.measuredSeconds`,
+written by `saveTranscript` from the provider's `usage.total_seconds` (fallback:
+the end of the last timed word; else absent, and the answer is left out of the
+profile). `segments.durationSeconds` is what the candidate's browser reported:
+a clamped display hint that nothing in the report may read. It used to feed
+pace, concision, engagement and every quote anchor — the person being assessed
+chose their own measurement (audit 2026-09-22,
+`convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`).
+
 ## The shadcn CLI rewrites files you did not ask it to
 
 `pnpm dlx shadcn@latest add alert-dialog switch` also rewrote

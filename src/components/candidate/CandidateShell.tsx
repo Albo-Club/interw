@@ -1,6 +1,18 @@
+import { Link } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import type { ReactNode } from 'react'
 
 import { cn } from '~/lib/utils'
+
+/**
+ * Every button a candidate presses is at least 44 px tall and ignores
+ * double-tap zoom. Set once on the frame rather than button by button: the
+ * two smallest buttons on the surface used to be "Try again" and "Skip" — the
+ * ones that decide whether an answer is saved. Anything rendered outside the
+ * frame, such as a dialog's portal, takes the same class.
+ */
+export const candidateTouchTargets =
+  'touch-manipulation [&_[data-slot=button]]:min-h-11'
 
 /**
  * The frame every candidate screen sits in.
@@ -13,16 +25,23 @@ import { cn } from '~/lib/utils'
 export function CandidateShell({
   organisationName,
   children,
-  footer,
+  privacyToken,
   width = 'narrow',
 }: {
   organisationName?: string
   children: ReactNode
-  footer?: ReactNode
+  /** Links the footer to this candidate's data page. */
+  privacyToken?: string
   width?: 'narrow' | 'wide'
 }) {
+  const { t } = useTranslation('interview')
   return (
-    <div className="bg-background flex min-h-svh flex-col">
+    <div
+      className={cn(
+        'bg-background flex min-h-svh flex-col',
+        candidateTouchTargets,
+      )}
+    >
       <header className="border-b">
         <div
           className={cn(
@@ -45,7 +64,7 @@ export function CandidateShell({
         {children}
       </main>
 
-      {footer && (
+      {privacyToken && (
         <footer className="border-t">
           <div
             className={cn(
@@ -53,7 +72,13 @@ export function CandidateShell({
               width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
             )}
           >
-            {footer}
+            <Link
+              to="/s/$token/privacy"
+              params={{ token: privacyToken }}
+              className="underline underline-offset-4"
+            >
+              {t('shell.privacy')}
+            </Link>
           </div>
         </footer>
       )}

@@ -1680,9 +1680,10 @@ exists to prevent.
 an upload slot issued for a video from being used to park HTML on the bucket's
 own origin, the second stops a 4 MB promise becoming a 40 GB upload.
 
-The cost is that the client must send **exactly** what was signed. `fetch`
-does this automatically for a `Blob` — it sets `Content-Length` from
-`blob.size` and takes `Content-Type` from the header you pass. A hand-rolled
+The cost is that the client must send **exactly** what was signed. The XHR
+in `src/lib/media/upload.ts` does this automatically for a `Blob` — it sets
+`Content-Length` from `blob.size` and takes `Content-Type` from the header you
+pass. A hand-rolled
 request, a proxy that re-encodes, or passing a different blob than the one
 whose size you declared, all produce a `403` that reads like a credentials
 problem and is not.
@@ -1714,6 +1715,50 @@ This is not redundancy. The audio track is what gets transcribed and measured,
 and handing a transcription model a WebM **video** container is the difference
 between a timestamped transcript and a provider error. The extra upload is a
 few hundred kilobytes against a recording of tens of megabytes.
+
+## An answer is saved when its audio lands; the video is extra
+
+The candidate runner uploads the audio, calls `markSegmentUploaded`, and only
+then uploads the video. The audio is what gets transcribed and assessed, so
+it alone decides whether an answer exists: a 40 MB video failing on a train
+after the 1 MB audio arrived used to discard the answer, although everything
+the report needs was already in the bucket. A failed video is logged as an
+`upload_failed` event whose detail starts with `video:`, and announced.
+
+The trap is on the reading side: such a segment still carries its `videoKey`
+(written before the upload, which is what keeps erasure exact), and no object
+sits behind it. A player given a signed URL for it gets a 404 that looks like
+a signing bug. There is no `videoUploaded` column yet — adding one is a schema
+change, outside the candidate surface — so until then, treat a failed video
+load on a segment as "this answer is audio only", not as an error.
+
+## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
+
+Two things stand between a Playwright run in a Claude Code cloud session and
+a real deployment, and neither is in this repo:
+
+- The browser NSS store (`~/.pki/nssdb`) starts empty, so every HTTPS request
+  through the session's TLS-terminating proxy fails with
+  `ERR_CERT_AUTHORITY_INVALID`. Importing `/root/.ccr/agent-proxy-ca.crt` with
+  `certutil` (package `libnss3-tools`) fixes HTTPS.
+- Chromium's WebSocket upgrade to `wss://*.convex.cloud` then fails with
+  `400`, whether it reaches the proxy on its own or through
+  `--proxy-server` — while `curl --http1.1` and Node's `WebSocket` get `101`
+  through the same proxy, with the same headers. The Convex client has no
+  HTTP fallback, so the page never loads its data.
+
+Do not spend the afternoon on it: run the candidate e2e in CI, where the
+runner reaches the deployment directly. Locally, `pnpm test` covers the
+reducer, the recorder and the server; the browser path needs CI or a phone.
+
+## The candidate surface switches the shared i18n instance
+
+`useCandidateLanguage` calls `i18n.changeLanguage(project.language)` on the
+client's one instance, and does not write the `lang` cookie — the language
+belongs to the link, not to the visitor. A recruiter who opens a candidate
+link and then navigates back into `/app` in the same tab keeps the role's
+language until the next full load. Harmless, and cheaper than a second i18n
+instance for the candidate bundle.
 
 ## Seeking a `<video>` before `loadedmetadata` is silently ignored
 

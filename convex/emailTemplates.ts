@@ -623,6 +623,79 @@ export function candidateInvitationEmail({
 }
 
 /**
+ * The candidate's confirmation that the interview arrived.
+ *
+ * Its reason to exist is the link at the bottom: the data page is the only
+ * way a candidate can exercise the erasure the consent screen promised "at
+ * any time", and without this email the only copy of that link was a page
+ * they had just closed. The link carries their token, hence the footer.
+ */
+export function candidateCompletedEmail({
+  locale,
+  candidateName,
+  jobTitle,
+  orgName,
+  privacyUrl,
+}: {
+  locale: EmailLocale
+  candidateName: string
+  jobTitle: string
+  orgName: string
+  privacyUrl: string
+}) {
+  const safeName = esc(candidateName)
+  const safeJob = esc(jobTitle)
+  const safeOrg = esc(orgName)
+  const c = pick(locale, {
+    en: {
+      subject: `${orgName}: your interview has been sent`,
+      heading: 'Your interview has been sent',
+      intro: `Hello ${safeName}, thank you. Your answers for the ${safeJob} role have reached <strong>${safeOrg}</strong>, and there is nothing more for you to do.`,
+      next: `${safeOrg} will review them and contact you directly.`,
+      data: 'You can see what is kept about this interview, and delete all of it at any time, from your data page.',
+      cta: 'See or delete my data',
+      footer: 'The link above is personal to you — please do not forward it.',
+      preheader: `Your answers for ${safeJob} have reached ${safeOrg}.`,
+      text: [
+        `Hello ${candidateName},`,
+        `Thank you. Your answers for the ${jobTitle} role have reached ${orgName}, and there is nothing more for you to do. ${orgName} will review them and contact you directly.`,
+        'You can see what is kept about this interview, and delete all of it at any time, from your data page:',
+        privacyUrl,
+        'This link is personal to you — please do not forward it.',
+      ],
+    },
+    fr: {
+      subject: `${orgName} : votre entretien a bien été envoyé`,
+      heading: 'Votre entretien a bien été envoyé',
+      intro: `Bonjour ${safeName}, merci. Vos réponses pour le poste de ${safeJob} sont bien parvenues à <strong>${safeOrg}</strong>, et vous n'avez plus rien à faire.`,
+      next: `${safeOrg} va les examiner et reviendra vers vous directement.`,
+      data: 'Vous pouvez consulter ce qui est conservé de cet entretien, et tout supprimer à tout moment, depuis votre page de données.',
+      cta: 'Voir ou supprimer mes données',
+      footer: 'Le lien ci-dessus vous est personnel : merci de ne pas le transmettre.',
+      preheader: `Vos réponses pour le poste de ${safeJob} sont bien parvenues à ${safeOrg}.`,
+      text: [
+        `Bonjour ${candidateName},`,
+        `Merci. Vos réponses pour le poste de ${jobTitle} sont bien parvenues à ${orgName}, et vous n'avez plus rien à faire. ${orgName} va les examiner et reviendra vers vous directement.`,
+        'Vous pouvez consulter ce qui est conservé de cet entretien, et tout supprimer à tout moment, depuis votre page de données :',
+        privacyUrl,
+        'Ce lien vous est personnel : merci de ne pas le transmettre.',
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.next, c.data, urlFallback(locale, privacyUrl)],
+    cta: { label: c.cta, url: privacyUrl },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}
+
+/**
  * The recruiter's "a report is ready" email.
  *
  * Deliberately says the verdict and the score and stops there. Putting the

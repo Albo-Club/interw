@@ -13,6 +13,9 @@
  * who cannot guess 32 bytes in the first place.
  */
 
+import type { GenericQueryCtx } from 'convex/server'
+import type { DataModel, Doc } from '../_generated/dataModel'
+
 export type SessionGateState =
   | 'ready'
   | 'resumable'
@@ -23,7 +26,6 @@ export type SessionGateState =
 
 export type SessionLike = {
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'expired'
-  lastQuestionIndex: number
   consentAcceptedAt?: number
 }
 
@@ -38,8 +40,6 @@ export type SessionGate = {
   canRecord: boolean
   /** True when consent still has to be collected before recording. */
   needsConsent: boolean
-  /** Where a resumed interview picks up. */
-  resumeAtIndex: number
 }
 
 export function evaluateSessionGate({
@@ -51,14 +51,12 @@ export function evaluateSessionGate({
   project: ProjectLike
   now: number
 }): SessionGate {
-  const resumeAtIndex = Math.max(0, session.lastQuestionIndex)
   const needsConsent = session.consentAcceptedAt === undefined
 
   const blocked = (state: SessionGateState): SessionGate => ({
     state,
     canRecord: false,
     needsConsent,
-    resumeAtIndex,
   })
 
   // Terminal session states win over everything: a completed interview stays
@@ -81,6 +79,63 @@ export function evaluateSessionGate({
     state: session.status === 'in_progress' ? 'resumable' : 'ready',
     canRecord: !needsConsent,
     needsConsent,
-    resumeAtIndex,
+  }
+}
+
+/** By id, never by index: `orderIndex` is a display order, the id is the question. */
+export function answeredQuestionIds(
+  segments: ReadonlyArray<{ questionId: string; uploadState: string }>,
+): Set<string> {
+  return new Set(
+    segments
+      .filter((segment) => segment.uploadState === 'uploaded')
+      .map((segment) => segment.questionId),
+  )
+}
+
+/**
+ * Where the interview picks up: the first question, in order, that has no
+ * answer on the server. The only resume cursor there is.
+ *
+ * There used to be two — `lastQuestionIndex`, advanced monotonically on each
+ * upload, and the client's own first-unanswered scan — and a skipped question
+ * made them disagree: the welcome screen announced question 4, the interview
+ * resumed at 1, then walked into question 2 and re-recorded it over the saved
+ * answer. Derived from the segments rather than stored, it cannot drift.
+ */
+export function nextQuestionIndex(
+  questionIds: ReadonlyArray<string>,
+  answered: ReadonlySet<string>,
+): number {
+  const index = questionIds.findIndex((id) => !answered.has(id))
+  return index === -1 ? questionIds.length : index
+}
+
+/**
+ * A session's position in its role: the questions in order, which ones the
+ * server holds an answer for, and where to pick up. The welcome screen and the
+ * runner both read it from here — the one read in this module, kept beside the
+ * rule it feeds so the two screens cannot compute it differently.
+ */
+export async function loadProgress(
+  ctx: GenericQueryCtx<DataModel>,
+  session: Doc<'sessions'>,
+) {
+  const questions = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', session.projectId))
+    .collect()
+  const segments = await ctx.db
+    .query('segments')
+    .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+    .collect()
+  const answered = answeredQuestionIds(segments)
+  return {
+    questions,
+    answered,
+    nextQuestionIndex: nextQuestionIndex(
+      questions.map((question) => question._id),
+      answered,
+    ),
   }
 }

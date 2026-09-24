@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateSessionGate } from './sessionState'
+import {
+  answeredQuestionIds,
+  evaluateSessionGate,
+  nextQuestionIndex,
+} from './sessionState'
 import type { ProjectLike, SessionLike } from './sessionState'
 
 const NOW = 1_700_000_000_000
 
 const session = (overrides: Partial<SessionLike> = {}): SessionLike => ({
   status: 'pending',
-  lastQuestionIndex: 0,
   consentAcceptedAt: NOW - 1000,
   ...overrides,
 })
@@ -35,10 +38,10 @@ describe('evaluateSessionGate', () => {
     ).toMatchObject({ state: 'ready', canRecord: false, needsConsent: true })
   })
 
-  it('resumes an interrupted interview at the question it stopped on', () => {
+  it('lets an interrupted interview resume', () => {
     expect(
-      gate(session({ status: 'in_progress', lastQuestionIndex: 3 }), project()),
-    ).toMatchObject({ state: 'resumable', canRecord: true, resumeAtIndex: 3 })
+      gate(session({ status: 'in_progress' }), project()),
+    ).toMatchObject({ state: 'resumable', canRecord: true })
   })
 
   it('closes a link once the role expires', () => {
@@ -87,10 +90,32 @@ describe('evaluateSessionGate', () => {
       ).state,
     ).toBe('completed')
   })
+})
 
-  it('never returns a negative resume index', () => {
+describe('nextQuestionIndex', () => {
+  const ids = ['q0', 'q1', 'q2', 'q3']
+  const segment = (questionId: string, uploadState: string) => ({
+    questionId,
+    uploadState,
+  })
+  const next = (segments: Array<ReturnType<typeof segment>>) =>
+    nextQuestionIndex(ids, answeredQuestionIds(segments))
+
+  it('is the first question without a saved answer', () => {
     expect(
-      gate(session({ lastQuestionIndex: -1 }), project()).resumeAtIndex,
-    ).toBe(0)
+      next([
+        segment('q0', 'uploaded'),
+        segment('q1', 'failed'),
+        segment('q2', 'uploaded'),
+      ]),
+    ).toBe(1)
+  })
+
+  it('does not count a pending or failed upload as an answer', () => {
+    expect(next([segment('q0', 'pending')])).toBe(0)
+  })
+
+  it('is past the end once every question is answered', () => {
+    expect(next(ids.map((id) => segment(id, 'uploaded')))).toBe(4)
   })
 })

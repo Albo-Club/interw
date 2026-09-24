@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "sturdier-interview": {
+      "title": "Un entretien plus solide pour vos candidats",
+      "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."
+    },
     "verification-needs-password": {
       "title": "Confirmer votre e-mail demande désormais votre mot de passe",
       "body": "Nous avons renforcé la vérification des e-mails : après avoir cliqué sur le lien, vous vous connectez avec votre mot de passe pour confirmer votre adresse. Ainsi, un lien de vérification ne peut finaliser qu’un compte que vous avez créé vous-même."

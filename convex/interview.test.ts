@@ -1,12 +1,30 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
+import { segmentKey } from './lib/objectStore'
 import schema from './schema'
 import type { Doc, Id } from './_generated/dataModel'
 
+const sent = vi.hoisted(
+  () => [] as Array<{ to: string; subject: string; html: string; text: string }>,
+)
+
+// Stood in for: what matters here is what would be sent, and to whom.
+vi.mock('./email', () => ({
+  RESEND_FROM: 'interw <no-reply@example.test>',
+  resend: {
+    sendEmail: (
+      _ctx: unknown,
+      email: { to: string; subject: string; html: string; text: string },
+    ) => {
+      sent.push(email)
+      return Promise.resolve('provider-id-stub')
+    },
+  },
+}))
 const modules = import.meta.glob('./**/*.ts')
 
 function newTest() {
@@ -244,7 +262,11 @@ describe('finish honours the session gate', () => {
     const after = await snapshot()
     expect(after.session!.status).toBe('completed')
     expect(after.project!.completedSessionCount).toBe(1)
-    expect(after.scheduled).toHaveLength(1)
+    // The pipeline, and the candidate's confirmation email.
+    expect(after.scheduled.map((job) => job.name).sort()).toEqual([
+      'interview:sendCompletionEmail',
+      'pipeline:onSessionCompleted',
+    ])
   })
 })
 
@@ -392,5 +414,259 @@ describe('markSegmentUploaded bounds the reported duration', () => {
       ).rejects.toThrow('invalid_duration')
     }
     expect(await stored()).toBeNull()
+  })
+})
+
+type OpenSeed = {
+  token: string
+  sessionId: Id<'sessions'>
+  orgId: Id<'organizations'>
+  questionIds: Array<Id<'questions'>>
+}
+
+/** An open role with four questions and a consented, started candidate. */
+async function seedOpen(t: ReturnType<typeof newTest>): Promise<OpenSeed> {
+  const token = 'r'.repeat(43)
+  return t.run(async (ctx) => {
+    const userId = await ctx.db.insert('users', {
+      betterAuthId: 'ba_1',
+      email: 'r@acme.test',
+      superAdmin: false,
+      createdAt: 0,
+    })
+    const orgId = await ctx.db.insert('organizations', {
+      slug: 'acme',
+      name: 'Acme',
+      createdBy: userId,
+      createdAt: 0,
+    })
+    const projectId = await ctx.db.insert('projects', {
+      orgId,
+      slug: 'backend',
+      title: 'Backend',
+      status: 'active',
+      language: 'fr',
+      introMode: 'none',
+      maxDurationMinutes: 20,
+      candidateFields: {
+        phone: { enabled: false, required: false },
+        linkedin: { enabled: false, required: false },
+        cv: { enabled: false, required: false },
+        coverLetter: { enabled: false, required: false },
+      },
+      createdBy: userId,
+      createdAt: 0,
+      restricted: false,
+      sessionCount: 1,
+      completedSessionCount: 0,
+    })
+    const questionIds: Array<Id<'questions'>> = []
+    for (let orderIndex = 0; orderIndex < 4; orderIndex++) {
+      questionIds.push(
+        await ctx.db.insert('questions', {
+          orgId,
+          projectId,
+          orderIndex,
+          content: `Question ${orderIndex}`,
+          maxResponseSeconds: 120,
+        }),
+      )
+    }
+    const sessionId = await ctx.db.insert('sessions', {
+      orgId,
+      projectId,
+      accessToken: token,
+      candidateName: 'Alex Martin',
+      candidateEmail: 'alex@example.test',
+      status: 'in_progress',
+      consentAcceptedAt: 1,
+      lastQuestionIndex: 0,
+      invitedBy: userId,
+      invitedAt: 0,
+    })
+    return { token, sessionId, orgId, questionIds }
+  })
+}
+
+const AUDIO = { mimeType: 'audio/webm;codecs=opus', contentLength: 1_000 }
+
+/**
+ * E6. Two resume cursors disagreed after a failed answer: the welcome screen
+ * read the monotone `lastQuestionIndex`, the runner scanned for the first
+ * unanswered question, then advanced by one — into an answer already saved,
+ * which it recorded over under the same object key.
+ */
+describe('one resume cursor, on the server', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seedOpen(t)
+    // q0 saved, q1 failed, q2 saved — the shape a "Skip" leaves behind.
+    await t.run(async (ctx) => {
+      for (const [questionIndex, uploadState] of [
+        [0, 'uploaded'],
+        [1, 'failed'],
+        [2, 'uploaded'],
+      ] as const) {
+        await ctx.db.insert('segments', {
+          orgId: s.orgId,
+          sessionId: s.sessionId,
+          questionId: s.questionIds[questionIndex],
+          questionIndex,
+          // The key a WebM retry derives, so re-reserving schedules nothing.
+          audioKey: segmentKey(s.orgId, s.sessionId, questionIndex, 'weba'),
+          uploadState,
+          uploadAttempts: 1,
+          recordedAt: 0,
+        })
+      }
+      // What the old monotone cursor would have said.
+      await ctx.db.patch('sessions', s.sessionId, { lastQuestionIndex: 3 })
+    })
+  })
+
+  it('resumes at the failed answer', async () => {
+    const result = await t.query(api.interview.questions, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(result.nextQuestionIndex).toBe(1)
+    expect(result.questions.map((q) => q.answered)).toEqual([
+      true,
+      false,
+      true,
+      false,
+    ])
+  })
+
+  /** M4 (language). The surface followed the browser, not the role. */
+  it('tells every candidate screen the role’s language', async () => {
+    const questions = await t.query(api.interview.questions, {
+      token: s.token,
+      now: Date.now(),
+    })
+    const privacy = await t.query(api.candidate.privacySummary, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(questions.language).toBe('fr')
+    expect(privacy.language).toBe('fr')
+  })
+
+  it('announces the same question on the welcome screen', async () => {
+    const landing = await t.query(api.candidate.landing, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(landing.gate.resumeAtIndex).toBe(1)
+  })
+
+  it('never lets a saved answer be recorded again', async () => {
+    const result = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 2,
+      audio: AUDIO,
+    })
+    expect(result).toEqual({ status: 'answered' })
+    const saved = await t.run((ctx) =>
+      ctx.db
+        .query('segments')
+        .withIndex('by_session', (q) =>
+          q.eq('sessionId', s.sessionId).eq('questionIndex', 2),
+        )
+        .unique(),
+    )
+    expect(saved).toMatchObject({ uploadState: 'uploaded', uploadAttempts: 1 })
+  })
+
+  it('still lets the failed answer be recorded again', async () => {
+    const slot = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 1,
+      audio: AUDIO,
+    })
+    expect(slot.status).toBe('reserved')
+  })
+})
+
+/**
+ * The candidate had no trace of their interview and no way back to their data
+ * page — the only place to exercise the erasure the consent screen promised
+ * "at any time" — once they closed the tab.
+ */
+describe('the completion email', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    vi.stubEnv('SITE_URL', 'https://interw.test/')
+    sent.length = 0
+    t = newTest()
+    s = await seedOpen(t)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const scheduled = () =>
+    t.run((ctx) => ctx.db.system.query('_scheduled_functions').collect())
+
+  it('is scheduled by finish, once', async () => {
+    await t.mutation(api.interview.finish, { token: s.token })
+    await t.mutation(api.interview.finish, { token: s.token })
+    const jobs = (await scheduled()).filter((job) =>
+      job.name.includes('sendCompletionEmail'),
+    )
+    expect(jobs).toHaveLength(1)
+  })
+
+  it('carries the link to the data page, in the role’s language', async () => {
+    await t.mutation(internal.interview.sendCompletionEmail, {
+      sessionId: s.sessionId,
+    })
+    expect(sent).toHaveLength(1)
+    expect(sent[0].to).toBe('alex@example.test')
+    expect(sent[0].text).toContain(`https://interw.test/s/${s.token}/privacy`)
+    expect(sent[0].subject).toContain('envoyé')
+    const logged = await t.run((ctx) =>
+      ctx.db
+        .query('emailLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(logged.map((row) => row.template)).toEqual(['candidate-completed'])
+  })
+
+  it('is not sent for a session erased in the meantime', async () => {
+    await t.run((ctx) => ctx.db.delete('sessions', s.sessionId))
+    await t.mutation(internal.interview.sendCompletionEmail, {
+      sessionId: s.sessionId,
+    })
+    expect(sent).toHaveLength(0)
+  })
+})
+
+describe('the browser test fixtures', () => {
+  it('seed a fresh open session each time, on one org', async () => {
+    const t = newTest()
+    const first = await t.mutation(internal.interview.seedE2eSession, {})
+    const second = await t.mutation(internal.interview.seedE2eSession, {})
+    expect(first.token).not.toBe(second.token)
+
+    const landing = await t.query(api.candidate.landing, {
+      token: second.token,
+      now: Date.now(),
+    })
+    expect(landing.gate.state).toBe('ready')
+    const orgs = await t.run((ctx) => ctx.db.query('organizations').collect())
+    expect(orgs).toHaveLength(1)
+    expect(
+      await t.query(internal.interview.e2eSessionState, {
+        token: second.token,
+      }),
+    ).toEqual({ status: 'pending', uploadedSegments: 0 })
   })
 })

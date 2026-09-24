@@ -107,3 +107,86 @@ export function assessMicLevels(levels: ReadonlyArray<number>): MicVerdict {
   if (peak < 0.06) return 'quiet'
   return 'good'
 }
+
+/** What a refused camera or microphone means for the candidate. */
+export type MediaFailure = 'permissionDenied' | 'busy' | 'noDevices'
+
+/**
+ * Name a `getUserMedia` rejection, or return null for one we cannot explain.
+ *
+ * These are `DOMException`s, not `ConvexError`s, so the generic error path
+ * rendered every one of them as "Something went wrong" — and the device check
+ * called anything but `NotFoundError` a refused permission. The commonest
+ * case at work is `NotReadableError`: the camera is held by a video call, and
+ * "allow it in your address bar" is the wrong advice for it.
+ */
+export function classifyMediaError(error: unknown): MediaFailure | null {
+  const name =
+    typeof error === 'object' && error !== null && 'name' in error
+      ? String(error.name)
+      : ''
+  switch (name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'permissionDenied'
+    case 'NotReadableError':
+    case 'AbortError':
+      return 'busy'
+    case 'NotFoundError':
+    case 'OverconstrainedError':
+      return 'noDevices'
+    default:
+      return null
+  }
+}
+
+export type InterviewStream = { stream: MediaStream; audioOnly: boolean }
+
+/**
+ * The stream an interview records from.
+ *
+ * Opens the devices the candidate chose on the check screen, when they chose
+ * one; the interview used to reopen the system defaults and record on the
+ * microphone the candidate had just rejected. Without a choice it asks for the
+ * front camera, which a phone does not otherwise guarantee.
+ *
+ * When the camera is missing, busy or no longer there, it falls back to the
+ * microphone alone: the audio is what gets transcribed and assessed, and
+ * losing the whole interview to a webcam held by a video call is the worse
+ * outcome. A refused permission does not fall back — it is the candidate's
+ * answer, and asking again for half of it would be ignoring it.
+ */
+export async function openInterviewStream(
+  {
+    cameraId,
+    micId,
+    video,
+  }: { cameraId?: string; micId?: string; video: boolean },
+  getUserMedia: (
+    constraints: MediaStreamConstraints,
+  ) => Promise<MediaStream> = (constraints) =>
+    navigator.mediaDevices.getUserMedia(constraints),
+): Promise<InterviewStream> {
+  const audio: MediaTrackConstraints | true = micId
+    ? { deviceId: { exact: micId } }
+    : true
+  if (video) {
+    try {
+      const stream = await getUserMedia({
+        audio,
+        video: {
+          ...(cameraId
+            ? { deviceId: { exact: cameraId } }
+            : { facingMode: 'user' }),
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      })
+      return { stream, audioOnly: false }
+    } catch (error) {
+      const failure = classifyMediaError(error)
+      if (failure === null || failure === 'permissionDenied') throw error
+    }
+  }
+  return { stream: await getUserMedia({ audio, video: false }), audioOnly: true }
+}

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   assessMicLevels,
+  classifyMediaError,
   detectBrowserSupport,
   isInAppBrowser,
   levelFromTimeDomain,
+  openInterviewStream,
 } from './devices'
 
 describe('isInAppBrowser', () => {
@@ -107,5 +109,90 @@ describe('assessMicLevels', () => {
 
   it('treats no samples as silence', () => {
     expect(assessMicLevels([])).toBe('silent')
+  })
+})
+
+const domError = (name: string) => Object.assign(new Error(name), { name })
+
+/** M1. Only `NotFoundError` was told apart; a busy camera read as "refused". */
+describe('classifyMediaError', () => {
+  it.each([
+    ['NotAllowedError', 'permissionDenied'],
+    ['SecurityError', 'permissionDenied'],
+    ['NotReadableError', 'busy'],
+    ['AbortError', 'busy'],
+    ['NotFoundError', 'noDevices'],
+    ['OverconstrainedError', 'noDevices'],
+  ] as const)('%s means %s', (name, failure) => {
+    expect(classifyMediaError(domError(name))).toBe(failure)
+  })
+
+  it('does not pretend to explain what it cannot', () => {
+    expect(classifyMediaError(new TypeError('bad constraints'))).toBeNull()
+    expect(classifyMediaError('nope')).toBeNull()
+  })
+})
+
+describe('openInterviewStream', () => {
+  const stream = {} as MediaStream
+
+  /** E1. The interview reopened the defaults and ignored the choice. */
+  it('opens the devices chosen on the check screen', async () => {
+    const getUserMedia = vi.fn(() => Promise.resolve(stream))
+    await openInterviewStream(
+      { cameraId: 'cam-2', micId: 'mic-2', video: true },
+      getUserMedia,
+    )
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: { deviceId: { exact: 'mic-2' } },
+      video: {
+        deviceId: { exact: 'cam-2' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    })
+  })
+
+  /** M7. Nothing guaranteed the front camera on a phone. */
+  it('asks for the front camera when none was chosen', async () => {
+    const getUserMedia = vi.fn(() => Promise.resolve(stream))
+    await openInterviewStream({ video: true }, getUserMedia)
+    expect(getUserMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audio: true,
+        video: expect.objectContaining({ facingMode: 'user' }),
+      }),
+    )
+  })
+
+  /** E2. A webcam held by a video call used to cost the whole interview. */
+  it.each(['NotReadableError', 'NotFoundError', 'OverconstrainedError'])(
+    'records audio only after %s',
+    async (name) => {
+      const getUserMedia = vi
+        .fn<(c: MediaStreamConstraints) => Promise<MediaStream>>()
+        .mockRejectedValueOnce(domError(name))
+        .mockResolvedValueOnce(stream)
+      const result = await openInterviewStream({ video: true }, getUserMedia)
+      expect(result).toEqual({ stream, audioOnly: true })
+      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true, video: false })
+    },
+  )
+
+  it('does not ask again after the candidate refused', async () => {
+    const getUserMedia = vi.fn(() =>
+      Promise.reject(domError('NotAllowedError')),
+    )
+    await expect(
+      openInterviewStream({ video: true }, getUserMedia),
+    ).rejects.toThrow('NotAllowedError')
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the microphone alone when the browser cannot record video', async () => {
+    const getUserMedia = vi.fn(() => Promise.resolve(stream))
+    const result = await openInterviewStream({ video: false }, getUserMedia)
+    expect(result.audioOnly).toBe(true)
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: false })
   })
 })

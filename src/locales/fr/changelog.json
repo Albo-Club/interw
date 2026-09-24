@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "evaluation-hardening": {
+      "title": "Évaluation par l’IA renforcée",
+      "body": "Nous avons renforcé la production des rapports : les propos du candidat et le texte d’une offre importée sont toujours traités comme la matière à évaluer. Un rapport couvre désormais chacune des réponses du candidat, sinon il est produit à nouveau, et il n’a plus à citer un point fort que l’entretien n’a pas montré."
+    },
     "delivery-figures-removed": {
       "title": "Les indicateurs d’élocution quittent les rapports",
       "body": "Les rapports n’affichent plus la section Élocution (débit, hésitations, silences, etc.). Ces indicateurs n’étaient pas assez fiables pour éclairer une décision de recrutement : nous les avons retirés. Scores, citations, réponses et enregistrements ne changent pas, y compris sur les rapports déjà reçus."

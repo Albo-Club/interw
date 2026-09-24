@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "evaluation-hardening": {
+      "title": "AI evaluation, hardened",
+      "body": "We hardened how reports are produced: what a candidate says, and the text of an imported job ad, are always treated as material to assess. A report now covers every answer the candidate gave, or is produced again, and it no longer has to name a strength the interview did not show."
+    },
     "delivery-figures-removed": {
       "title": "Delivery figures removed from reports",
       "body": "Reports no longer include the Delivery section (speaking rate, hesitation, silence and the rest). Those figures were not reliable enough to inform a hiring decision, so we removed them. Scores, evidence, answers and recordings are unchanged, including on reports you have already received."

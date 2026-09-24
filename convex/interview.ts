@@ -38,12 +38,14 @@ import {
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
 import { candidateCompletedEmail } from './emailTemplates'
-import type { GenericQueryCtx } from 'convex/server'
+import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const MAX_SEGMENT_BYTES = 300 * 1024 * 1024
-/** Newest events kept per session. See `logEvent`. */
+/** Newest events kept per session. See `appendSessionEvent`. */
 const MAX_SESSION_EVENTS = 200
+/** Slack over a question's time limit for the recorder's own stop latency. */
+const DURATION_MARGIN_SECONDS = 5
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
 const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
 
@@ -81,6 +83,37 @@ async function requireOpenSession(
   }
   if (gate.needsConsent) throw new ConvexError('consent_required')
   return { session, project }
+}
+
+/**
+ * The one way a `sessionEvents` row is written. The cap lives here, at the
+ * insertion point, and not in one handler: every writer of this table is a
+ * public token-gated mutation, and the rate limiter still admits 120 writes a
+ * minute — so without it, the size of this table for one session is chosen by
+ * whoever holds the link. It is a support trail, not an audit log: the most
+ * recent events are the ones that explain what just went wrong.
+ */
+export async function appendSessionEvent(
+  ctx: GenericMutationCtx<DataModel>,
+  session: Doc<'sessions'>,
+  event: { kind: Doc<'sessionEvents'>['kind']; detail?: string; at: number },
+): Promise<void> {
+  const oldest = await ctx.db
+    .query('sessionEvents')
+    .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+    .take(MAX_SESSION_EVENTS)
+  // Room for the row about to be written, so the count never exceeds the cap.
+  const excess = Math.max(0, oldest.length - MAX_SESSION_EVENTS + 1)
+  for (const stale of oldest.slice(0, excess)) {
+    await ctx.db.delete('sessionEvents', stale._id)
+  }
+  await ctx.db.insert('sessionEvents', {
+    orgId: session.orgId,
+    sessionId: session._id,
+    kind: event.kind,
+    detail: event.detail?.slice(0, 500),
+    at: event.at,
+  })
 }
 
 /** The questions, in order, as the candidate may see them. */
@@ -142,9 +175,7 @@ export const start = mutation({
       })
     } else {
       await ctx.db.patch('sessions', session._id, { lastActivityAt: now })
-      await ctx.db.insert('sessionEvents', {
-        orgId: session.orgId,
-        sessionId: session._id,
+      await appendSessionEvent(ctx, session, {
         kind: 'interview_resumed',
         at: now,
       })
@@ -306,22 +337,24 @@ export const reserveSegment = internalMutation({
     let segmentId: Id<'segments'>
     if (existing) {
       segmentId = existing._id
+      // A different container, or no video this time, changes the keys. The
+      // earlier PUT may already have landed, so the keys this slot leaves
+      // behind stay named on the row until erasure has deleted them.
+      const current = [audioKey, videoKey]
+      const supersededKeys = [
+        ...new Set([
+          ...(existing.supersededKeys ?? []),
+          existing.audioKey,
+          existing.videoKey,
+        ]),
+      ].filter(
+        (key): key is string => key !== undefined && !current.includes(key),
+      )
       await ctx.db.patch('segments', existing._id, {
         ...fields,
+        supersededKeys,
         uploadAttempts: existing.uploadAttempts + 1,
       })
-      // A retry from another browser changes the container (Chrome records
-      // WebM, Safari MP4), hence the key. The row no longer names the old
-      // object, so erasure could never reach it: delete it now.
-      const replaced = [existing.audioKey, existing.videoKey].filter(
-        (key): key is string =>
-          key !== undefined && key !== audioKey && key !== videoKey,
-      )
-      if (replaced.length > 0) {
-        await ctx.scheduler.runAfter(0, internal.media.deleteKeys, {
-          keys: replaced,
-        })
-      }
     } else {
       segmentId = await ctx.db.insert('segments', {
         orgId: session.orgId,
@@ -417,9 +450,21 @@ export const markSegmentUploaded = mutation({
       throw new ConvexError('not_found')
     }
 
+    // The client's number is a hint for display, never the measurement the
+    // report is computed from (see `saveTranscript`) — and even as a hint it
+    // stays within what the recorder could have produced.
+    if (!Number.isFinite(durationSeconds)) {
+      throw new ConvexError('invalid_duration')
+    }
+    const question = await ctx.db.get('questions', segment.questionId)
+    const ceiling =
+      (question?.maxResponseSeconds ?? 120) + DURATION_MARGIN_SECONDS
     await ctx.db.patch('segments', segmentId, {
       uploadState: 'uploaded',
-      durationSeconds: Math.max(0, Math.round(durationSeconds)),
+      durationSeconds: Math.min(
+        ceiling,
+        Math.max(0, Math.round(durationSeconds)),
+      ),
     })
     await ctx.db.patch('sessions', session._id, {
       lastQuestionIndex: Math.max(
@@ -444,11 +489,9 @@ export const markSegmentFailed = mutation({
       throw new ConvexError('not_found')
     }
     await ctx.db.patch('segments', segmentId, { uploadState: 'failed' })
-    await ctx.db.insert('sessionEvents', {
-      orgId: session.orgId,
-      sessionId: session._id,
+    await appendSessionEvent(ctx, session, {
       kind: 'upload_failed',
-      detail: detail.slice(0, 500),
+      detail,
       at: now,
     })
     return null
@@ -468,27 +511,7 @@ export const logEvent = mutation({
     // is no longer "open" — that is exactly when the trail is worth having.
     const session = await resolveSessionByToken(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
-
-    // Capped per session, oldest first. This endpoint is public, gated only by
-    // the token, and the rate limiter still allows 120 writes a minute — so
-    // the size of this table for one session was chosen by whoever held the
-    // link. It is a support trail, not an audit log: the most recent two
-    // hundred events are the ones that explain what just went wrong.
-    const existing = await ctx.db
-      .query('sessionEvents')
-      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
-      .take(MAX_SESSION_EVENTS + 1)
-    for (const stale of existing.slice(0, existing.length - MAX_SESSION_EVENTS)) {
-      await ctx.db.delete('sessionEvents', stale._id)
-    }
-
-    await ctx.db.insert('sessionEvents', {
-      orgId: session.orgId,
-      sessionId: session._id,
-      kind,
-      detail: detail?.slice(0, 500),
-      at: Date.now(),
-    })
+    await appendSessionEvent(ctx, session, { kind, detail, at: Date.now() })
     return null
   },
 })
@@ -504,17 +527,36 @@ export const finish = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const now = Date.now()
-    // Deliberately `resolveSessionByToken` and not `requireOpenSession`: a
-    // candidate who has just recorded their answers must be able to finish
-    // even if the role expired a minute ago. Refusing here would strand a
-    // completed interview in `in_progress` with nothing to trigger the
-    // pipeline — punishing the candidate for our own deadline.
     const session = await resolveSessionByToken(ctx, token)
     if (session.status === 'completed') return { alreadyCompleted: true }
-    await consumeLimit(ctx, 'candidateWrite', token)
 
     const project = await ctx.db.get('projects', session.projectId)
     if (!project) throw new ConvexError('not_found')
+
+    // Not `requireOpenSession`, for one reason only: a candidate who has just
+    // recorded their answers must be able to finish even if the role's own
+    // deadline passed a minute ago. Refusing that would strand a sat
+    // interview in `in_progress` with nothing to trigger the pipeline. Every
+    // other blocker stays terminal here as it is everywhere else — a cancelled
+    // link, a session that is itself expired, a role that is not live — or
+    // finishing would undo the recruiter's decision and start the pipeline.
+    const gate = evaluateSessionGate({ session, project, now })
+    const roleDeadlinePassed =
+      gate.state === 'expired' &&
+      session.status !== 'expired' &&
+      project.status === 'active'
+    if (
+      gate.state !== 'ready' &&
+      gate.state !== 'resumable' &&
+      !roleDeadlinePassed
+    ) {
+      throw new ConvexError(gate.state)
+    }
+    // Nothing to finish if nothing was started.
+    if (session.status !== 'in_progress' || gate.needsConsent) {
+      throw new ConvexError('not_started')
+    }
+    await consumeLimit(ctx, 'candidateWrite', token)
 
     await ctx.db.patch('sessions', session._id, {
       status: 'completed',

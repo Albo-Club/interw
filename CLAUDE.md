@@ -198,7 +198,7 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `magicLink()` + `convex()`. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front + streaming HTTP route `/api/chat`. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
+- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front; generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
 - **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
 - **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
 
@@ -612,6 +612,12 @@ verification is in `TESTING.md`.
   so it calls `Date.now()` and ignores whatever `now` it was handed. `now: 0`
   used to resurrect an expired share link and mint an hour of signed URLs on
   the candidate's video.
+- **A measurement presented to a recruiter never depends on an argument
+  either.** Anything a report calls measured (answer length, timings, quote
+  anchors) comes from data the server observed itself — provider output, the
+  stored transcript — never from a number the candidate's client sent. A client
+  value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
+  § "Para-verbal analysis is computed, not generated".
 
 ## Model output
 
@@ -674,6 +680,11 @@ verification is in `TESTING.md`.
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
 - `purgeLog` stores a hash of the candidate's address, never the address.
+- A tool or component that receives candidate data must be reachable by
+  erasure: record the link in the transaction that hands the data over
+  (`chatThreadSessions` for assistant tools). A copy erasure cannot find is a
+  copy erasure does not delete. See `KNOWN_ISSUES.md` § "Components keep their
+  own copies of candidate data".
 
 ## AI and hiring
 

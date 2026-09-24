@@ -28,6 +28,15 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 2,
   },
+  // "Your password was changed" notices: per user. The client fires it after
+  // Better Auth confirms the change, but the mutation is public and cannot
+  // tell a real change from a replay, so each call is one paid send.
+  passwordChangedNotify: {
+    kind: 'token bucket',
+    rate: 3,
+    period: HOUR,
+    capacity: 2,
+  },
   // Chat messages: per user. AI calls are expensive.
   chatSend: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 10 },
   // Job-ad import: per user. Each call is an outbound fetch plus a model
@@ -47,7 +56,7 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
   candidateRead: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 60 },
   // Candidate writes, keyed by token: consent, profile, segment bookkeeping.
   candidateWrite: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
-  // Report share views, keyed by share token.
+  // Report share views, keyed by the resolved share, never the raw token.
   shareView: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
 })
 
@@ -56,6 +65,7 @@ type LimitName =
   | 'magicLinkSend'
   | 'verificationSend'
   | 'passwordResetSend'
+  | 'passwordChangedNotify'
   | 'chatSend'
   | 'jobImport'
   | 'candidateInvite'

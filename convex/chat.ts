@@ -12,18 +12,12 @@ import {
 } from '@convex-dev/agent'
 
 import { components, internal } from './_generated/api'
-import {
-  httpAction,
-  internalAction,
-  internalQuery,
-  mutation,
-  query,
-} from './_generated/server'
+import { internalAction, mutation, query } from './_generated/server'
 import { requireOrgMember } from './lib/auth'
 import { chatAgent } from './agent'
 import { buildInstructions } from './lib/instructions'
-import { authComponent } from './auth'
 import { consumeLimit } from './rateLimiters'
+import type { StreamArgs, SyncStreamsReturnValue } from '@convex-dev/agent'
 import type { DataModel, Id } from './_generated/dataModel'
 import type {
   GenericActionCtx,
@@ -40,18 +34,20 @@ function scopeKey(orgId: Id<'organizations'>, userId: Id<'users'>): string {
   return `${orgId}:${userId}`
 }
 
+/** What `syncStreams` returns for a thread with no streams, per request kind. */
+function emptyStreams(
+  streamArgs: StreamArgs,
+): SyncStreamsReturnValue | undefined {
+  if (!streamArgs) return undefined
+  return streamArgs.kind === 'list'
+    ? { kind: 'list', messages: [] }
+    : { kind: 'deltas', deltas: [] }
+}
+
 // Keep the per-message system prompt bounded.
 const ROUTE_CONTEXT_MAX = 200
 // Auto-title a thread from its first user message.
 const AUTO_TITLE_MAX = 80
-
-export const actionAuthProbe = internalQuery({
-  args: { orgId: v.id('organizations') },
-  handler: async (ctx, { orgId }) => {
-    const { user } = await requireOrgMember(ctx, orgId)
-    return user
-  },
-})
 
 async function authorizeThread(
   ctx: AnyCtx,
@@ -141,7 +137,22 @@ export const listMessages = query({
   handler: async (ctx, { orgId, threadId, paginationOpts, streamArgs }) => {
     const { user } = await requireOrgMember(ctx, orgId)
     const scope = scopeKey(orgId, user._id)
-    await authorizeThread(ctx, threadId, scope)
+    const thread = await ctx.runQuery(components.agent.threads.getThread, {
+      threadId,
+    })
+    // Gone — erasing a candidate deletes every thread that read them, possibly
+    // while it is open. An empty page rather than a throw, which would take
+    // the whole app shell down with the panel. Nothing is read for a thread
+    // with no owner to check against.
+    if (!thread) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: '',
+        streams: emptyStreams(streamArgs),
+      }
+    }
+    if (thread.userId !== scope) throw new ConvexError('forbidden')
     const streams = await syncStreams(ctx, components.agent, {
       threadId,
       streamArgs,
@@ -263,49 +274,4 @@ export const streamAsync = internalAction({
     )
     await result.consumeStream()
   },
-})
-
-/**
- * One-shot HTTP streaming endpoint at /api/chat. Useful for clients that
- * prefer plain HTTP streaming over the WebSocket delta sync (e.g. simple
- * curl tests). For the in-app chat, prefer `sendMessage` + the
- * `listMessages` query.
- */
-export const streamOverHttp = httpAction(async (ctx, request) => {
-  const baUser = await authComponent.safeGetAuthUser(ctx)
-  if (!baUser) return new Response('Unauthorized', { status: 401 })
-
-  const body = (await request.json()) as {
-    orgId?: string
-    threadId?: string
-    prompt?: string
-  }
-  if (!body.orgId || !body.prompt) {
-    return new Response('Bad request', { status: 400 })
-  }
-
-  const probeUser = await ctx.runQuery(internal.chat.actionAuthProbe, {
-    orgId: body.orgId as Id<'organizations'>,
-  })
-  const scope = scopeKey(body.orgId as Id<'organizations'>, probeUser._id)
-
-  const threadId =
-    body.threadId ??
-    (await createThread(ctx, components.agent, { userId: scope }))
-
-  if (body.threadId) {
-    await authorizeThread(ctx, body.threadId, scope)
-  }
-
-  const result = await chatAgent.streamText(
-    ctx,
-    { threadId },
-    { prompt: body.prompt },
-  )
-  const response = result.toTextStreamResponse()
-  if (result.promptMessageId) {
-    response.headers.set('X-Message-Id', result.promptMessageId)
-  }
-  response.headers.set('X-Thread-Id', threadId)
-  return response
 })

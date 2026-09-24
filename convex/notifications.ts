@@ -3,6 +3,7 @@ import { v } from 'convex/values'
 import { internalMutation, mutation } from './_generated/server'
 import { requireAppUser } from './lib/auth'
 import { RESEND_FROM, resend } from './email'
+import { consumeLimit } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
 import type { Id } from './_generated/dataModel'
 
@@ -23,6 +24,7 @@ export const notifyPasswordChanged = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAppUser(ctx)
+    await consumeLimit(ctx, 'passwordChangedNotify', user._id)
     const resetUrl = `${siteUrl}/forgot-password`
     const { subject, html, text } = passwordChangedEmail({
       locale: user.preferredLanguage ?? 'en',
@@ -96,6 +98,15 @@ export const sendReportReady = internalMutation({
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
     for (const userId of recipients) {
+      // Membership is re-checked at send time: `createdBy` and a share row are
+      // attributions inside the org, never a grant that outlives removal.
+      const membership = await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', session.orgId).eq('userId', userId),
+        )
+        .unique()
+      if (!membership) continue
       const user = await ctx.db.get('users', userId)
       if (!user) continue
       const { subject, html, text } = reportReadyEmail({

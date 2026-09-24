@@ -31,6 +31,7 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
+import { appendSessionEvent } from './interview'
 import {
   toCandidateProjectView,
   toCandidateSessionView,
@@ -138,9 +139,7 @@ export const acceptConsent = mutation({
       consentAcceptedAt: now,
       lastActivityAt: now,
     })
-    await ctx.db.insert('sessionEvents', {
-      orgId: session.orgId,
-      sessionId: session._id,
+    await appendSessionEvent(ctx, session, {
       kind: 'consent_accepted',
       at: now,
     })

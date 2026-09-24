@@ -288,6 +288,13 @@ export function AiPanel({
     if (latest) setThreadId(latest._id)
   }, [threadId, draftNew, threads.status, threads.results])
 
+  // The open thread can disappear under us: erasing a candidate deletes every
+  // thread that read them. Drop it, and the effect above resumes the latest.
+  useEffect(() => {
+    if (!threadId || threads.status === 'LoadingFirstPage') return
+    if (!threads.results.some((th) => th._id === threadId)) setThreadId(null)
+  }, [threadId, threads.status, threads.results])
+
   const messages = useUIMessages(
     api.chat.listMessages,
     threadId ? { orgId, threadId } : 'skip',

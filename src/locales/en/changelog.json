@@ -9,6 +9,26 @@
       "title": "A sturdier interview for your candidates",
       "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."
     },
+    "erasure-reaches-copies": {
+      "title": "Deleting a candidate reaches every copy",
+      "body": "We hardened candidate data deletion: when a candidate’s data is erased, the copies kept by our email and assistant services go too — assistant conversations that read it immediately, email copies automatically within 30 days at most."
+    },
+    "candidate-interview-hardening": {
+      "title": "A closed interview stays closed, and a deletion is complete",
+      "body": "We hardened the candidate interview. A cancelled or closed invitation now stays closed at every step, including the last one. The delivery figures in a report are now computed only from what our own systems measured. And deleting a candidate’s data now removes every recording they made, including an answer re-recorded from another browser."
+    },
+    "team-access-hardening": {
+      "title": "Confidential roles stay confidential, and removal ends access",
+      "body": "We tightened who can see and act on confidential roles, and made sure that removing a teammate fully ends their access to your organisation — including the emails they receive about candidates. Restoring an archived role now takes the same rights as archiving it."
+    },
+    "assistant-images-and-role-actions": {
+      "title": "Safer assistant replies, clearer role actions",
+      "body": "We hardened the assistant: images in its replies are no longer loaded, only described. And a role’s Share, Archive and Restore actions are now offered only to the people who can use them."
+    },
+    "abuse-hardening": {
+      "title": "Hardened against misuse",
+      "body": "We hardened the AI assistant, job-ad import, account notifications and shared report links against misuse, so they stay fast and fair for everyone."
+    },
     "assistant-in-europe": {
       "title": "The assistant runs in Europe too",
       "body": "The assistant that answers your questions about roles and candidates now runs on the same French provider as interview transcription and assessment. It reads reports in order to answer you, so what you ask it about a candidate is interview data like any other — and it belongs under the same guarantee: one provider, one destination, and nothing about a candidate leaving it."

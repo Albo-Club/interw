@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexAuth } from 'convex/react'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
-import { useForm } from '@tanstack/react-form'
 import { Trans, useTranslation } from 'react-i18next'
-import { z } from 'zod'
 import { toast } from 'sonner'
 import { ConvexError } from 'convex/values'
 
@@ -12,21 +10,9 @@ import { api } from '../../convex/_generated/api'
 import { authClient } from '~/lib/auth-client'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
-import { classifyAuthError, formatAuthError } from '~/lib/auth-errors'
-import { isPasswordPwned } from '~/lib/hibp'
 import { Button } from '~/components/ui/button'
-import { Input } from '~/components/ui/input'
 import { Spinner } from '~/components/ui/spinner'
-import { PasswordInput } from '~/components/auth/password-input'
-import { PasswordStrength } from '~/components/auth/password-strength'
-import { VerificationSentCard } from '~/components/auth/verification-sent'
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '~/components/ui/field'
+import { EmailSignIn } from '~/components/auth/email-sign-in'
 import {
   Card,
   CardContent,
@@ -64,10 +50,13 @@ function AcceptInvitePage() {
   const acceptMutation = useConvexMutation(api.invitations.accept)
   const triedAccept = useRef(false)
   const [acceptError, setAcceptError] = useState<string | null>(null)
+  // The sign-in form still has steps after its own sign-in (a new account's
+  // name): hold the auto-accept, and keep the form on screen, until it is done.
+  const [signingIn, setSigningIn] = useState(false)
 
   useEffect(() => {
     if (!preview || preview.kind !== 'ok') return
-    if (authLoading || !isAuthenticated) return
+    if (authLoading || !isAuthenticated || signingIn) return
     if (me?.kind !== 'ready' && me?.kind !== 'unprovisioned') return
     const myEmail = me.kind === 'ready' ? me.user.email : null
     if (myEmail && myEmail.toLowerCase() !== preview.email.toLowerCase()) return
@@ -89,7 +78,7 @@ function AcceptInvitePage() {
         triedAccept.current = false
       }
     })()
-  }, [preview, authLoading, isAuthenticated, me, token, navigate, acceptMutation])
+  }, [preview, authLoading, isAuthenticated, signingIn, me, token, navigate, acceptMutation])
 
   if (!preview)
     return <LoadingCard message={t('acceptInvite.loadingInvitation')} />
@@ -118,9 +107,9 @@ function AcceptInvitePage() {
     )
   }
 
-  if (authLoading) return <LoadingCard />
+  if (authLoading && !signingIn) return <LoadingCard />
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !signingIn) {
     if (me?.kind !== 'ready' && me?.kind !== 'unprovisioned') {
       return <LoadingCard />
     }
@@ -140,10 +129,23 @@ function AcceptInvitePage() {
     )
   }
 
-  return preview.accountExists ? (
-    <SignInToAccept preview={preview} />
-  ) : (
-    <SignUpToAccept preview={preview} token={token} />
+  // Google, a code emailed to the invited address (which proves it, and
+  // creates the account on first use), or an existing password.
+  return (
+    <EmailSignIn
+      title={t('acceptInvite.join', { orgName: preview.orgName })}
+      description={
+        <Trans
+          t={t}
+          i18nKey="acceptInvite.signInDescription"
+          values={{ email: preview.email }}
+        />
+      }
+      lockedEmail={preview.email}
+      redirect={`/accept-invite/${token}`}
+      onBusyChange={setSigningIn}
+      onDone={() => setSigningIn(false)}
+    />
   )
 }
 
@@ -231,350 +233,6 @@ function SwitchAccountCard({
             {t('acceptInvite.wrongAccount.switch')}
           </Button>
         </CardFooter>
-      </Card>
-    </main>
-  )
-}
-
-function SignInToAccept({
-  preview,
-}: {
-  preview: Extract<Preview, { kind: 'ok' }>
-}) {
-  const { t } = useTranslation(['auth', 'validation', 'errors'])
-  const te = (k: string) => t(`errors:${k}`)
-  const signInSchema = useMemo(
-    () =>
-      z.object({
-        password: z.string().min(1, t('validation:password.required')),
-      }),
-    [t],
-  )
-  const [loading, setLoading] = useState(false)
-  const [magicLoading, setMagicLoading] = useState(false)
-
-  const form = useForm({
-    defaultValues: { password: '' },
-    validators: { onChange: signInSchema, onSubmit: signInSchema },
-    onSubmit: async ({ value }) => {
-      setLoading(true)
-      const { error } = await authClient.signIn.email({
-        email: preview.email,
-        password: value.password,
-      })
-      setLoading(false)
-      if (error) {
-        toast.error(formatAuthError(classifyAuthError(error), 'signin', te))
-        return
-      }
-      // useConvexAuth flips → auto-accept effect fires in parent
-    },
-  })
-
-  const onMagicLink = async () => {
-    setMagicLoading(true)
-    const { error } = await authClient.signIn.magicLink({
-      email: preview.email,
-      callbackURL: window.location.pathname,
-    })
-    setMagicLoading(false)
-    if (error) {
-      toast.error(formatAuthError(classifyAuthError(error), 'signin', te))
-      return
-    }
-    toast.success(t('auth:magic.sentInbox'))
-  }
-
-  return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {t('auth:acceptInvite.join', { orgName: preview.orgName })}
-          </CardTitle>
-          <CardDescription>
-            <Trans
-              t={t}
-              i18nKey="auth:acceptInvite.signInDescription"
-              values={{ email: preview.email }}
-            />
-          </CardDescription>
-        </CardHeader>
-        <form
-          className="flex flex-col gap-6"
-          onSubmit={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            void form.handleSubmit()
-          }}
-        >
-          <CardContent>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="invite-email">
-                  {t('auth:fields.email')}
-                </FieldLabel>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={preview.email}
-                  readOnly
-                  disabled
-                />
-              </Field>
-              <form.Field name="password">
-                {(field) => {
-                  const invalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field data-invalid={invalid || undefined}>
-                      <FieldLabel htmlFor={field.name}>
-                        {t('auth:fields.password')}
-                      </FieldLabel>
-                      <PasswordInput
-                        id={field.name}
-                        name={field.name}
-                        autoComplete="current-password"
-                        autoFocus
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={invalid || undefined}
-                      />
-                      {invalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
-              </form.Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter className="flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Spinner />}
-              {t('auth:acceptInvite.accept')}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={onMagicLink}
-              disabled={magicLoading}
-            >
-              {magicLoading && <Spinner />}
-              {t('auth:signIn.magicLink')}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-    </main>
-  )
-}
-
-function SignUpToAccept({
-  preview,
-  token,
-}: {
-  preview: Extract<Preview, { kind: 'ok' }>
-  token: string
-}) {
-  const { t } = useTranslation(['auth', 'validation', 'errors'])
-  const te = (k: string) => t(`errors:${k}`)
-  const signUpSchema = useMemo(
-    () =>
-      z.object({
-        name: z.string().min(1, t('validation:name.required')),
-        password: z.string().min(12, t('validation:password.min12')),
-      }),
-    [t],
-  )
-  const [loading, setLoading] = useState(false)
-  const [verificationSent, setVerificationSent] = useState(false)
-
-  const form = useForm({
-    defaultValues: { name: '', password: '' },
-    validators: { onChange: signUpSchema, onSubmit: signUpSchema },
-    onSubmit: async ({ value }) => {
-      setLoading(true)
-      const { error: signUpError } = await authClient.signUp.email({
-        email: preview.email,
-        password: value.password,
-        name: value.name,
-        // Token-gated: the signup databaseHook (convex/auth.ts) pre-verifies
-        // the email when this token resolves to a pending invitation for
-        // preview.email, so the invitee skips the verification round-trip.
-        // callbackURL brings them back here if verification is ever required
-        // (e.g. the token went stale between preview and submit). The client
-        // type doesn't model `inviteToken`, but BA forwards it to the hook
-        // via context.body — hence the cast.
-        inviteToken: token,
-        callbackURL: `/accept-invite/${token}`,
-      } as Parameters<typeof authClient.signUp.email>[0])
-      if (signUpError) {
-        setLoading(false)
-        toast.error(
-          formatAuthError(classifyAuthError(signUpError), 'signup', te),
-        )
-        return
-      }
-      // Email is already verified, so sign in immediately: useConvexAuth flips
-      // and the parent's auto-accept effect fires while we stay on this page.
-      // If the token was not valid the email is unverified → signIn fails →
-      // fall back to the verification screen (callbackURL returns here).
-      const { error: signInError } = await authClient.signIn.email({
-        email: preview.email,
-        password: value.password,
-      })
-      setLoading(false)
-      if (signInError) {
-        setVerificationSent(true)
-      }
-    },
-  })
-
-  if (verificationSent) {
-    return (
-      <VerificationSentCard
-        description={
-          <Trans
-            t={t}
-            i18nKey="auth:acceptInvite.verifyDescription"
-            values={{ email: preview.email, orgName: preview.orgName }}
-          />
-        }
-      />
-    )
-  }
-
-  return (
-    <main className="flex min-h-svh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>
-            {t('auth:acceptInvite.join', { orgName: preview.orgName })}
-          </CardTitle>
-          <CardDescription>
-            <Trans
-              t={t}
-              i18nKey="auth:acceptInvite.signUpDescription"
-              values={{ email: preview.email }}
-            />
-          </CardDescription>
-        </CardHeader>
-        <form
-          className="flex flex-col gap-6"
-          onSubmit={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            void form.handleSubmit()
-          }}
-        >
-          <CardContent>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="invite-email">
-                  {t('auth:fields.email')}
-                </FieldLabel>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={preview.email}
-                  readOnly
-                  disabled
-                />
-              </Field>
-              <form.Field name="name">
-                {(field) => {
-                  const invalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field data-invalid={invalid || undefined}>
-                      <FieldLabel htmlFor={field.name}>
-                        {t('auth:fields.yourName')}
-                      </FieldLabel>
-                      <Input
-                        id={field.name}
-                        autoComplete="name"
-                        autoFocus
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={invalid || undefined}
-                      />
-                      {invalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
-              </form.Field>
-              <form.Field
-                name="password"
-                validators={{
-                  onBlurAsync: async ({ value }) => {
-                    if (!value || value.length < 12) return undefined
-                    const { pwned } = await isPasswordPwned(value)
-                    return pwned
-                      ? { message: t('validation:password.pwned') }
-                      : undefined
-                  },
-                }}
-              >
-                {(field) => {
-                  const invalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  const isValidating = field.state.meta.isValidating
-                  return (
-                    <Field data-invalid={invalid || undefined}>
-                      <FieldLabel htmlFor={field.name}>
-                        {t('auth:fields.password')}
-                      </FieldLabel>
-                      <PasswordInput
-                        id={field.name}
-                        name={field.name}
-                        autoComplete="new-password"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={invalid || undefined}
-                      />
-                      <FieldDescription>
-                        {isValidating ? (
-                          <span
-                            className="flex items-center gap-1.5"
-                            aria-live="polite"
-                          >
-                            <Spinner className="size-3" />
-                            {t('auth:password.checking')}
-                          </span>
-                        ) : (
-                          t('auth:password.hint')
-                        )}
-                      </FieldDescription>
-                      <PasswordStrength
-                        value={field.state.value}
-                        userInputs={[
-                          preview.email,
-                          form.getFieldValue('name'),
-                        ]}
-                      />
-                      {invalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
-              </form.Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Spinner />}
-              {t('auth:acceptInvite.accept')}
-            </Button>
-          </CardFooter>
-        </form>
       </Card>
     </main>
   )

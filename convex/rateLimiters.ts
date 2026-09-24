@@ -11,10 +11,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 5,
   },
-  // Magic-link sign-in emails: per recipient email.
-  magicLinkSend: { kind: 'token bucket', rate: 5, period: HOUR, capacity: 2 },
+  // Sign-in code emails: per recipient email, charged by `perEmailQuota` in
+  // convex/auth.ts. Room for a code, a resend and a retyped address; after
+  // that, one every ten minutes.
+  emailCodeSend: { kind: 'token bucket', rate: 6, period: HOUR, capacity: 3 },
   // Email-verification resends: per recipient email. Separate bucket so a
-  // user re-asking for a verification link doesn't eat into magic-link quota.
+  // user re-asking for a verification link doesn't eat into sign-in codes.
   verificationSend: {
     kind: 'token bucket',
     rate: 5,
@@ -62,9 +64,6 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 
 type LimitName =
   | 'invitationCreate'
-  | 'magicLinkSend'
-  | 'verificationSend'
-  | 'passwordResetSend'
   | 'passwordChangedNotify'
   | 'chatSend'
   | 'jobImport'

@@ -214,9 +214,10 @@ function ProfilePage() {
   async function handleMagicLink() {
     if (me?.kind !== 'ready') return
     setSendingMagic(true)
-    const { error } = await authClient.signIn.magicLink({
+    // Magic links were replaced by sign-in codes (convex/auth.ts).
+    const { error } = await authClient.emailOtp.sendVerificationOtp({
       email: me.user.email,
-      callbackURL: '/app',
+      type: 'sign-in',
     })
     setSendingMagic(false)
     if (error) {

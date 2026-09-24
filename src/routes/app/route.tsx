@@ -1,9 +1,15 @@
 import { useEffect } from 'react'
-import { Outlet, createFileRoute, useNavigate } from '@tanstack/react-router'
+import {
+  Outlet,
+  createFileRoute,
+  useLocation,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '../../../convex/_generated/api'
 import { useAuthState } from '~/lib/auth-state'
+import { rememberSessionActive, takeLostSession } from '~/lib/auth-memory'
 
 export const Route = createFileRoute('/app')({
   component: AppLayout,
@@ -11,6 +17,7 @@ export const Route = createFileRoute('/app')({
 
 function AppLayout() {
   const navigate = useNavigate()
+  const { href } = useLocation()
   const { t } = useTranslation('nav')
   const { isLoading, isAuthenticated, isSignedOut } = useAuthState()
   const me = useConvexQuery(
@@ -23,10 +30,23 @@ function AppLayout() {
     // Only redirect when BA confirms no session. Don't redirect on the
     // transient `convexAuth=false while BA session loading` state — that
     // caused tab-A→tab-B and hard-refresh logouts in dev.
+    // Back to this very page once signed in, with a word of explanation when
+    // this browser had a session it never signed out of.
     if (isSignedOut) {
-      navigate({ to: '/login' })
+      navigate({
+        to: '/login',
+        search: {
+          redirect: href === '/app' ? undefined : href,
+          expired: takeLostSession() ? 1 : undefined,
+        },
+        replace: true,
+      })
     }
-  }, [isSignedOut, navigate])
+  }, [isSignedOut, navigate, href])
+
+  useEffect(() => {
+    if (isAuthenticated) rememberSessionActive()
+  }, [isAuthenticated])
 
   useEffect(() => {
     if (me?.kind === 'unprovisioned') {

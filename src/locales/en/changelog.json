@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "verification-needs-password": {
+      "title": "Confirming your email now asks for your password",
+      "body": "We strengthened email verification: after clicking the link, you now sign in with your password to confirm your address. That way a verification link can only ever complete an account you set up yourself."
+    },
     "job-import-pinned": {
       "title": "Job-ad import, hardened",
       "body": "We hardened how job-ad imports reach the web: each page is now fetched only from the address we checked."

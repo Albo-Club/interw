@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "verification-needs-password": {
+      "title": "Confirmer votre e-mail demande désormais votre mot de passe",
+      "body": "Nous avons renforcé la vérification des e-mails : après avoir cliqué sur le lien, vous vous connectez avec votre mot de passe pour confirmer votre adresse. Ainsi, un lien de vérification ne peut finaliser qu’un compte que vous avez créé vous-même."
+    },
     "job-import-pinned": {
       "title": "L’import d’annonces renforcé",
       "body": "Nous avons renforcé la façon dont l’import d’annonces accède au web : chaque page n’est désormais récupérée qu’à l’adresse que nous avons vérifiée."

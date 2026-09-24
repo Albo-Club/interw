@@ -9,6 +9,18 @@
       "title": "Job-ad import, hardened",
       "body": "We hardened how job-ad imports reach the web: each page is now fetched only from the address we checked."
     },
+    "erasure-reaches-copies": {
+      "title": "Deleting a candidate reaches every copy",
+      "body": "We hardened candidate data deletion: when a candidate’s data is erased, the copies kept by our email and assistant services go too — assistant conversations that read it immediately, email copies automatically within 30 days at most."
+    },
+    "candidate-interview-hardening": {
+      "title": "A closed interview stays closed, and a deletion is complete",
+      "body": "We hardened the candidate interview. A cancelled or closed invitation now stays closed at every step, including the last one. The delivery figures in a report are now computed only from what our own systems measured. And deleting a candidate’s data now removes every recording they made, including an answer re-recorded from another browser."
+    },
+    "team-access-hardening": {
+      "title": "Confidential roles stay confidential, and removal ends access",
+      "body": "We tightened who can see and act on confidential roles, and made sure that removing a teammate fully ends their access to your organisation — including the emails they receive about candidates. Restoring an archived role now takes the same rights as archiving it."
+    },
     "assistant-images-and-role-actions": {
       "title": "Safer assistant replies, clearer role actions",
       "body": "We hardened the assistant: images in its replies are no longer loaded, only described. And a role’s Share, Archive and Restore actions are now offered only to the people who can use them."

@@ -3,6 +3,8 @@ import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { makeFunctionReference } from 'convex/server'
+
 import { api, internal } from './_generated/api'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
@@ -58,6 +60,7 @@ function newTest() {
 type World = {
   acmeOrgId: Id<'organizations'>
   openProjectId: Id<'projects'>
+  restrictedProjectId: Id<'projects'>
   sessionId: Id<'sessions'>
 }
 
@@ -169,7 +172,7 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
       generatedAt: 0,
     })
 
-    return { acmeOrgId, openProjectId, sessionId }
+    return { acmeOrgId, openProjectId, restrictedProjectId, sessionId }
   })
 }
 
@@ -292,6 +295,172 @@ describe('project visibility inside an organisation', () => {
     })
     expect(detail.project.slug).toBe('chief-of-staff')
   })
+
+  /**
+   * Audit 2026-09-22, `convex/emailEvents.ts:recent:org-scope-without-project-visibility`.
+   * The deliverability list is derived from the invitations, so it inherits
+   * the visibility of the role each one was sent for.
+   */
+  it('does not leak a restricted role’s candidates through the deliverability list', async () => {
+    await t.run(async (ctx) => {
+      const hidden = await ctx.db.insert('sessions', {
+        orgId: w.acmeOrgId,
+        projectId: w.restrictedProjectId,
+        accessToken: 'h'.repeat(43),
+        candidateName: 'Sam Hidden',
+        candidateEmail: 'hidden@candidate.test',
+        status: 'pending',
+        lastQuestionIndex: 0,
+        invitedBy: (await ctx.db.get('projects', w.restrictedProjectId))!
+          .createdBy,
+        invitedAt: 0,
+      })
+      await ctx.db.insert('emailLog', {
+        orgId: w.acmeOrgId,
+        template: 'candidate-invitation',
+        recipient: 'hidden@candidate.test',
+        status: 'sent',
+        sessionId: hidden,
+        createdAt: 1,
+      })
+    })
+
+    const excluded = await as(t, 'acmeMember').query(api.emailEvents.recent, {
+      orgId: w.acmeOrgId,
+    })
+    expect(excluded.map((row) => row.recipient)).not.toContain(
+      'hidden@candidate.test',
+    )
+    const named = await as(t, 'acmeShared').query(api.emailEvents.recent, {
+      orgId: w.acmeOrgId,
+    })
+    expect(named.map((row) => row.recipient)).toContain('hidden@candidate.test')
+  })
+
+  /**
+   * Same finding, count variant. `sessions.countsForOrg` had no caller and
+   * counted every role's sessions; `dashboard.overview` is the filtered
+   * source of the same numbers, so the unfiltered copy is gone rather than
+   * kept in sync.
+   */
+  it('no longer exposes an unfiltered session count', async () => {
+    await expect(
+      as(t, 'acmeMember').query(
+        makeFunctionReference<'query'>('sessions:countsForOrg'),
+        { orgId: w.acmeOrgId },
+      ),
+    ).rejects.toThrow()
+  })
+})
+
+/**
+ * Audit 2026-09-22, `convex/organizations.ts:removeMember:projectShares-not-revoked`.
+ * Membership is the hard boundary: a share or a `createdBy` attribution must
+ * not keep acting for someone after they were removed.
+ */
+describe('removing a member revokes what was granted through them', () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+
+  beforeEach(async () => {
+    t = newTest()
+    w = await seed(t)
+  })
+
+  async function removeShared() {
+    const membership = await t.run(async (ctx) => {
+      const user = await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_acmeShared'))
+        .unique()
+      return (await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', w.acmeOrgId).eq('userId', user!._id),
+        )
+        .unique())!
+    })
+    await as(t, 'acmeOwner').mutation(api.organizations.removeMember, {
+      orgId: w.acmeOrgId,
+      memberId: membership._id,
+    })
+    return membership.userId
+  }
+
+  async function completeInterviewOn(projectId: Id<'projects'>) {
+    const sessionId = await t.run(async (ctx) => {
+      const project = (await ctx.db.get('projects', projectId))!
+      const id = await ctx.db.insert('sessions', {
+        orgId: w.acmeOrgId,
+        projectId,
+        accessToken: 'r'.repeat(43),
+        candidateName: 'Dana Fictional',
+        candidateEmail: 'dana@candidate.test',
+        status: 'completed',
+        lastQuestionIndex: 1,
+        invitedBy: project.createdBy,
+        invitedAt: 0,
+        completedAt: 1,
+      })
+      await ctx.db.insert('reports', {
+        orgId: w.acmeOrgId,
+        sessionId: id,
+        overallScore: 87,
+        recommendation: 'strong_yes',
+        executiveSummary: 'Strong.',
+        criteriaScores: [],
+        strengths: ['Something'],
+        concerns: [],
+        model: 'test',
+        generatedAt: 0,
+      })
+      return id
+    })
+    await t.mutation(internal.notifications.sendReportReady, { sessionId })
+    return await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query('emailLog')
+          .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+          .collect()
+      ).map((row) => row.recipient),
+    )
+  }
+
+  it('stops mailing reports of a role they were named on', async () => {
+    await removeShared()
+    const recipients = await completeInterviewOn(w.restrictedProjectId)
+    expect(recipients).not.toContain('acmeShared@example.test')
+    expect(recipients).toContain('acmeOwner@example.test')
+  })
+
+  it('stops mailing reports of a role they created', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) =>
+      ctx.db.patch('projects', w.openProjectId, { createdBy: userId }),
+    )
+    const recipients = await completeInterviewOn(w.openProjectId)
+    expect(recipients).not.toContain('acmeShared@example.test')
+    expect(recipients).toContain('acmeMember@example.test')
+  })
+
+  it('does not restore a restricted role on re-invitation', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) =>
+      ctx.db.insert('organizationMembers', {
+        orgId: w.acmeOrgId,
+        userId,
+        role: 'member',
+        joinedAt: 2,
+      }),
+    )
+    await expect(
+      as(t, 'acmeShared').query(api.projects.getBySlug, {
+        orgId: w.acmeOrgId,
+        slug: 'chief-of-staff',
+      }),
+    ).rejects.toThrow('not_found')
+  })
 })
 
 /**
@@ -321,6 +490,27 @@ describe('destructive actions need owner or admin', () => {
       ctx.db.get('projects', w.openProjectId),
     )
     expect(project?.status).toBe('active')
+  })
+
+  /**
+   * Audit 2026-09-22, `convex/projects.ts:restore:requireProjectAccess-weaker-than-archive`.
+   * Restoring lifts the freeze and, via `publish`, reopens every link the
+   * archival closed: it is the same decision in reverse, so the same tier.
+   */
+  it('refuses a plain member the right to restore an archived role', async () => {
+    await as(t, 'acmeOwner').mutation(api.projects.archive, {
+      projectId: w.openProjectId,
+    })
+    await expect(
+      as(t, 'acmeMember').mutation(api.projects.restore, {
+        projectId: w.openProjectId,
+      }),
+    ).rejects.toThrow('insufficient_role')
+
+    const project = await t.run(async (ctx) =>
+      ctx.db.get('projects', w.openProjectId),
+    )
+    expect(project?.status).toBe('archived')
   })
 
   /**
@@ -392,5 +582,102 @@ describe('the super-admin boundary', () => {
         )!._id,
       }),
     ).rejects.toThrow()
+  })
+})
+
+/**
+ * Audit 2026-09-22, `convex/files.ts:setMyAvatar:storageId-unbound-to-caller`.
+ * Convex storage has no per-file owner: the reference in our own rows is the
+ * only ownership record, so an avatar may only claim a blob nobody else holds.
+ */
+describe('storage handles', () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+  let logoId: Id<'_storage'>
+
+  beforeEach(async () => {
+    t = newTest()
+    w = await seed(t)
+    logoId = await t.run(async (ctx) => {
+      const id = await ctx.storage.store(new Blob(['logo']))
+      await ctx.db.patch('organizations', w.acmeOrgId, { logoStorageId: id })
+      return id
+    })
+  })
+
+  const blobExists = (id: Id<'_storage'>) =>
+    t.run(async (ctx) => (await ctx.db.system.get('_storage', id)) !== null)
+
+  it('does not hand the logo’s storage id to members', async () => {
+    const org = await as(t, 'acmeMember').query(api.organizations.bySlug, {
+      slug: 'acme',
+    })
+    expect(org).not.toHaveProperty('logoStorageId')
+    expect(org?.logoUrl).toBeTruthy()
+  })
+
+  it('refuses to attach the organisation logo as an avatar', async () => {
+    await expect(
+      as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+        storageId: logoId,
+      }),
+    ).rejects.toThrow('not_found')
+    await as(t, 'acmeMember').mutation(api.files.removeMyAvatar, {})
+    expect(await blobExists(logoId)).toBe(true)
+  })
+
+  it('refuses to attach a colleague’s avatar', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    await as(t, 'acmeOwner').mutation(api.files.setMyAvatar, {
+      storageId: avatarId,
+    })
+    await expect(
+      as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+        storageId: avatarId,
+      }),
+    ).rejects.toThrow('not_found')
+    expect(await blobExists(avatarId)).toBe(true)
+  })
+
+  it('does not delete a blob still referenced elsewhere when an account is deleted', async () => {
+    // A row written before the claim check existed may point at the logo.
+    await t.run(async (ctx) => {
+      const member = (await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_acmeMember'))
+        .unique())!
+      await ctx.db.patch('users', member._id, { avatarStorageId: logoId })
+    })
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    expect(await blobExists(logoId)).toBe(true)
+  })
+
+  it('still deletes an avatar only that account held', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    await as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+      storageId: avatarId,
+    })
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    expect(await blobExists(avatarId)).toBe(false)
+  })
+
+  it('keeps the blob when an avatar is re-attached', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    for (let i = 0; i < 2; i++) {
+      await as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+        storageId: avatarId,
+      })
+    }
+    expect(await blobExists(avatarId)).toBe(true)
   })
 })

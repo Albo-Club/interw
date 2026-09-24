@@ -9,7 +9,7 @@ import {
 import { authComponent } from './auth'
 import { provisionAppUser, requireAppUser, safeAppUser } from './lib/auth'
 import { getLastOrgSlug } from './lib/userPrefs'
-import { resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
+import { release, resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 
 export const me = query({
   args: {},
@@ -176,12 +176,10 @@ export const cascadeDelete = internalMutation({
       .unique()
     if (prefs) await ctx.db.delete('userPrefs', prefs._id)
 
-    if (appUser.avatarStorageId) {
-      try {
-        await ctx.storage.delete(appUser.avatarStorageId)
-      } catch {
-        // ignore — storage may already be gone
-      }
+    try {
+      await release(ctx, appUser.avatarStorageId, appUser._id)
+    } catch {
+      // ignore — storage may already be gone
     }
 
     await ctx.db.delete("users", appUser._id)

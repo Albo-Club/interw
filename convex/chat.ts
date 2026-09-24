@@ -17,6 +17,7 @@ import { requireOrgMember } from './lib/auth'
 import { chatAgent } from './agent'
 import { buildInstructions } from './lib/instructions'
 import { consumeLimit } from './rateLimiters'
+import type { StreamArgs, SyncStreamsReturnValue } from '@convex-dev/agent'
 import type { DataModel, Id } from './_generated/dataModel'
 import type {
   GenericActionCtx,
@@ -31,6 +32,16 @@ type AnyCtx =
 
 function scopeKey(orgId: Id<'organizations'>, userId: Id<'users'>): string {
   return `${orgId}:${userId}`
+}
+
+/** What `syncStreams` returns for a thread with no streams, per request kind. */
+function emptyStreams(
+  streamArgs: StreamArgs,
+): SyncStreamsReturnValue | undefined {
+  if (!streamArgs) return undefined
+  return streamArgs.kind === 'list'
+    ? { kind: 'list', messages: [] }
+    : { kind: 'deltas', deltas: [] }
 }
 
 // Keep the per-message system prompt bounded.
@@ -126,7 +137,22 @@ export const listMessages = query({
   handler: async (ctx, { orgId, threadId, paginationOpts, streamArgs }) => {
     const { user } = await requireOrgMember(ctx, orgId)
     const scope = scopeKey(orgId, user._id)
-    await authorizeThread(ctx, threadId, scope)
+    const thread = await ctx.runQuery(components.agent.threads.getThread, {
+      threadId,
+    })
+    // Gone — erasing a candidate deletes every thread that read them, possibly
+    // while it is open. An empty page rather than a throw, which would take
+    // the whole app shell down with the panel. Nothing is read for a thread
+    // with no owner to check against.
+    if (!thread) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: '',
+        streams: emptyStreams(streamArgs),
+      }
+    }
+    if (thread.userId !== scope) throw new ConvexError('forbidden')
     const streams = await syncStreams(ctx, components.agent, {
       threadId,
       streamArgs,

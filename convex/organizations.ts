@@ -122,8 +122,12 @@ export const bySlug = query({
       )
       .unique()
     if (!member) return null
+    // Never the raw row: `logoStorageId` is a handle to a blob only admins
+    // may manage, and the client needs nothing but the resolved URL.
     return {
-      ...org,
+      _id: org._id,
+      slug: org.slug,
+      name: org.name,
       logoUrl: await resolveLogoUrl(ctx, org),
     }
   },
@@ -211,6 +215,19 @@ export const removeMember = mutation({
       const owners = await countOwners(ctx, orgId)
       if (owners <= 1) throw new ConvexError('last_owner')
     }
+
+    // A project share was only ever legal because the person was a member
+    // (`setShares` rejects a non-member), so it dies with the membership.
+    // Left behind, it silently restores the restricted role if they are ever
+    // re-invited.
+    const shares = await ctx.db
+      .query('projectShares')
+      .withIndex('by_user', (q) => q.eq('userId', target.userId))
+      .collect()
+    for (const share of shares) {
+      if (share.orgId === orgId) await ctx.db.delete('projectShares', share._id)
+    }
+
     await ctx.db.delete("organizationMembers", memberId)
     return null
   },

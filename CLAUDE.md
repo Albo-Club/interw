@@ -612,6 +612,12 @@ verification is in `TESTING.md`.
   so it calls `Date.now()` and ignores whatever `now` it was handed. `now: 0`
   used to resurrect an expired share link and mint an hour of signed URLs on
   the candidate's video.
+- **A measurement presented to a recruiter never depends on an argument
+  either.** Anything a report calls measured (answer length, timings, quote
+  anchors) comes from data the server observed itself — provider output, the
+  stored transcript — never from a number the candidate's client sent. A client
+  value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
+  § "Para-verbal analysis is computed, not generated".
 
 ## Model output
 
@@ -674,6 +680,11 @@ verification is in `TESTING.md`.
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
 - `purgeLog` stores a hash of the candidate's address, never the address.
+- A tool or component that receives candidate data must be reachable by
+  erasure: record the link in the transaction that hands the data over
+  (`chatThreadSessions` for assistant tools). A copy erasure cannot find is a
+  copy erasure does not delete. See `KNOWN_ISSUES.md` § "Components keep their
+  own copies of candidate data".
 
 ## AI and hiring
 

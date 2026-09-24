@@ -23,7 +23,7 @@
     },
     "completed": {
       "title": "Vous avez déjà terminé cet entretien",
-      "body": "Merci — il n'y a rien de plus à faire. {{org}} a vos réponses et reviendra vers vous."
+      "body": "Merci — vous n'avez plus rien à faire. Vos réponses ont été envoyées et l'équipe reviendra vers vous directement."
     }
   },
   "welcome": {
@@ -185,6 +185,7 @@
       "body": "Vos enregistrements, votre transcription, l'analyse et les documents envoyés seront définitivement supprimés. {{org}} ne pourra plus étudier cette candidature. Cette action est irréversible.",
       "confirm": "Supprimer définitivement"
     },
+    "deleting": "Suppression de vos données…",
     "deleted": {
       "title": "Vos données ont été supprimées",
       "body": "Plus rien de cet entretien n'est conservé. Vous pouvez fermer cette page."

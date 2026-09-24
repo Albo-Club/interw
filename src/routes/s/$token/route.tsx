@@ -2,7 +2,10 @@ import { Outlet, createFileRoute } from '@tanstack/react-router'
 
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
-import { RouterErrorFallback, RouterNotFound } from '~/components/RouterFallbacks'
+import {
+  CandidateError,
+  CandidateNotFound,
+} from '~/components/candidate/CandidateError'
 
 /**
  * The candidate surface.
@@ -17,8 +20,10 @@ import { RouterErrorFallback, RouterNotFound } from '~/components/RouterFallback
  */
 export const Route = createFileRoute('/s/$token')({
   component: CandidateLayout,
-  errorComponent: RouterErrorFallback,
-  notFoundComponent: RouterNotFound,
+  // The candidate's own fallbacks, never the back office's: its "Go home"
+  // button led a candidate holding a dead link to the marketing site.
+  errorComponent: CandidateError,
+  notFoundComponent: CandidateNotFound,
   head: () => ({
     meta: [
       {

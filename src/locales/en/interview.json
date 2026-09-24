@@ -23,7 +23,7 @@
     },
     "completed": {
       "title": "You've already completed this interview",
-      "body": "Thank you — there is nothing more to do. {{org}} has your answers and will be in touch."
+      "body": "Thank you — there is nothing more to do. Your answers have been sent, and the team will contact you directly."
     }
   },
   "welcome": {
@@ -185,6 +185,7 @@
       "body": "Your recordings, transcript, analysis and uploaded documents will be permanently deleted. {{org}} will no longer be able to consider this application. This cannot be undone.",
       "confirm": "Delete permanently"
     },
+    "deleting": "Deleting your data…",
     "deleted": {
       "title": "Your data has been deleted",
       "body": "Nothing from this interview is held any more. You can close this page."

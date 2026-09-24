@@ -30,7 +30,7 @@ import {
   CandidateShell,
   candidateAction,
 } from '~/components/candidate/CandidateShell'
-import { InterviewCrash } from '~/components/candidate/InterviewCrash'
+import { CandidateError } from '~/components/candidate/CandidateError'
 import { cn } from '~/lib/utils'
 
 type DeviceChoice = { camera?: string; mic?: string }
@@ -45,7 +45,7 @@ export const Route = createFileRoute('/s/$token/interview')({
     mic: typeof search.mic === 'string' ? search.mic : undefined,
   }),
   component: InterviewRunner,
-  errorComponent: InterviewCrash,
+  errorComponent: CandidateError,
 })
 
 /** The countdown appears for the last 30 seconds, never before. */

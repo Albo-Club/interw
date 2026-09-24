@@ -19,7 +19,10 @@ import {
   AlertDialogTitle,
 } from '~/components/ui/alert-dialog'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
-import { CandidateShell } from '~/components/candidate/CandidateShell'
+import {
+  CandidateShell,
+  candidateAction,
+} from '~/components/candidate/CandidateShell'
 
 export const Route = createFileRoute('/s/$token/privacy')({
   component: CandidatePrivacy,
@@ -29,19 +32,31 @@ function CandidatePrivacy() {
   const { t } = useTranslation(['interview', 'common'])
   const { token } = Route.useParams()
   const [now] = useState(() => Date.now())
-  const summary = useConvexQuery(api.candidate.privacySummary, { token, now })
+  const [erasure, setErasure] = useState<'idle' | 'deleting' | 'deleted'>(
+    'idle',
+  )
+  // Unsubscribed the moment deletion starts. The summary is a reactive query
+  // on the session being deleted: it throws `not_found` as soon as the rows
+  // go — before the action even returns — and the candidate saw a crash
+  // instead of the confirmation of their erasure.
+  const summary = useConvexQuery(
+    api.candidate.privacySummary,
+    erasure === 'idle' ? { token, now } : 'skip',
+  )
   const deleteMyData = useConvexAction(api.candidate.deleteMyData)
 
   const [confirming, setConfirming] = useState(false)
-  const [deleted, setDeleted] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (deleted) {
+  if (erasure !== 'idle') {
     return (
       <CandidateNotice
-        title={t('interview:privacy.deleted.title')}
-        body={t('interview:privacy.deleted.body')}
+        title={t(
+          erasure === 'deleted'
+            ? 'interview:privacy.deleted.title'
+            : 'interview:privacy.deleting',
+        )}
+        body={erasure === 'deleted' ? t('interview:privacy.deleted.body') : ''}
       />
     )
   }
@@ -57,17 +72,16 @@ function CandidatePrivacy() {
   const org = summary.organisationName
 
   const remove = async () => {
-    setBusy(true)
+    setConfirming(false)
     setError(null)
+    setErasure('deleting')
     try {
       await deleteMyData({ token })
-      setDeleted(true)
+      setErasure('deleted')
     } catch (cause) {
+      setErasure('idle')
       const { key, fallbackKey } = errorMessageKey(cause, 'interview')
       setError(t(key, { defaultValue: t(fallbackKey) }))
-    } finally {
-      setBusy(false)
-      setConfirming(false)
     }
   }
 
@@ -123,8 +137,8 @@ function CandidatePrivacy() {
           <Button
             variant="destructive"
             size="lg"
+            className={candidateAction}
             onClick={() => setConfirming(true)}
-            disabled={busy}
           >
             {t('interview:privacy.delete')}
           </Button>

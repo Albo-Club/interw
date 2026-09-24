@@ -291,6 +291,46 @@ describe('erasure', () => {
     expect(after.rows).toEqual([])
   })
 
+  /**
+   * The recruiter may have that thread open when it goes. `listMessages` used
+   * to throw on a missing thread, and the panel rendering it has no error
+   * boundary of its own, so the whole app shell fell to the router's fallback.
+   */
+  it('reads an erased thread as empty, and a foreign one as forbidden', async () => {
+    const s = await seed(t)
+    const { gone, foreign } = await t.run(async (ctx) => {
+      const user = await ctx.db.query('users').first()
+      const own = await createThread(ctx, components.agent, {
+        userId: `${s.orgId}:${user!._id}`,
+      })
+      await ctx.runMutation(components.agent.threads.deleteAllForThreadIdAsync, {
+        threadId: own,
+      })
+      return {
+        gone: own,
+        foreign: await createThread(ctx, components.agent, {
+          userId: `${s.orgId}:someone-else`,
+        }),
+      }
+    })
+    const recruiter = t.withIdentity({ subject: 'ba_recruiter' })
+    const read = (threadId: string) =>
+      recruiter.query(api.chat.listMessages, {
+        orgId: s.orgId,
+        threadId,
+        paginationOpts: { numItems: 10, cursor: null },
+        streamArgs: { kind: 'list' },
+      })
+
+    await expect(read(gone)).resolves.toEqual({
+      page: [],
+      isDone: true,
+      continueCursor: '',
+      streams: { kind: 'list', messages: [] },
+    })
+    await expect(read(foreign)).rejects.toThrow(/forbidden/)
+  })
+
   it('refuses to write the register without a salt', async () => {
     vi.stubEnv('PURGE_HASH_SALT', '')
     await expect(

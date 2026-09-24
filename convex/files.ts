@@ -29,6 +29,54 @@ async function validateImage(
   }
 }
 
+/**
+ * Whether a row other than `self` references this blob. Convex storage has no
+ * per-file owner, so our own references are the only ownership record: an
+ * avatar or logo may not claim a blob someone else holds, and clearing one
+ * never deletes a blob another row still points at.
+ */
+async function heldElsewhere(
+  ctx: GenericMutationCtx<DataModel>,
+  storageId: Id<'_storage'>,
+  self: Id<'users'> | Id<'organizations'>,
+): Promise<boolean> {
+  // `take(2)`, not `first()`: rows written before this check existed may
+  // already share a blob, and `self` must not hide the other holder.
+  const users = await ctx.db
+    .query('users')
+    .withIndex('by_avatarStorageId', (q) => q.eq('avatarStorageId', storageId))
+    .take(2)
+  const orgs = await ctx.db
+    .query('organizations')
+    .withIndex('by_logoStorageId', (q) => q.eq('logoStorageId', storageId))
+    .take(2)
+  return [...users, ...orgs].some((row) => row._id !== self)
+}
+
+/** Checked before `validateImage`, which deletes a blob it rejects. */
+async function claim(
+  ctx: GenericMutationCtx<DataModel>,
+  storageId: Id<'_storage'>,
+  self: Id<'users'> | Id<'organizations'>,
+): Promise<void> {
+  // Same refusal as an id that does not exist: the caller learns nothing
+  // about whose blob it is.
+  if (await heldElsewhere(ctx, storageId, self)) {
+    throw new ConvexError('not_found')
+  }
+  await validateImage(ctx, storageId)
+}
+
+async function release(
+  ctx: GenericMutationCtx<DataModel>,
+  storageId: Id<'_storage'> | undefined,
+  self: Id<'users'> | Id<'organizations'>,
+): Promise<void> {
+  if (storageId && !(await heldElsewhere(ctx, storageId, self))) {
+    await ctx.storage.delete(storageId)
+  }
+}
+
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
@@ -41,9 +89,9 @@ export const setMyAvatar = mutation({
   args: { storageId: v.id('_storage') },
   handler: async (ctx, { storageId }) => {
     const user = await requireAppUser(ctx)
-    await validateImage(ctx, storageId)
-    if (user.avatarStorageId) {
-      await ctx.storage.delete(user.avatarStorageId)
+    await claim(ctx, storageId, user._id)
+    if (user.avatarStorageId !== storageId) {
+      await release(ctx, user.avatarStorageId, user._id)
     }
     await ctx.db.patch("users", user._id, {
       avatarStorageId: storageId,
@@ -57,9 +105,7 @@ export const removeMyAvatar = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAppUser(ctx)
-    if (user.avatarStorageId) {
-      await ctx.storage.delete(user.avatarStorageId)
-    }
+    await release(ctx, user.avatarStorageId, user._id)
     await ctx.db.patch("users", user._id, {
       avatarStorageId: undefined,
       avatarUrl: undefined,
@@ -72,10 +118,10 @@ export const setOrgLogo = mutation({
   args: { orgId: v.id('organizations'), storageId: v.id('_storage') },
   handler: async (ctx, { orgId, storageId }) => {
     await requireOrgRole(ctx, orgId, 'admin')
-    await validateImage(ctx, storageId)
+    await claim(ctx, storageId, orgId)
     const org = await ctx.db.get("organizations", orgId)
-    if (org?.logoStorageId) {
-      await ctx.storage.delete(org.logoStorageId)
+    if (org?.logoStorageId !== storageId) {
+      await release(ctx, org?.logoStorageId, orgId)
     }
     await ctx.db.patch("organizations", orgId, {
       logoStorageId: storageId,
@@ -90,9 +136,7 @@ export const removeOrgLogo = mutation({
   handler: async (ctx, { orgId }) => {
     await requireOrgRole(ctx, orgId, 'admin')
     const org = await ctx.db.get("organizations", orgId)
-    if (org?.logoStorageId) {
-      await ctx.storage.delete(org.logoStorageId)
-    }
+    await release(ctx, org?.logoStorageId, orgId)
     await ctx.db.patch("organizations", orgId, {
       logoStorageId: undefined,
       logoUrl: undefined,

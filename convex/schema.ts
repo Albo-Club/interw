@@ -247,7 +247,8 @@ export default defineSchema({
     lastOrgSlug: v.optional(v.string()),
   })
     .index('by_betterAuthId', ['betterAuthId'])
-    .index('by_email', ['email']),
+    .index('by_email', ['email'])
+    .index('by_avatarStorageId', ['avatarStorageId']),
 
   // Frequently-written per-user state, isolated from `users` on purpose:
   // every query reads the caller's `users` row (requireAppUser), so writes
@@ -265,7 +266,9 @@ export default defineSchema({
     logoStorageId: v.optional(v.id('_storage')),
     createdBy: v.id('users'),
     createdAt: v.number(),
-  }).index('by_slug', ['slug']),
+  })
+    .index('by_slug', ['slug'])
+    .index('by_logoStorageId', ['logoStorageId']),
 
   organizationMembers: defineTable({
     orgId: v.id('organizations'),

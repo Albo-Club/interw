@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "erasure-reaches-copies": {
+      "title": "Supprimer un candidat efface chaque copie",
+      "body": "Nous avons renforcé la suppression des données candidats : lorsqu’elles sont effacées, les copies conservées par nos services d’e-mail et d’assistant disparaissent aussi — immédiatement pour les conversations de l’assistant qui les ont lues, automatiquement sous 30 jours au plus pour les e-mails."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

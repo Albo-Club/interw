@@ -1594,6 +1594,25 @@ Same family as the Better Auth trigger cycle documented above. When `tsc`
 starts reporting implicit `any` in unrelated files, look for a new function
 reference in a module-level initialiser.
 
+## Components keep their own copies of candidate data
+
+`@convex-dev/resend` stores recipient, subject and the full body of every email
+(`emails` / `content` / `deliveryEvents`) and forgets only when the app
+schedules `cleanupOldEmails` / `cleanupAbandonedEmails` — the README says so,
+and nothing did until `convex/crons.ts` `cleanupResend` (7 days after the
+outcome, 30 days absolute). 0.2.8 has no per-email delete, so erasure of that
+copy cannot be immediate; and once a component row is gone, a late webhook
+event for it is ignored and never reaches `emailLog`.
+
+`@convex-dev/agent` threads hold tool results — and the answers written from
+them — where the app cannot search. So the candidate-reading tools record a
+`chatThreadSessions` row in the same transaction as the read, and
+`purge.deleteChildRows` deletes those whole threads. Any new tool that returns
+candidate data must record the same row, or its output survives erasure.
+Threads created before this change carry no row and are not covered.
+`chat.listMessages` answers an empty page for a thread that no longer exists,
+because erasure may delete a thread a recruiter has open.
+
 ## Candidate recordings are NOT in Convex file storage
 
 `ctx.storage.getUrl()` returns a **permanent, unauthenticated** URL. Convex's

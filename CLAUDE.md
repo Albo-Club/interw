@@ -674,6 +674,11 @@ verification is in `TESTING.md`.
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
 - `purgeLog` stores a hash of the candidate's address, never the address.
+- A tool or component that receives candidate data must be reachable by
+  erasure: record the link in the transaction that hands the data over
+  (`chatThreadSessions` for assistant tools). A copy erasure cannot find is a
+  copy erasure does not delete. See `KNOWN_ISSUES.md` § "Components keep their
+  own copies of candidate data".
 
 ## AI and hiring
 

@@ -1594,6 +1594,20 @@ Same family as the Better Auth trigger cycle documented above. When `tsc`
 starts reporting implicit `any` in unrelated files, look for a new function
 reference in a module-level initialiser.
 
+## Convex storage ids have no owner — our rows are the ownership record
+
+`_storage` carries no owner field and `ctx.storage.delete` accepts any id. So a
+mutation that takes an `Id<'_storage'>` from a client must refuse an id another
+row already references, and must delete a blob only when no other row still
+points at it — `claim` / `release` in `convex/files.ts`. And a raw storage id
+never reaches a client: resolve it to a URL server-side.
+`organizations.bySlug` used to spread the whole row, handing every member the
+logo's handle, which `setMyAvatar` then accepted and `removeMyAvatar` deleted
+(audit 2026-09-22, `convex/files.ts:setMyAvatar:storageId-unbound-to-caller`).
+
+`users.cascadeDelete` still deletes the avatar blob without that check. It is
+reachable only for a blob two rows already shared before `claim` existed.
+
 ## Candidate recordings are NOT in Convex file storage
 
 `ctx.storage.getUrl()` returns a **permanent, unauthenticated** URL. Convex's

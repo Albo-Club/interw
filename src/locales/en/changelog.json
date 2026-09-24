@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "team-access-hardening": {
+      "title": "Confidential roles stay confidential, and removal ends access",
+      "body": "We tightened who can see and act on confidential roles, and made sure that removing a teammate fully ends their access to your organisation — including the emails they receive about candidates. Restoring an archived role now takes the same rights as archiving it."
+    },
     "assistant-in-europe": {
       "title": "The assistant runs in Europe too",
       "body": "The assistant that answers your questions about roles and candidates now runs on the same French provider as interview transcription and assessment. It reads reports in order to answer you, so what you ask it about a candidate is interview data like any other — and it belongs under the same guarantee: one provider, one destination, and nothing about a candidate leaving it."

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "team-access-hardening": {
+      "title": "Les postes confidentiels le restent, et un retrait met fin à l’accès",
+      "body": "Nous avons renforcé les contrôles sur qui peut voir et modifier les postes confidentiels, et garanti qu’un membre retiré de votre organisation perd entièrement son accès — y compris les e-mails qu’il recevait sur les candidats. Restaurer un poste archivé demande désormais les mêmes droits que l’archiver."
+    },
     "assistant-in-europe": {
       "title": "L’assistant aussi tourne en Europe",
       "body": "L’assistant qui répond à vos questions sur vos postes et vos candidats passe désormais par le même fournisseur français que la transcription et l’évaluation des entretiens. Il lit les rapports pour vous répondre : ce que vous lui demandez sur un candidat est donc une donnée d’entretien comme une autre, et relève de la même garantie — un fournisseur, une destination, et rien d’un candidat qui en sorte."

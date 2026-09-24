@@ -1076,6 +1076,10 @@ existing `revokeSessionsOnPasswordReset: true` covers the takeover-mitigation
 side (all sessions revoked, user must re-auth) so a hijacker is locked out;
 the missing piece is the *informational* email to the rightful owner.
 
+The mutation is public and cannot tell a real change from a replay, so it
+consumes the per-user `passwordChangedNotify` bucket (3/h, burst 2) before
+sending; the client's fire-and-forget call absorbs a `rate_limited` silently.
+
 Two paths if/when this matters:
 1. Add `databaseHooks.account.update.after(account)` in `convex/auth.ts` and
    gate on `providerId === 'credential'`. Risk: BA's `databaseHooks` type
@@ -1887,6 +1891,16 @@ The fetch now identifies itself (`InterwBot/1.0 (+SITE_URL)`) rather than
 impersonating a browser, and `401 / 403 / 429` gets its own `page_blocked`
 code. Some sites bot-wall everything regardless; the point is that the recruiter
 is told the site said no, instead of being sent hunting for a typo.
+
+### Its other neighbour: parse work must be linear, not just capped
+
+The fetcher caps a page at 2 MiB; that bounds the transfer, not the parse. A
+lazy `open[\s\S]*?close` regex, or a tag class like `[^>]`, rescans to the end
+of the input from every unclosed opener — 2 MiB of `<` cost an extrapolated
+~30 min of CPU in one action (audit 2026-09-22,
+`convex/lib/htmlText.ts:htmlToText:quadratic-regex-over-uncapped-body`).
+`htmlText.ts` uses `[^<>]` classes and a single-pass span scan (`spans()`);
+`htmlText.test.ts` fails if either is widened back.
 
 Note that `errors.page_unreachable` still offers to let them "paste the text
 instead", which no screen in the wizard does. Either build it or drop the

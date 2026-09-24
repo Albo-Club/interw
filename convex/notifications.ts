@@ -3,6 +3,7 @@ import { v } from 'convex/values'
 import { internalMutation, mutation } from './_generated/server'
 import { requireAppUser } from './lib/auth'
 import { RESEND_FROM, resend } from './email'
+import { consumeLimit } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
 import type { Id } from './_generated/dataModel'
 
@@ -23,6 +24,7 @@ export const notifyPasswordChanged = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireAppUser(ctx)
+    await consumeLimit(ctx, 'passwordChangedNotify', user._id)
     const resetUrl = `${siteUrl}/forgot-password`
     const { subject, html, text } = passwordChangedEmail({
       locale: user.preferredLanguage ?? 'en',

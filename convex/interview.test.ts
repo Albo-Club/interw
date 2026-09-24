@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
+import { segmentKey } from './lib/objectStore'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -116,5 +117,223 @@ describe('a closed role stays closed', () => {
       now: Date.now(),
     })
     expect(result.questions).toHaveLength(1)
+  })
+})
+
+type OpenSeed = {
+  token: string
+  sessionId: Id<'sessions'>
+  orgId: Id<'organizations'>
+  questionIds: Array<Id<'questions'>>
+}
+
+/** An open role with four questions and a consented, started candidate. */
+async function seedOpen(t: ReturnType<typeof newTest>): Promise<OpenSeed> {
+  const token = 'r'.repeat(43)
+  return t.run(async (ctx) => {
+    const userId = await ctx.db.insert('users', {
+      betterAuthId: 'ba_1',
+      email: 'r@acme.test',
+      superAdmin: false,
+      createdAt: 0,
+    })
+    const orgId = await ctx.db.insert('organizations', {
+      slug: 'acme',
+      name: 'Acme',
+      createdBy: userId,
+      createdAt: 0,
+    })
+    const projectId = await ctx.db.insert('projects', {
+      orgId,
+      slug: 'backend',
+      title: 'Backend',
+      status: 'active',
+      language: 'fr',
+      introMode: 'none',
+      maxDurationMinutes: 20,
+      candidateFields: {
+        phone: { enabled: false, required: false },
+        linkedin: { enabled: false, required: false },
+        cv: { enabled: false, required: false },
+        coverLetter: { enabled: false, required: false },
+      },
+      createdBy: userId,
+      createdAt: 0,
+      restricted: false,
+      sessionCount: 1,
+      completedSessionCount: 0,
+    })
+    const questionIds: Array<Id<'questions'>> = []
+    for (let orderIndex = 0; orderIndex < 4; orderIndex++) {
+      questionIds.push(
+        await ctx.db.insert('questions', {
+          orgId,
+          projectId,
+          orderIndex,
+          content: `Question ${orderIndex}`,
+          maxResponseSeconds: 120,
+        }),
+      )
+    }
+    const sessionId = await ctx.db.insert('sessions', {
+      orgId,
+      projectId,
+      accessToken: token,
+      candidateName: 'Alex Martin',
+      candidateEmail: 'alex@example.test',
+      status: 'in_progress',
+      consentAcceptedAt: 1,
+      lastQuestionIndex: 0,
+      invitedBy: userId,
+      invitedAt: 0,
+    })
+    return { token, sessionId, orgId, questionIds }
+  })
+}
+
+const AUDIO = { mimeType: 'audio/webm;codecs=opus', contentLength: 1_000 }
+const VIDEO = { mimeType: 'video/webm', contentLength: 10_000 }
+
+/**
+ * E6. Two resume cursors disagreed after a failed answer: the welcome screen
+ * read the monotone `lastQuestionIndex`, the runner scanned for the first
+ * unanswered question, then advanced by one — into an answer already saved,
+ * which it recorded over under the same object key.
+ */
+describe('one resume cursor, on the server', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seedOpen(t)
+    // q0 saved, q1 failed, q2 saved — the shape a "Skip" leaves behind.
+    await t.run(async (ctx) => {
+      for (const [questionIndex, uploadState] of [
+        [0, 'uploaded'],
+        [1, 'failed'],
+        [2, 'uploaded'],
+      ] as const) {
+        await ctx.db.insert('segments', {
+          orgId: s.orgId,
+          sessionId: s.sessionId,
+          questionId: s.questionIds[questionIndex],
+          questionIndex,
+          // The key a WebM retry derives, so re-reserving schedules nothing.
+          audioKey: segmentKey(s.orgId, s.sessionId, questionIndex, 'weba'),
+          uploadState,
+          uploadAttempts: 1,
+          recordedAt: 0,
+        })
+      }
+      // What the old monotone cursor would have said.
+      await ctx.db.patch('sessions', s.sessionId, { lastQuestionIndex: 3 })
+    })
+  })
+
+  it('resumes at the failed answer', async () => {
+    const result = await t.query(api.interview.questions, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(result.nextQuestionIndex).toBe(1)
+    expect(result.questions.map((q) => q.answered)).toEqual([
+      true,
+      false,
+      true,
+      false,
+    ])
+  })
+
+  it('announces the same question on the welcome screen', async () => {
+    const landing = await t.query(api.candidate.landing, {
+      token: s.token,
+      now: Date.now(),
+    })
+    expect(landing.gate.resumeAtIndex).toBe(1)
+  })
+
+  it('never lets a saved answer be recorded again', async () => {
+    await expect(
+      t.mutation(internal.interview.reserveSegment, {
+        token: s.token,
+        questionIndex: 2,
+        audio: AUDIO,
+      }),
+    ).rejects.toThrow('already_answered')
+  })
+
+  it('still lets the failed answer be recorded again', async () => {
+    const slot = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 1,
+      audio: AUDIO,
+    })
+    expect(slot.audio.key).toContain(s.sessionId)
+  })
+})
+
+/**
+ * F1. A retry that changes container — Chrome records WebM, Safari MP4 —
+ * changes the object key. The row then named only the new object, and the old
+ * one sat in the bucket where erasure could never find it.
+ */
+describe('re-reserving an answer', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    t = newTest()
+    s = await seedOpen(t)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function deletedAfter(
+    second: { audio: typeof AUDIO; video?: typeof VIDEO },
+  ): Promise<Array<string>> {
+    await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      audio: AUDIO,
+      video: VIDEO,
+    })
+    const deleted: Array<string> = []
+    const spy = vi
+      .spyOn(await import('./lib/objectStore'), 'deleteObjects')
+      .mockImplementation((keys: Array<string>) => {
+        deleted.push(...keys)
+        return Promise.resolve()
+      })
+    await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      ...second,
+    })
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    spy.mockRestore()
+    return deleted
+  }
+
+  const key = (extension: string) =>
+    segmentKey(s.orgId, s.sessionId, 0, extension)
+
+  it('deletes the objects the new reservation no longer names', async () => {
+    const deleted = await deletedAfter({
+      audio: { mimeType: 'audio/mp4', contentLength: 1_000 },
+      video: { mimeType: 'video/mp4', contentLength: 10_000 },
+    })
+    expect(deleted.sort()).toEqual([key('weba'), key('webm')].sort())
+  })
+
+  it('deletes the old video when the retry is audio only', async () => {
+    expect(await deletedAfter({ audio: AUDIO })).toEqual([key('webm')])
+  })
+
+  it('deletes nothing when the keys are unchanged', async () => {
+    expect(await deletedAfter({ audio: AUDIO, video: VIDEO })).toEqual([])
   })
 })

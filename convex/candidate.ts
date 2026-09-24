@@ -40,7 +40,7 @@ import {
   candidateSessionReturns,
   sessionGateReturns,
 } from './lib/candidateReturns'
-import { evaluateSessionGate } from './lib/sessionState'
+import { evaluateSessionGate, nextQuestionIndex } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
   candidateDocumentKey,
@@ -108,12 +108,24 @@ export const landing = query({
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
+    const segments = await ctx.db
+      .query('segments')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .collect()
 
     return {
       organisationName: org?.name ?? '',
       session: toCandidateSessionView(session),
       project: toCandidateProjectView(project, questions.length),
-      gate: evaluateSessionGate({ session, project, now }),
+      gate: {
+        ...evaluateSessionGate({ session, project, now }),
+        // The same value `interview.questions` resumes at, so the welcome
+        // screen cannot announce one question and the interview open another.
+        resumeAtIndex: nextQuestionIndex(
+          questions.map((question) => question._id),
+          segments,
+        ),
+      },
     }
   },
 })

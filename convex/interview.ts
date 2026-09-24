@@ -23,7 +23,11 @@ import { introModeValidator, sessionEventKindValidator } from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import { toCandidateQuestionView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
-import { evaluateSessionGate } from './lib/sessionState'
+import {
+  answeredQuestionIds,
+  evaluateSessionGate,
+  nextQuestionIndex,
+} from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
@@ -89,7 +93,9 @@ export const questions = query({
         answered: v.boolean(),
       }),
     ),
-    resumeAtIndex: v.number(),
+    /** Where the interview picks up. The client computes no resume point of
+     *  its own; see `nextQuestionIndex` in convex/lib/sessionState.ts. */
+    nextQuestionIndex: v.number(),
     introMode: introModeValidator,
     introText: v.union(v.string(), v.null()),
     hasIntroMedia: v.boolean(),
@@ -110,20 +116,17 @@ export const questions = query({
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', session._id))
       .collect()
-    // By id, not by index: `orderIndex` is renumbered when the trame is
-    // edited, `questionId` is not. See convex/pipeline.ts.
-    const answered = new Set(
-      segments
-        .filter((segment) => segment.uploadState === 'uploaded')
-        .map((segment) => segment.questionId),
-    )
+    const answered = answeredQuestionIds(segments)
 
     return {
       questions: rows.map((question) => ({
         ...toCandidateQuestionView(question),
         answered: answered.has(question._id),
       })),
-      resumeAtIndex: session.lastQuestionIndex,
+      nextQuestionIndex: nextQuestionIndex(
+        rows.map((question) => question._id),
+        segments,
+      ),
       introMode: project.introMode,
       introText: project.introText ?? null,
       hasIntroMedia: project.introMediaKey !== undefined,
@@ -235,7 +238,10 @@ function validateMedia(
  * so "delete everything about this person" never has to guess or scan.
  *
  * Re-requesting the same question replaces the reservation in place, which is
- * what makes a retry after a dropped connection safe.
+ * what makes a retry after a dropped connection safe — unless the answer is
+ * already saved. A candidate gets one attempt, and the old runner used to walk
+ * into a saved answer after a resume and record over it under the same key.
+ * The client treats `already_answered` as "saved" and moves on.
  */
 export const reserveSegment = internalMutation({
   args: {
@@ -293,6 +299,9 @@ export const reserveSegment = internalMutation({
         q.eq('sessionId', session._id).eq('questionIndex', questionIndex),
       )
       .unique()
+    if (existing?.uploadState === 'uploaded') {
+      throw new ConvexError('already_answered')
+    }
 
     const fields = {
       audioKey,
@@ -307,6 +316,18 @@ export const reserveSegment = internalMutation({
         ...fields,
         uploadAttempts: existing.uploadAttempts + 1,
       })
+      // A retry from another browser changes the container (Chrome records
+      // WebM, Safari MP4), hence the key. The row no longer names the old
+      // object, so erasure could never reach it: delete it now.
+      const replaced = [existing.audioKey, existing.videoKey].filter(
+        (key): key is string =>
+          key !== undefined && key !== audioKey && key !== videoKey,
+      )
+      if (replaced.length > 0) {
+        await ctx.scheduler.runAfter(0, internal.media.deleteKeys, {
+          keys: replaced,
+        })
+      }
     } else {
       segmentId = await ctx.db.insert('segments', {
         orgId: session.orgId,
@@ -373,9 +394,9 @@ export const requestSegmentUpload = action({
 })
 
 /**
- * The answer is in the bucket. Advancing `lastQuestionIndex` here, and only
- * here, is what makes "resume where I left off" mean "resume after the last
- * answer that actually arrived".
+ * The answer is in the bucket. `lastQuestionIndex` is kept for the recruiter's
+ * progress display; it is not where the candidate resumes — that is derived
+ * from the segments, see `nextQuestionIndex`.
  */
 export const markSegmentUploaded = mutation({
   args: {

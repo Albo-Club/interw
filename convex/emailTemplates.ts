@@ -38,7 +38,7 @@ function layout({
 }) {
   const ctaHtml = cta
     ? `<tr><td style="padding: 24px 0 8px;">
-        <a href="${cta.url}"
+        <a href="${esc(cta.url)}"
           style="display:inline-block; background:${BUTTON_BG}; color:${BUTTON_FG}; text-decoration:none; padding:12px 20px; border-radius:8px; font-weight:600; font-size:14px;">
           ${cta.label}
         </a>
@@ -92,7 +92,8 @@ function plainText(parts: Array<string>): string {
 // User-supplied values (display names, org names, emails) must be escaped
 // before interpolation into the HTML branch — otherwise a self-set name like
 // `x</strong><a href="https://evil">…</a>` injects markup into a
-// DKIM-authenticated email (phishing vector). Plain-text branches and
+// DKIM-authenticated email (phishing vector). URLs too: their query string
+// carries caller-chosen values such as a `callbackURL`. Plain-text branches and
 // subjects are not HTML and use the raw values.
 function esc(value: string): string {
   return value
@@ -109,8 +110,8 @@ function pick<T>(locale: EmailLocale, copy: Record<EmailLocale, T>): T {
 
 const urlFallback = (locale: EmailLocale, url: string) =>
   pick(locale, {
-    en: `If the button doesn't work, copy this URL into your browser:<br><span style="color:${MUTED}; word-break:break-all;">${url}</span>`,
-    fr: `Si le bouton ne fonctionne pas, copiez cette URL dans votre navigateur :<br><span style="color:${MUTED}; word-break:break-all;">${url}</span>`,
+    en: `If the button doesn't work, copy this URL into your browser:<br><span style="color:${MUTED}; word-break:break-all;">${esc(url)}</span>`,
+    fr: `Si le bouton ne fonctionne pas, copiez cette URL dans votre navigateur :<br><span style="color:${MUTED}; word-break:break-all;">${esc(url)}</span>`,
   })
 
 export function invitationEmail({
@@ -309,29 +310,29 @@ export function verificationEmail({
     en: {
       subject: `Verify your email on ${APP_NAME}`,
       heading: `Verify your email`,
-      intro: `Confirm this is your email address by clicking the button below. You'll be signed in automatically.`,
-      footer: `If you didn't create an account, you can safely ignore this email.`,
+      intro: `To confirm this is your email address, click the button below and sign in with your ${APP_NAME} password.`,
+      footer: `Didn't create an account or change your email on ${APP_NAME}? Ignore this email — without the account's password, this link does nothing.`,
       preheader: `Verify your email on ${APP_NAME}.`,
       cta: 'Verify email',
       text: [
         `Verify your email on ${APP_NAME}.`,
-        `Open this link to verify and sign in:`,
+        `Open this link, then sign in with your password:`,
         url,
-        `If you didn't create an account, you can safely ignore this email.`,
+        `Didn't create an account or change your email on ${APP_NAME}? Ignore this email — without the account's password, this link does nothing.`,
       ],
     },
     fr: {
       subject: `Vérifiez votre e-mail sur ${APP_NAME}`,
       heading: `Vérifiez votre e-mail`,
-      intro: `Confirmez qu'il s'agit bien de votre adresse e-mail en cliquant sur le bouton ci-dessous. Vous serez connecté automatiquement.`,
-      footer: `Si vous n'avez pas créé de compte, vous pouvez ignorer cet e-mail.`,
+      intro: `Pour confirmer qu'il s'agit bien de votre adresse e-mail, cliquez sur le bouton ci-dessous et connectez-vous avec votre mot de passe ${APP_NAME}.`,
+      footer: `Vous n'avez ni créé de compte ni changé d'e-mail sur ${APP_NAME} ? Ignorez cet e-mail — sans le mot de passe du compte, ce lien ne fait rien.`,
       preheader: `Vérifiez votre e-mail sur ${APP_NAME}.`,
       cta: 'Vérifier l’e-mail',
       text: [
         `Vérifiez votre e-mail sur ${APP_NAME}.`,
-        `Ouvrez ce lien pour vérifier et vous connecter :`,
+        `Ouvrez ce lien, puis connectez-vous avec votre mot de passe :`,
         url,
-        `Si vous n'avez pas créé de compte, vous pouvez ignorer cet e-mail.`,
+        `Vous n'avez ni créé de compte ni changé d'e-mail sur ${APP_NAME} ? Ignorez cet e-mail — sans le mot de passe du compte, ce lien ne fait rien.`,
       ],
     },
   })

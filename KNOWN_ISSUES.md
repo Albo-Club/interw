@@ -56,8 +56,26 @@ wait for the victim to OAuth/magic-link with the same email, and BA
 will silently link the attacker's password account to the victim's
 session → account takeover.
 
-Verified email closes the hole : the attacker's password account stays
-unverified, so BA refuses to link it.
+Verified email closes *that* hole: OAuth refuses to link an unverified local
+account (`requireLocalEmailVerified`, default true), and a magic link deletes
+the unproven credential before verifying (`revokeUnprovenAccountAccess`).
+
+**But a verification link is not proof of the password.** It proves control of
+the mailbox, and nothing about who chose the password on the account it points
+at. BA's `/verify-email` (1.6.x) flips `emailVerified` and, with
+`autoSignInAfterVerification`, signs the clicker in — without revoking an
+unproven credential. An attacker who signed up at the victim's address kept a
+working password on an identity the victim's own click verified, and could then
+accept invitations bound to that address. Same with a change-email link sent to
+a victim's address (audit 2026-09-22, `VALIDATION-RESULTS.md` lead 1).
+`verificationRequiresCredential` in `convex/auth.ts` closes both: a sign-up
+link only redirects to `/login?verifyToken=…`, and the email is verified by a
+`/sign-in/email` carrying that token **and** the account's password; a
+change-email link completes only for a clicker already signed in to the
+account. Never re-enable `autoSignInAfterVerification`, and never redeem a
+verification token without the credential. A squatted address is recovered by
+forgot-password (which replaces the stranger's password) or a magic link
+(which deletes it).
 
 ### Legacy users
 
@@ -1972,6 +1990,30 @@ The fetch now identifies itself (`InterwBot/1.0 (+SITE_URL)`) rather than
 impersonating a browser, and `401 / 403 / 429` gets its own `page_blocked`
 code. Some sites bot-wall everything regardless; the point is that the recruiter
 is told the site said no, instead of being sent hunting for a typo.
+
+### Rebinding: `fetch` can't be told which address to connect to
+
+Checking a hostname with `dns.lookup` and then calling `fetch(hostname)`
+resolves the name twice, so whoever controls the record can answer the check
+with a public address and the connection with `127.0.0.1` (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 7). `fetch` has no public way to choose the
+address; the only other route is an undici `Agent({ connect: { lookup } })` as
+`dispatcher`, i.e. a second undici kept in step with the one inside Node. So
+`convex/jobImportFetch.ts` uses `http(s).get` with a `lookup` that answers only
+the checked addresses, and `agent: false` so no pooled socket is reused. The
+hostname stays the host, so `Host`, SNI and certificate validation are
+unchanged. Two traps:
+
+- A pinned `lookup` must answer asynchronously (`setImmediate`). Answered
+  synchronously, an immediate connection failure throws before `http` has
+  attached its socket error handler.
+- Resolver answers go through `isPrivateAddress`, not `isPrivateHost`: an
+  answer that is not a well-formed address must fail closed, which a hostname
+  predicate cannot do.
+
+Responses are requested with `Accept-Encoding: identity` and not decompressed,
+so the 2 MiB cap counts what is read; a server that compresses anyway yields
+unreadable text and the import fails as too thin.
 
 ### Its other neighbour: parse work must be linear, not just capped
 

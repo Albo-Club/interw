@@ -34,6 +34,10 @@ const searchSchema = z.object({
   // Better Auth appends ?error=... when a social sign-in fails via
   // `errorCallbackURL`. We surface it as a toast on mount.
   error: z.string().optional(),
+  // Set by the sign-up verification link (convex/auth.ts
+  // `verificationRequiresCredential`): the email is verified only by a
+  // sign-in that carries it together with the account's password.
+  verifyToken: z.string().optional(),
 })
 
 export const Route = createFileRoute('/login')({
@@ -64,7 +68,7 @@ function LoginPage() {
     () => z.email(t('validation:email.enterValid')),
     [t],
   )
-  const { redirect, error: socialError } = Route.useSearch()
+  const { redirect, error: socialError, verifyToken } = Route.useSearch()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [magicLoading, setMagicLoading] = useState(false)
@@ -82,7 +86,10 @@ function LoginPage() {
     onSubmit: async ({ value }) => {
       setSubmitError(null)
       setLoading(true)
-      const { error } = await authClient.signIn.email(value)
+      const { error } = await authClient.signIn.email({
+        ...value,
+        ...(verifyToken ? { verifyToken } : {}),
+      })
       setLoading(false)
       if (error) {
         const code = classifyAuthError(error)
@@ -153,9 +160,11 @@ function LoginPage() {
     <AuthShell
       title={t('auth:signIn.title')}
       description={
-        isInviteFlow
-          ? t('auth:signIn.descriptionInvite')
-          : t('auth:signIn.description')
+        verifyToken
+          ? t('auth:signIn.descriptionVerify')
+          : isInviteFlow
+            ? t('auth:signIn.descriptionInvite')
+            : t('auth:signIn.description')
       }
     >
       <form

@@ -1,4 +1,6 @@
 import { betterAuth } from 'better-auth/minimal'
+import { createAuthMiddleware, getSessionFromCtx } from 'better-auth/api'
+import { verifyJWT } from 'better-auth/crypto'
 import { magicLink } from 'better-auth/plugins/magic-link'
 import { createClient } from '@convex-dev/better-auth'
 import { convex } from '@convex-dev/better-auth/plugins'
@@ -43,6 +45,89 @@ const googleEnabled = !!(
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
 )
 
+// Per-endpoint rate limits. Keys are Better Auth endpoint paths, matched
+// exactly — a key naming no endpoint is silently ignored, so the test asserts
+// every key resolves to a real route.
+export const rateLimitRules = {
+  '/sign-in/email': { window: 60, max: 5 },
+  '/sign-up/email': { window: 60, max: 3 },
+  '/request-password-reset': { window: 60, max: 3 },
+  '/reset-password': { window: 60, max: 5 },
+  '/sign-in/magic-link': { window: 60, max: 3 },
+  '/sign-in/social': { window: 60, max: 10 },
+  '/magic-link/verify': { window: 60, max: 5 },
+  '/send-verification-email': { window: 60, max: 3 },
+  '/verify-email': { window: 60, max: 10 },
+  '/change-email': { window: 60, max: 3 },
+  '/change-password': { window: 60, max: 5 },
+  '/delete-user': { window: 60, max: 3 },
+}
+
+// A verification link proves control of a mailbox and nothing else. It says
+// nothing about who chose the password on the account it points at: anyone can
+// sign up — or move their own account — onto someone else's address. Left to
+// Better Auth, `/verify-email` then verifies that account and signs the clicker
+// into it, while the stranger's password keeps working on an identity now
+// verified as the victim's. So a link never completes on its own: whoever
+// clicks it must also prove the account's credential.
+// See KNOWN_ISSUES.md § "Account linking & verified email".
+export const verificationRequiresCredential = createAuthMiddleware(
+  async (ctx) => {
+    if (ctx.path === '/verify-email') {
+      const query = ctx.query ?? {}
+      const { token, callbackURL } = query
+      // A missing, bad or expired token is Better Auth's to reject.
+      if (typeof token !== 'string') return
+      const payload = await verifyJWT(token, ctx.context.secret)
+      if (!payload) return
+      // Approving an email change only mails the new address.
+      if (payload.requestType === 'change-email-confirmation') return
+      const login = new URL('/login', ctx.context.baseURL)
+      if (!payload.updateTo) {
+        // Sign-up verification: completed by `/sign-in/email` below, once the
+        // clicker has typed the account's password.
+        login.searchParams.set('verifyToken', token)
+        if (callbackURL) login.searchParams.set('redirect', callbackURL)
+        throw ctx.redirect(login.toString())
+      }
+      // Email change: moves the account onto the clicked address, so the
+      // clicker must already be signed in to it (Better Auth rejects a session
+      // for another account). Otherwise sign in first, then come back here.
+      if (await getSessionFromCtx(ctx)) return
+      const back = `${new URL(ctx.context.baseURL).pathname}/verify-email?${new URLSearchParams(query)}`
+      login.searchParams.set('redirect', back)
+      throw ctx.redirect(login.toString())
+    }
+    if (ctx.path === '/sign-in/email') {
+      const { email, password, verifyToken } = ctx.body ?? {}
+      if (typeof verifyToken !== 'string' || typeof password !== 'string')
+        return
+      const payload = await verifyJWT(verifyToken, ctx.context.secret)
+      if (
+        !payload ||
+        payload.updateTo ||
+        typeof email !== 'string' ||
+        payload.email !== email.toLowerCase()
+      )
+        return
+      const found = await ctx.context.internalAdapter.findUserByEmail(
+        payload.email,
+        { includeAccounts: true },
+      )
+      const hash = found?.accounts.find(
+        (a) => a.providerId === 'credential',
+      )?.password
+      if (!found || found.user.emailVerified || !hash) return
+      if (!(await ctx.context.password.verify({ hash, password }))) return
+      // Mailbox (token) and password proven in one request: verify, then let
+      // the sign-in proceed and mint the session.
+      await ctx.context.internalAdapter.updateUser(found.user.id, {
+        emailVerified: true,
+      })
+    }
+  },
+)
+
 export const createAuth = (ctx: GenericCtx<DataModel>) =>
   betterAuth({
     baseURL: siteUrl,
@@ -56,21 +141,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
       window: 10,
       max: 100,
       storage: 'database',
-      customRules: {
-        '/sign-in/email': { window: 60, max: 5 },
-        '/sign-up/email': { window: 60, max: 3 },
-        '/forgot-password': { window: 60, max: 3 },
-        '/reset-password': { window: 60, max: 5 },
-        '/sign-in/magic-link': { window: 60, max: 3 },
-        '/sign-in/social': { window: 60, max: 10 },
-        '/magic-link/verify': { window: 60, max: 5 },
-        '/email-verification/send': { window: 60, max: 3 },
-        '/verify-email': { window: 60, max: 10 },
-        '/change-email': { window: 60, max: 3 },
-        '/change-password': { window: 60, max: 5 },
-        '/delete-user': { window: 60, max: 3 },
-      },
+      customRules: rateLimitRules,
     },
+    hooks: { before: verificationRequiresCredential },
     // Force secure cookies in prod, sensible defaults everywhere. Without
     // explicit attributes BA's defaults vary by adapter — pin them.
     advanced: {
@@ -137,7 +210,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
     },
     emailVerification: {
       sendOnSignUp: true,
-      autoSignInAfterVerification: true,
+      // No `autoSignInAfterVerification`: a link alone never signs anyone in
+      // (see `verificationRequiresCredential`).
       sendVerificationEmail: async (data: {
         user: { email: string }
         url: string

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { UploadError, uploadToSignedUrl } from './upload'
-import type { UploadProgress } from './upload'
+import type { PutRequest, SendImpl, UploadProgress } from './upload'
 
-const blob = new Blob(['x'], { type: 'video/webm' })
+const blob = new Blob(['0123456789'], { type: 'video/webm' })
 
 function run(
-  fetchImpl: typeof fetch,
+  sendImpl: SendImpl,
   overrides: Partial<Parameters<typeof uploadToSignedUrl>[0]> = {},
 ) {
   const progress: Array<UploadProgress> = []
@@ -16,7 +16,7 @@ function run(
       url: 'https://bucket.example/key',
       blob,
       contentType: 'video/webm',
-      fetchImpl,
+      sendImpl,
       sleepImpl: async () => {},
       onProgress: (p) => progress.push(p),
       ...overrides,
@@ -24,34 +24,52 @@ function run(
   }
 }
 
-const ok = () => new Response(null, { status: 200 })
-const fail = (status: number) => () => new Response(null, { status })
+const ok = () => Promise.resolve(200)
+const fail = (status: number) => () => Promise.resolve(status)
 
 describe('uploadToSignedUrl', () => {
   it('sends the exact content type the URL was signed with', async () => {
-    const fetchImpl = vi.fn((_url: string, _init?: RequestInit) => ok())
-    await run(fetchImpl as unknown as typeof fetch).promise
-    const init = fetchImpl.mock.calls[0][1]
-    expect(init?.method).toBe('PUT')
-    expect((init?.headers as Record<string, string>)['Content-Type']).toBe(
-      'video/webm',
-    )
+    const sendImpl = vi.fn((_request: PutRequest) => ok())
+    await run(sendImpl).promise
+    const request = sendImpl.mock.calls[0][0]
+    expect(request.contentType).toBe('video/webm')
+    expect(request.body).toBe(blob)
   })
 
   it('reports done on the first try', async () => {
-    const { progress, promise } = run(vi.fn(ok) as unknown as typeof fetch)
+    const { progress, promise } = run(vi.fn(ok))
     await promise
     expect(progress.map((p) => p.phase)).toEqual(['uploading', 'done'])
   })
 
+  /**
+   * E9. `fetch` reported nothing between "started" and "done": a 40 MB answer
+   * over 4G was minutes of a frozen screen, and a candidate who reloads it
+   * loses the answer.
+   */
+  it('reports the bytes sent while the upload runs', async () => {
+    const { progress, promise } = run(({ onUploadProgress }) => {
+      onUploadProgress(4)
+      onUploadProgress(10)
+      return ok()
+    })
+    await promise
+    expect(progress.map((p) => [p.phase, p.loaded, p.total])).toEqual([
+      ['uploading', 0, 10],
+      ['uploading', 4, 10],
+      ['uploading', 10, 10],
+      ['done', 10, 10],
+    ])
+  })
+
   it('retries a 500 and succeeds', async () => {
-    const fetchImpl = vi
-      .fn()
+    const sendImpl = vi
+      .fn<SendImpl>()
       .mockImplementationOnce(fail(503))
       .mockImplementationOnce(ok)
-    const { progress, promise } = run(fetchImpl)
+    const { progress, promise } = run(sendImpl)
     await promise
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(sendImpl).toHaveBeenCalledTimes(2)
     expect(progress.map((p) => p.phase)).toEqual([
       'uploading',
       'retrying',
@@ -60,46 +78,43 @@ describe('uploadToSignedUrl', () => {
   })
 
   it('retries a network drop — the case it exists for', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    const sendImpl = vi
+      .fn<SendImpl>()
+      .mockRejectedValueOnce(new Error('network error'))
       .mockImplementationOnce(ok)
-    await run(fetchImpl).promise
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    await run(sendImpl).promise
+    expect(sendImpl).toHaveBeenCalledTimes(2)
   })
 
   // An expired or malformed signature will never succeed; retrying only
   // delays telling the candidate something is wrong.
   it('does not retry a 403', async () => {
-    const fetchImpl = vi.fn(fail(403))
-    const { promise } = run(fetchImpl as unknown as typeof fetch)
+    const sendImpl = vi.fn(fail(403))
+    const { promise } = run(sendImpl)
     await expect(promise).rejects.toThrow(UploadError)
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(sendImpl).toHaveBeenCalledTimes(1)
   })
 
   it('surfaces a failure instead of resolving quietly', async () => {
-    const { progress, promise } = run(vi.fn(fail(500)) as unknown as typeof fetch)
+    const { progress, promise } = run(vi.fn(fail(500)))
     await expect(promise).rejects.toThrow(/HTTP 500/)
     expect(progress.at(-1)?.phase).toBe('failed')
   })
 
   it('gives up after maxAttempts', async () => {
-    const fetchImpl = vi.fn(fail(500))
-    const { promise } = run(fetchImpl as unknown as typeof fetch, {
-      maxAttempts: 4,
-    })
+    const sendImpl = vi.fn(fail(500))
+    const { promise } = run(sendImpl, { maxAttempts: 4 })
     await expect(promise).rejects.toThrow()
-    expect(fetchImpl).toHaveBeenCalledTimes(4)
+    expect(sendImpl).toHaveBeenCalledTimes(4)
   })
 
   it('stops immediately when aborted', async () => {
     const controller = new AbortController()
     controller.abort()
-    const fetchImpl = vi.fn(ok)
+    const sendImpl = vi.fn(ok)
     await expect(
-      run(fetchImpl as unknown as typeof fetch, { signal: controller.signal })
-        .promise,
+      run(sendImpl, { signal: controller.signal }).promise,
     ).rejects.toThrow(/aborted/)
-    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(sendImpl).not.toHaveBeenCalled()
   })
 })

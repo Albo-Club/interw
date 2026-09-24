@@ -13,7 +13,7 @@
 import { ConvexError, v } from 'convex/values'
 
 import { internalMutation, internalQuery } from './_generated/server'
-import { internal } from './_generated/api'
+import { components, internal } from './_generated/api'
 import type { GenericMutationCtx } from 'convex/server'
 import type { DataModel, Id } from './_generated/dataModel'
 
@@ -119,6 +119,26 @@ async function deleteChildRows(
       spent += 1
     }
     await ctx.db.delete('reports', report._id)
+    spent += 1
+  }
+
+  // An assistant thread that read this candidate holds a copy of them — the
+  // tool result, and the answer written from it. The whole thread goes: the
+  // answer cannot be told apart from the rest of the conversation. The
+  // component deletes it page by page on its own schedule, committed in this
+  // transaction with the row that named it, so neither can outlive the other.
+  if (spent >= budget) return spent
+  const reads = await ctx.db
+    .query('chatThreadSessions')
+    .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+    .take(budget - spent)
+  for (const read of reads) {
+    await ctx.scheduler.runAfter(
+      0,
+      components.agent.threads.deleteAllForThreadIdAsync,
+      { threadId: read.threadId },
+    )
+    await ctx.db.delete('chatThreadSessions', read._id)
     spent += 1
   }
 

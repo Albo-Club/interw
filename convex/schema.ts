@@ -594,6 +594,18 @@ export default defineSchema({
     .index('by_org_and_purged', ['orgId', 'purgedAt'])
     .index('by_session', ['sessionId']),
 
+  /** Which assistant threads a candidate's data was read into. A tool result
+   *  is a copy of the candidate held in the agent component, where erasure
+   *  cannot find it by content; this is how it finds it by session. Written
+   *  in the same transaction as the read, so no tool result can reach a
+   *  thread without its row. */
+  chatThreadSessions: defineTable({
+    threadId: v.string(),
+    sessionId: v.id('sessions'),
+  })
+    .index('by_session', ['sessionId'])
+    .index('by_thread_and_session', ['threadId', 'sessionId']),
+
   /** Every pipeline state transition, with its duration and outcome. This is
    *  what makes "a step can fail" observable instead of a lost session — and
    *  it is why there are no catch-up scripts. */

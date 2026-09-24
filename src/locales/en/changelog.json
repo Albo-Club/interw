@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "recruiter-routes": {
+      "title": "Clearer errors, safer publishing",
+      "body": "A mistyped or deleted link now shows a clear page inside the app with a way back to your roles, and refused actions tell you why. A role can no longer be published with the example question or an unnamed criterion, and you can delete a role created by mistake. Downloaded CVs and cover letters are named in your language."
+    },
     "candidate-page": {
       "title": "A candidate page that keeps up with you",
       "body": "Videos no longer restart when you save a note, and keep playing after an hour on the page; if a recording cannot load, you are told and can retry. The moments worth watching sit under the player, decisions keep their history, and when an analysis does not finish, the role's creator or an admin can relaunch it. Revoking a share link now asks first, and the cover letter has its own button."

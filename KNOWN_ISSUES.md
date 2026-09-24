@@ -2277,3 +2277,38 @@ cannot play, not an expiry, and shows an error instead of looping.
 Trap: swapping a `<video>`'s `src` resets it to 0:00, paused, even for the
 same file. `AnswerPlayer` sets `src` imperatively and restores `currentTime`
 (and playback) on `loadedmetadata`; don't move `src` back into JSX.
+
+## Decisions and report links are team-level
+
+`reports.setDecision` and `shares.create` require `requireProjectAccess` — the
+role's team plus org owners and admins — and no rank above that (audit Back
+F2). This is deliberate: the team is the set of people hiring for the role, so
+it is who reads the reports, who decides and who may show a report to someone
+outside. Accountability comes from naming who acted, not from a rank:
+`recruiterDecisionBy` and `decisionEvents` record every decision, and a share
+link records its creator and is revoked when they leave the org (h03). Actions
+that destroy or close things for candidates (archive, delete a role, cancel a
+link, erase a candidate, relaunch an analysis) sit one tier higher,
+`requireProjectOwnerOrAdmin`. Do not "harden" decisions to owner/admin without
+a product decision: it would stop the people doing the hiring from recording it.
+
+## The server reads a few UI strings from `src/locales`
+
+`convex/lib/publishReadiness.ts` must recognise the example question and
+criterion the wizard seeds, and `convex/reports.ts` names downloaded documents
+in the recruiter's language. Both import the locale JSON directly
+(`convex/tsconfig.json` has `resolveJsonModule` for it; esbuild bundles JSON
+from outside `convex/` like any other import). A second copy of the strings in
+`convex/` would drift the day the copy changes, and the publish gate would
+silently stop recognising the example. Changing that copy is therefore a
+behaviour change: a role seeded with the old text is no longer caught.
+
+## Every thrown error code needs `errors:codes.<code>`
+
+`errorMessageKey` resolves a Convex error code against the domain namespace
+first, then the shared `errors:codes`. `src/lib/convex-errors.test.ts` reads
+every `ConvexError(` in `convex/` and fails on a code with no en or fr message.
+A computed code (`new ConvexError(someVariable)`) fails the test until it is
+registered in the test's `DYNAMIC` map with the codes it can carry — derive
+them from the code itself (as for `gate.state` and `publishBlockers`), never
+list them by hand.

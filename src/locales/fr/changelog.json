@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "recruiter-routes": {
+      "title": "Des erreurs plus claires, une publication plus sûre",
+      "body": "Un lien mal saisi ou supprimé affiche désormais une page claire dans l'application, avec un retour vers vos postes, et une action refusée dit pourquoi. Un poste ne peut plus être publié avec la question d'exemple ou un critère sans nom, et vous pouvez supprimer un poste créé par erreur. Les CV et lettres de motivation téléchargés sont nommés dans votre langue."
+    },
     "candidate-page": {
       "title": "Une fiche candidat qui suit votre rythme",
       "body": "Les vidéos ne repartent plus de zéro quand vous enregistrez une note, et restent lisibles après une heure sur la page ; si un enregistrement ne se charge pas, vous le voyez et pouvez réessayer. Les moments à regarder s'affichent sous le lecteur, les décisions gardent leur historique, et quand une analyse n'aboutit pas, la personne qui a créé le poste ou un admin peut la relancer. Révoquer un lien de partage demande désormais confirmation, et la lettre de motivation a son propre bouton."

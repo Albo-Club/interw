@@ -1,5 +1,7 @@
 import { ConvexError } from 'convex/values'
 
+import { resources } from './i18n'
+
 /**
  * Pull the machine-readable code out of a ConvexError.
  *
@@ -28,8 +30,11 @@ export function convexErrorCode(error: unknown): string | null {
  * The i18n key for an error, falling back to a generic message.
  *
  * `namespace` is where the domain's own copy lives (`projects`, `interview`…).
- * An unknown code resolves to the generic boundary message rather than leaking
- * an internal identifier onto the screen.
+ * A code the domain says nothing about resolves to the shared
+ * `errors:codes.<code>`, which holds every code `convex/` throws — a parity
+ * test keeps it that way (M3). Callers pass `fallbackKey` as the
+ * `defaultValue`, so a code from outside our functions (a component) still
+ * shows the generic message rather than an internal identifier.
  */
 export function errorMessageKey(
   error: unknown,
@@ -37,7 +42,19 @@ export function errorMessageKey(
 ): { key: string; fallbackKey: string } {
   const code = convexErrorCode(error)
   return {
-    key: code ? `${namespace}:errors.${code}` : 'common:errorBoundary.title',
+    key: code
+      ? hasDomainCopy(namespace, code)
+        ? `${namespace}:errors.${code}`
+        : `errors:codes.${code}`
+      : 'common:errorBoundary.title',
     fallbackKey: 'common:errorBoundary.description',
   }
+}
+
+/** Key sets are identical across locales (i18n.test.ts), so `en` answers. */
+function hasDomainCopy(namespace: string, code: string): boolean {
+  const ns: unknown = (resources.en as Record<string, unknown>)[namespace]
+  if (typeof ns !== 'object' || ns === null || !('errors' in ns)) return false
+  const errors = ns.errors as Record<string, unknown>
+  return typeof errors[code] === 'string'
 }

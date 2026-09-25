@@ -27,166 +27,45 @@ the wiring, not just the code.**
 
 Never merge the template's `skills-lock.json` or `.agents/skills/**` into a
 derived project. Those belong to that project; let it run its own
-`sync:skills:update`.
+`pnpm skills:update`.
 
-The corollary is that `scripts/sync-skills.mjs` **does** port while the skill
-set does not. So a derived project inherits capabilities like the `frontmatter`
-map and orphan-symlink pruning, but never the entries that use them — to pick up
-a skill this template added (`web-design-guidelines`, say), copy that one lock
-entry across by hand and run `pnpm run sync:skills`.
+## Prompt — move to the standard `skills` CLI and auto-load Convex rules
 
-## Verifying a derived project (no agent needed)
-
-Three questions, in order. Run from the derived project's root.
-
-```bash
-# 1. Is the tooling present? All must print a definition.
-grep -n 'async function hashLocal\|async function runVerify\|async function orphanLinks' scripts/sync-skills.mjs
-grep -n 'sync:skills:verify' package.json
-
-# 2. Is it actually wired into CI? (the one people forget)
-grep -rn -- '--verify' .github/workflows/
-
-# 3. Does it pass? (this is the payoff, not a formality)
-node scripts/sync-skills.mjs --verify
-```
-
-Steps 1 and 2 are `grep -n`, not `grep -c`, on purpose: a count invites a
-hardcoded expected number that goes stale the moment someone adds a comment
-mentioning the identifier. Read the lines instead.
-
-Step 3 failing on a first run is **not** a bug in the port — it is the latent rot
-the guard exists to find. Do not edit `skills-lock.json` to match the disk; that
-ratifies the corruption. Run `pnpm run sync:skills` to repair, then read the
-`git diff` to see what had rotted and for how long.
-
-## The drift decision — do not copy it blindly
-
-A derived project must answer "who watches upstream?" before touching CI. Look
-at `ls .github/workflows/` for a skills-sync cron:
-
-- **A cron exists** → CI can run `--verify` only, and drop `--check`. Fully
-  offline CI: no job can go red because `raw.githubusercontent.com` hiccuped on
-  an unrelated PR. Upstream drift is caught by the cron's bump PR.
-- **No cron** → keep `--check` in CI **and** add `--verify`. Without a cron, the
-  CI check is the only thing watching upstream.
-
-This template has no cron (deliberately — see `KNOWN_ISSUES.md` §
-"sync-skills.yml (cron + auto-PR) was removed"), so it runs both jobs. A derived
-project that kept its cron is right to run only one. Same code, different correct
-answers.
-
-## Prompt — port the skills integrity guard
-
-The worked example, still needed by any project forked before that fix. Paste it
-into Claude Code from the derived project's root. It diagnoses before acting, so
-it is safe to run against a project that already has some or all of it.
+`upgrade-template` will not carry this cleanly: it deletes a script, rewrites
+the lock in another format and touches `package.json`, `ci.yml` and three
+docs. Paste into Claude Code from the derived project's root.
 
 ```text
-Port the skills-pipeline integrity guard into this repo. It shipped upstream in
-the template `Albo-Club/albo-ouvre-boite` (public) at commit 0e2b8f3 (PR #52).
+Replace this repo's in-house skill sync (scripts/sync-skills.mjs, the
+sync:skills* scripts, the skills-verify / skills-drift CI jobs) with the
+standard `skills` CLI, and make Convex's guidelines load automatically. The
+reference is the template commit that deleted scripts/sync-skills.mjs
+(`git log --diff-filter=D -- scripts/sync-skills.mjs`); read KNOWN_ISSUES.md §
+"Skills: the standard `skills` CLI" there first.
 
-    gh api repos/Albo-Club/albo-ouvre-boite/commits/0e2b8f3 \
-      --jq '.files[] | "\(.filename)"'
-
-Read the diff of `scripts/sync-skills.mjs` before writing anything. Apply ONLY
-that PR: do not touch `.agents/skills/` contents or `skills-lock.json`, which
-belong to this project, not to the template.
-
-## The defect
-
-`--check` and the default mode both compare the lock's hash to UPSTREAM.
-`isVendored()` only tests that files EXIST. Nothing ever re-reads the content
-actually vendored on disk. So a file under `.agents/skills/**` that was
-hand-edited, truncated or left stale is invisible from both sides.
-
-## Step 1 — diagnose BEFORE coding, and report what you find
-
-1. Does this repo already have the fix? Look in `scripts/sync-skills.mjs` for
-   `hashLocal`, `runVerify`, `verifyOnly`, and the `local.hash !==
-   info.computedHash` comparison inside `runSync`. Check `sync:skills:verify` in
-   `package.json` and `--verify` in the CI workflows.
-   → If all present, write no code: go to step 4.
-   → If partial, tell me exactly what is missing. The dangerous state is
-     "script updated but no CI job": the guard exists and never runs.
-
-2. Reproduce the hole — do not take my word for it:
-
-       node scripts/sync-skills.mjs --check      # note the exit code
-       echo "CORRUPTION" >> <a vendored SKILL.md>
-       node scripts/sync-skills.mjs --check      # still green? exit 0?
-       git checkout -- .agents/skills
-
-   Also confirm the shape of it: DELETING a file IS caught (existence test),
-   MODIFYING its content is not.
-
-## Step 2 — the decision that depends on THIS repo; do not guess it
-
-Run `ls .github/workflows/` and look for a skills-sync cron.
-
-- A cron exists → you may drop `--check` from CI and keep only `--verify`
-  (fully offline CI; the cron catches upstream drift).
-- No cron → KEEP the `--check` job AND add `--verify`. Without a cron the CI
-  check is the only thing watching upstream.
-
-Tell me which case applies, and why, before editing any YAML.
-
-## Step 3 — implement
-
-1. `scripts/sync-skills.mjs`:
-   - `hashLocal(name, info)`: mirror of `fetchSkillAt()` against the working
-     tree — same file order (`relPaths`), same framing, so the digest is
-     comparable to `computedHash` byte for byte. Return `{ missing: rel }` when
-     a file is absent.
-   - `runVerify(lock)`: the new `--verify` mode. Compare `hashLocal` to
-     `computedHash`, name every divergent skill, exit 2 if any. No network.
-   - `runSync` becomes self-healing: `needsWrite` includes
-     `local.hash !== info.computedHash`, so a plain `sync:skills` repairs a
-     corrupted tree without `--force` (a missing file leaves `local.hash`
-     undefined, which also mismatches). `isVendored` stays — `runCheck` still
-     uses it.
-   - Update the comment banner at the top of the file (modes, exit codes). It
-     documents the modes; it must stay accurate.
-2. `package.json`: `"sync:skills:verify": "node scripts/sync-skills.mjs --verify"`.
-3. CI: add a job running `node scripts/sync-skills.mjs --verify` (no
-   `pnpm install` — the script has no dependencies). In YAML comments, state
-   which question each job answers: `--verify` = "is my tree intact?" (offline);
-   `--check` = "has upstream moved?" (network).
-4. Docs, in THIS repo's language (check the existing files before choosing):
-   both modes and how they differ, the `sync:skills:verify` command, the fact
-   that the default mode is now self-healing, the rule "--verify guards, --check
-   detects, --update bumps", and a "when the verify job is red" procedure. Fix
-   any claim that became false in passing (command outputs, job names, phrasing
-   like "invisible to sync:skills and --check" that must now name three modes).
-
-## Step 4 — prove it, do not assert it
-
-1. `--verify` on a clean tree → exit 0.
-2. THREE corruption types exit 2 with the skill named: modified `SKILL.md`,
-   modified file under `references/`, deleted file.
-3. `sync:skills` ALONE (no `--force`) repairs all three, and `git status` returns
-   to 0 modified files under `.agents/skills/`.
-4. `sync:skills` is idempotent on a second pass.
-5. `--check` unchanged.
-6. `skills-lock.json` untouched by the exercise (compare its sha256 before and
-   after).
-7. The project's lint and build pass.
-
-## ⚠️ If `--verify` is red on the FIRST run against a clean tree
-
-That is not a bug in your implementation — it is the rot the hole already
-allowed. Do NOT edit `skills-lock.json` to match the disk; that ratifies the
-corruption. Run `sync:skills` to repair, then read the `git diff` and tell me
-what had rotted and since when (`git log` on the affected files). That is the
-most valuable outcome of the whole exercise.
-
-## Do NOT
-
-- Touch anything under `.agents/skills/`, `skills-lock.json`, or the script's
-  `MAX_IN_FLIGHT`.
-- Merge the template's skill contents — this repo has its own set.
-- Run `--update`: this is not a skills bump.
-- Drop the `--check` job without having verified a cron exists (step 2).
+1. Record this repo's current skill set: the names and sources in
+   skills-lock.json. Keep exactly that set — do not import the template's.
+2. `pnpm add -D skills`; add the script
+   "skills:update": "DISABLE_TELEMETRY=1 skills update --project --yes".
+3. Delete scripts/sync-skills.mjs, skills-lock.json, .agents/skills and the
+   .claude/skills symlinks — `rm -rf .agents`, not just its skills dir: the
+   CLI keys its layout on whether `.agents` exists. Reinstall each skill with
+   `DISABLE_TELEMETRY=1 pnpm exec skills add <source> --skill <name>
+   --full-depth -y`.
+4. Prove idempotence: stage everything, run `pnpm skills:update` twice,
+   `git status` must show nothing new under .agents or .claude/skills.
+5. Replace the two CI jobs with one skills-drift job: install, run
+   skills:update, then `git add -A .agents .claude/skills skills-lock.json &&
+   git diff --cached --stat --exit-code`. Remove any sync:skills line from the
+   SessionStart hook (`skills check` rewrites files; it is not read-only).
+6. Create convex/CLAUDE.md containing `@_generated/ai/guidelines.md`, and
+   convex.json with {"aiFiles": {"skills": {"agents": []}}} unless this repo
+   deliberately installs Convex's own skills.
+7. Update CLAUDE.md, TESTING.md and KNOWN_ISSUES.md wherever they name
+   sync:skills or the removed script.
+Then: pnpm typecheck, pnpm lint, pnpm test, and
+`grep -rn "sync:skills\|sync-skills" --exclude-dir=node_modules --exclude-dir=docs .`
+must return nothing outside CHANGELOG/UPGRADING history.
 ```
 
 ## Prompt — port the pnpm version pin

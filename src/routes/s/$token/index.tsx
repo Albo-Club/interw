@@ -16,9 +16,11 @@ import { CandidateNotice } from '~/components/candidate/CandidateNotice'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { DocumentUploadField } from '~/components/candidate/DocumentUploadField'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/')({
   component: CandidateWelcome,
+  head: () => candidateHead('welcome'),
 })
 
 function CandidateWelcome() {

@@ -47,12 +47,22 @@ export type CandidateProjectView = {
   jobTitle: string | null
   language: Doc<'projects'>['language']
   personaName: string | null
-  introMode: Doc<'projects'>['introMode']
-  introText: string | null
+  introMode: 'none' | 'video'
   hasIntroMedia: boolean
   maxDurationMinutes: number
   candidateFields: Doc<'projects'>['candidateFields']
   questionCount: number
+}
+
+/**
+ * A retired `text` or `audio` intro reads as none, for the recruiter and the
+ * candidate alike: the candidate goes straight to the questions rather than
+ * to an intro screen with nothing on it.
+ */
+export function effectiveIntroMode(
+  project: Pick<Doc<'projects'>, 'introMode'>,
+): 'none' | 'video' {
+  return project.introMode === 'video' ? 'video' : 'none'
 }
 
 export function toCandidateProjectView(
@@ -63,8 +73,7 @@ export function toCandidateProjectView(
     jobTitle: project.jobTitle ?? null,
     language: project.language,
     personaName: project.personaName ?? null,
-    introMode: project.introMode,
-    introText: project.introText ?? null,
+    introMode: effectiveIntroMode(project),
     hasIntroMedia: project.introMediaKey !== undefined,
     maxDurationMinutes: project.maxDurationMinutes,
     candidateFields: project.candidateFields,
@@ -110,4 +119,36 @@ export type CandidateLandingView = {
   session: CandidateSessionView
   project: CandidateProjectView
   gate: SessionGate & { resumeAtIndex: number }
+}
+
+/**
+ * One answer as a share link lists it. Not a candidate view, but the same
+ * rule: a share holder is outside the account, so what they get of a segment
+ * row is listed here field by field — never its keys, its transcript state or
+ * the candidate's own duration hint.
+ *
+ * `mediaKind` says which element plays it: an answer recorded without a
+ * camera is audio, and a `<video>` over an audio file is a black box.
+ */
+export type SharedAnswerView = {
+  segmentId: Doc<'segments'>['_id']
+  questionIndex: number
+  question: string
+  mediaKind: 'audio' | 'video' | null
+}
+
+export function toSharedAnswerView(
+  segment: Doc<'segments'>,
+  question: Pick<Doc<'questions'>, 'content'> | undefined,
+): SharedAnswerView {
+  return {
+    segmentId: segment._id,
+    questionIndex: segment.questionIndex,
+    question: question?.content ?? '',
+    mediaKind: segment.videoKey
+      ? 'video'
+      : segment.audioKey
+        ? 'audio'
+        : null,
+  }
 }

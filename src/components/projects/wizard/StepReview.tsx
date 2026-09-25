@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { CheckCircle2, CircleAlert } from 'lucide-react'
 
+import { publishBlockers } from '../../../../convex/lib/publishReadiness'
 import type { WizardCriterion, WizardProject, WizardQuestion } from './types'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 
@@ -19,11 +20,13 @@ export function StepReview({
   questions: Array<WizardQuestion>
   criteria: Array<WizardCriterion>
 }) {
-  const { t } = useTranslation(['projects', 'common'])
+  const { t, i18n } = useTranslation(['projects', 'common'])
 
-  const missing: Array<string> = []
-  if (questions.length === 0) missing.push(t('projects:review.missing.questions'))
-  if (criteria.length === 0) missing.push(t('projects:review.missing.criteria'))
+  const missing = publishBlockers(questions, criteria).map((blocker) =>
+    t(`projects:review.missing.${blocker.code}`, {
+      position: 'position' in blocker ? blocker.position : undefined,
+    }),
+  )
   const ready = missing.length === 0
 
   return (
@@ -78,7 +81,7 @@ export function StepReview({
           label={t('projects:detail.stats.expiry')}
           value={
             project.expiresAt
-              ? new Date(project.expiresAt).toLocaleDateString()
+              ? new Date(project.expiresAt).toLocaleDateString(i18n.language)
               : t('projects:detail.stats.noExpiry')
           }
         />

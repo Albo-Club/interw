@@ -37,10 +37,12 @@ import {
   toCandidateSessionView,
 } from './lib/candidateView'
 import {
+  candidatePrivacyReturns,
   candidateProjectReturns,
   candidateSessionReturns,
   sessionGateReturns,
 } from './lib/candidateReturns'
+import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
@@ -96,7 +98,8 @@ async function requireSession(
  *
  * `now` comes from the caller rather than the clock, because a query that
  * reads the wall clock is not re-run as time passes and would cache a stale
- * "still open" past the role's expiry.
+ * "still open" past the role's expiry. It keeps the page reactive and does not
+ * decide the gate: see convex/lib/clock.ts.
  */
 export const landing = query({
   args: { token: v.string(), now: v.number() },
@@ -117,7 +120,12 @@ export const landing = query({
       session: toCandidateSessionView(session),
       project: toCandidateProjectView(project, progress.questions.length),
       gate: {
-        ...evaluateSessionGate({ session, project, org, now }),
+        ...evaluateSessionGate({
+          session,
+          project,
+          org,
+          now: effectiveNow(now),
+        }),
         // The value `interview.questions` resumes at, from the same loader,
         // so the welcome screen cannot announce one question and the
         // interview open another.
@@ -205,6 +213,41 @@ export const updateProfile = mutation({
 
 /* ─────────────────────── CV and cover letter upload ─────────────────────── */
 
+/** The accepted document type a browser MIME type names, or a refusal. */
+function documentType(mimeType: string): {
+  contentType: string
+  extension: string
+} {
+  const contentType = mimeType.split(';')[0].trim().toLowerCase()
+  const extension = DOCUMENT_TYPES[contentType]
+  if (!extension) throw new ConvexError('unsupported_document_type')
+  return { contentType, extension }
+}
+
+/**
+ * The gate and the field check shared by issuing a slot and attaching what
+ * was written to it. `swapDocumentKey`'s caller then DELETES the object it
+ * replaced, so without them anyone still holding the link — the candidate, or
+ * whoever the invitation was forwarded to — could re-point `cvKey` and destroy
+ * the CV the recruiter had already read, days after the interview closed.
+ */
+async function requireDocumentSlot(
+  ctx: GenericQueryCtx<DataModel>,
+  token: string,
+  kind: 'cv' | 'cover',
+): Promise<Doc<'sessions'>> {
+  const { session, project, org } = await requireSession(ctx, token)
+  const gate = evaluateSessionGate({ session, project, org, now: Date.now() })
+  if (gate.state !== 'ready' && gate.state !== 'resumable') {
+    throw new ConvexError(gate.state)
+  }
+  const field = kind === 'cv' ? 'cv' : 'coverLetter'
+  if (!project.candidateFields[field].enabled) {
+    throw new ConvexError('not_requested')
+  }
+  return session
+}
+
 export const resolveDocumentUpload = internalQuery({
   args: {
     token: v.string(),
@@ -213,24 +256,8 @@ export const resolveDocumentUpload = internalQuery({
     contentLength: v.number(),
   },
   handler: async (ctx, { token, kind, mimeType, contentLength }) => {
-    const { session, project, org } = await requireSession(ctx, token)
-    const gate = evaluateSessionGate({
-      session,
-      project,
-      org,
-      now: Date.now(),
-    })
-    if (gate.state !== 'ready' && gate.state !== 'resumable') {
-      throw new ConvexError(gate.state)
-    }
-
-    const field = kind === 'cv' ? 'cv' : 'coverLetter'
-    if (!project.candidateFields[field].enabled) {
-      throw new ConvexError('not_requested')
-    }
-    const base = mimeType.split(';')[0].trim().toLowerCase()
-    const extension = DOCUMENT_TYPES[base]
-    if (!extension) throw new ConvexError('unsupported_document_type')
+    const session = await requireDocumentSlot(ctx, token, kind)
+    const { contentType, extension } = documentType(mimeType)
     if (
       !Number.isInteger(contentLength) ||
       contentLength <= 0 ||
@@ -240,17 +267,17 @@ export const resolveDocumentUpload = internalQuery({
     }
 
     return {
-      key: candidateDocumentKey(
-        session.orgId,
-        session._id,
-        kind,
-        extension,
-      ),
-      contentType: base,
+      key: candidateDocumentKey(session.orgId, session._id, kind, extension),
+      contentType,
     }
   },
 })
 
+/**
+ * An upload slot for a CV or a cover letter. The object key stays on the
+ * server: it embeds the organisation and session ids, which a candidate has
+ * no use for. `attachDocument` derives it again from the kind and the type.
+ */
 export const requestDocumentUpload = action({
   args: {
     token: v.string(),
@@ -261,7 +288,7 @@ export const requestDocumentUpload = action({
   handler: async (
     ctx,
     args,
-  ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
+  ): Promise<{ uploadUrl: string; contentType: string }> => {
     await ctx.runMutation(internal.candidate.consumeWriteLimit, {
       token: args.token,
     })
@@ -276,7 +303,6 @@ export const requestDocumentUpload = action({
         undefined,
         args.contentLength,
       ),
-      key: target.key,
       contentType: target.contentType,
     }
   },
@@ -296,40 +322,18 @@ export const swapDocumentKey = internalMutation({
   args: {
     token: v.string(),
     kind: v.union(v.literal('cv'), v.literal('cover')),
-    key: v.string(),
+    mimeType: v.string(),
   },
-  handler: async (ctx, { token, kind, key }) => {
-    const { session, project, org } = await requireSession(ctx, token)
-    // The same two checks `resolveDocumentUpload` makes, replayed here. The
-    // caller of this mutation then DELETES the object it replaced, so without
-    // them anyone still holding the link — the candidate, or whoever the
-    // invitation was forwarded to — could point `cvKey` at a name that does
-    // not exist and destroy the CV the recruiter had already read, days after
-    // the interview closed.
-    const gate = evaluateSessionGate({
-      session,
-      project,
-      org,
-      now: Date.now(),
-    })
-    if (gate.state !== 'ready' && gate.state !== 'resumable') {
-      throw new ConvexError(gate.state)
-    }
-    const field = kind === 'cv' ? 'cv' : 'coverLetter'
-    if (!project.candidateFields[field].enabled) {
-      throw new ConvexError('not_requested')
-    }
-
-    // Re-derive the acceptable prefix instead of trusting the key we are
-    // handed: a candidate must not be able to point their row at an object
-    // belonging to someone else's session.
-    const expectedPrefix = candidateDocumentKey(
+  handler: async (ctx, { token, kind, mimeType }) => {
+    const session = await requireDocumentSlot(ctx, token, kind)
+    // Derived, never received: the only keys this row can point at are the
+    // ones `resolveDocumentUpload` could have issued for this session.
+    const key = candidateDocumentKey(
       session.orgId,
       session._id,
       kind,
-      '',
+      documentType(mimeType).extension,
     )
-    if (!key.startsWith(expectedPrefix)) throw new ConvexError('key_mismatch')
 
     const previous = kind === 'cv' ? session.cvKey : session.coverLetterKey
     await ctx.db.patch('sessions', session._id, {
@@ -344,7 +348,8 @@ export const attachDocument = action({
   args: {
     token: v.string(),
     kind: v.union(v.literal('cv'), v.literal('cover')),
-    key: v.string(),
+    /** The type the slot was issued for, which names the key it wrote. */
+    mimeType: v.string(),
   },
   handler: async (ctx, args): Promise<null> => {
     const { previous } = await ctx.runMutation(
@@ -364,7 +369,8 @@ export const attachDocument = action({
  * to replay their own interview back at them.
  */
 export const privacySummary = query({
-  args: { token: v.string(), now: v.number() },
+  args: { token: v.string() },
+  returns: candidatePrivacyReturns,
   handler: async (ctx, { token }) => {
     const { session, project, org } = await requireSession(ctx, token)
     const segments = await ctx.db

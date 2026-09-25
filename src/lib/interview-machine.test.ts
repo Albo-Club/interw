@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  answerAtRisk,
   initialInterviewState,
   interviewReducer,
   nextOpenQuestion,
+  opensOnIntro,
 } from './interview-machine'
 import type { InterviewEvent, InterviewState } from './interview-machine'
 
@@ -48,6 +50,28 @@ describe('booting', () => {
     expect(run([boot(0, 4, true), { type: 'introDone' }]).phase).toBe('prompt')
   })
 
+  // Decision n° 1 (T05): a role with no intro opens on its first question,
+  // and the candidate never sees an intro screen. Cand F2: nor one with
+  // nothing on it, when the video could not be signed.
+  it('opens on the intro only for a video that can be played, on a first visit', () => {
+    const fresh = [false, false]
+    const video = { mode: 'video', url: 'https://media.test/intro.mp4' } as const
+    expect(opensOnIntro(video, fresh)).toBe(true)
+    expect(opensOnIntro({ mode: 'none', url: null }, fresh)).toBe(false)
+    expect(opensOnIntro({ mode: 'video', url: null }, fresh)).toBe(false)
+    // A URL signed for an intro the recruiter has since switched off.
+    expect(opensOnIntro({ mode: 'none', url: video.url }, fresh)).toBe(false)
+    expect(opensOnIntro(video, [true, false])).toBe(false)
+  })
+
+  it('goes straight to the first question when there is no intro', () => {
+    const showIntro = opensOnIntro({ mode: 'none', url: null }, [false, false])
+    expect(run([boot(0, 2, showIntro)])).toMatchObject({
+      phase: 'prompt',
+      index: 0,
+    })
+  })
+
   it('boots once', () => {
     const state = run([boot(1), boot(3)])
     expect(state.index).toBe(1)
@@ -86,6 +110,37 @@ describe('resuming after a failed answer', () => {
       { type: 'saved', answered: [true, false, true, false], videoLost: false },
     ])
     expect(state.phase).toBe('review')
+  })
+})
+
+describe('an answer recovered after a reload', () => {
+  it('is sent straight away, and announced once it lands', () => {
+    const sending = run([boot(1), { type: 'recovered' }])
+    expect(sending).toMatchObject({ phase: 'saving', index: 1 })
+    const saved = run(
+      [{ type: 'saved', answered: [true, false, false, false], videoLost: false }],
+      sending,
+    )
+    expect(saved).toMatchObject({ phase: 'prompt', index: 2, stopReason: 'recovered' })
+  })
+
+  it('is sent even from the intro', () => {
+    expect(run([boot(0, 4, true), { type: 'recovered' }]).phase).toBe('saving')
+  })
+
+  it('offers the usual retry when it does not get through', () => {
+    const failed = run([
+      boot(0),
+      { type: 'recovered' },
+      { type: 'saveFailed', error: 'interview:errors.network' },
+    ])
+    expect(failed.phase).toBe('saveFailed')
+    expect(run([{ type: 'retry' }], failed).phase).toBe('saving')
+  })
+
+  it('is ignored mid-recording', () => {
+    const recording = run([boot(0), { type: 'recordingStarted' }])
+    expect(run([{ type: 'recovered' }], recording)).toBe(recording)
   })
 })
 
@@ -298,5 +353,28 @@ describe('events out of place', () => {
     ] as const) {
       expect(interviewReducer(prompt, event)).toBe(prompt)
     }
+  })
+})
+
+/** Cand M12: `saveFailed` holds unsent bytes and was left unguarded. */
+describe('answerAtRisk', () => {
+  it('guards every phase where an answer is on the page and not on the server', () => {
+    const phases = [
+      'loading',
+      'intro',
+      'prompt',
+      'recording',
+      'saving',
+      'saveFailed',
+      'recordingLost',
+      'review',
+      'finishing',
+      'finishFailed',
+    ] as const
+    expect(phases.filter(answerAtRisk)).toEqual([
+      'recording',
+      'saving',
+      'saveFailed',
+    ])
   })
 })

@@ -4,10 +4,15 @@
  * Two layers, in this order, and never one without the other:
  *   1. Organisation membership — the hard boundary. Enforced by
  *      `requireOrgMember`, which every entry point here calls first.
- *   2. Project visibility — a soft boundary inside the org. A project with
- *      `projectShares` rows is visible only to those people, its creator, and
- *      org admins/owners. Invisible resolves to `not_found`, not "forbidden":
- *      a recruiter should not learn that a confidential role exists.
+ *   2. Project visibility — a soft boundary inside the org. Every role is
+ *      visible to its team (its creator plus the `projectShares` rows) and to
+ *      org admins/owners, and to nobody else. Invisible resolves to
+ *      `not_found`, not "forbidden": a recruiter should not learn that a
+ *      confidential role exists.
+ *
+ * The creator is on the team by construction and is never stored as a row:
+ * they cannot be dropped from it, so the person who opened the search always
+ * sees it and always hears about its reports.
  */
 
 import { ConvexError } from 'convex/values'
@@ -30,7 +35,6 @@ export async function canSeeProject(
   userId: Id<'users'>,
   role: AppRole,
 ): Promise<boolean> {
-  if (!project.restricted) return true
   if (seesEverything(role)) return true
   if (project.createdBy === userId) return true
   const share = await ctx.db
@@ -84,7 +88,7 @@ export async function requireProjectEditable(
   return access
 }
 
-/** Destructive actions (delete, change who the project is restricted to). */
+/** Destructive actions (delete, archive, change the role's team). */
 export async function requireProjectOwnerOrAdmin(
   ctx: Ctx,
   projectId: Id<'projects'>,
@@ -114,14 +118,57 @@ export async function filterVisibleProjects(
   role: AppRole,
 ): Promise<Array<Doc<'projects'>>> {
   if (seesEverything(role)) return projects
-  const needsCheck = projects.some((p) => p.restricted)
-  if (!needsCheck) return projects
+  const shared = await sharedProjectIds(ctx, userId)
+  return projects.filter((p) => p.createdBy === userId || shared.has(p._id))
+}
+
+/** Roles this person was added to the team of. Their own roles, whose team
+ *  they are on as creator, are not in it: compare `createdBy` for those. */
+export async function sharedProjectIds(
+  ctx: Ctx,
+  userId: Id<'users'>,
+): Promise<Set<Id<'projects'>>> {
   const shares = await ctx.db
     .query('projectShares')
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
-  const shared = new Set(shares.map((s) => s.projectId))
-  return projects.filter(
-    (p) => !p.restricted || p.createdBy === userId || shared.has(p._id),
-  )
+  return new Set(shares.map((s) => s.projectId))
+}
+
+/**
+ * Revoke what a person holds in an organisation only because they belong to
+ * it: their places on role teams, and the report links they handed out (h03).
+ * A link acts for its creator; once that person has left, nobody accountable
+ * is behind it. Called when a membership ends (`removeMember`, one org) and
+ * when the account goes (`cascadeDelete`, every org at once).
+ */
+export async function revokeMemberGrants(
+  ctx: GenericMutationCtx<DataModel>,
+  userId: Id<'users'>,
+  orgId?: Id<'organizations'>,
+): Promise<void> {
+  const teamRows = await ctx.db
+    .query('projectShares')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .collect()
+  for (const row of teamRows) {
+    if (orgId === undefined || row.orgId === orgId) {
+      await ctx.db.delete('projectShares', row._id)
+    }
+  }
+
+  const links = await ctx.db
+    .query('reportShares')
+    .withIndex('by_creator_and_org', (q) =>
+      orgId === undefined
+        ? q.eq('createdBy', userId)
+        : q.eq('createdBy', userId).eq('orgId', orgId),
+    )
+    .collect()
+  const now = Date.now()
+  for (const link of links) {
+    if (link.revokedAt === undefined) {
+      await ctx.db.patch('reportShares', link._id, { revokedAt: now })
+    }
+  }
 }

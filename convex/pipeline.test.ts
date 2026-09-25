@@ -1,12 +1,22 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { internal } from './_generated/api'
 import schema from './schema'
 import { chooseStartSeconds } from './lib/evidence'
-import { computeParaverbal } from './lib/paraverbal'
 import type { Id } from './_generated/dataModel'
+import type * as ai from './lib/ai'
+import type { ReportOutput } from './lib/reportSchema'
+
+// The model is the one thing a test cannot call. Everything after it — the
+// builder, the save, the log — runs for real.
+const modelOutput = vi.hoisted((): { value: unknown } => ({ value: null }))
+vi.mock('./lib/ai', async (importOriginal) => ({
+  ...(await importOriginal<typeof ai>()),
+  complete: () =>
+    Promise.resolve({ value: modelOutput.value, model: 'test-model' }),
+}))
 
 const modules = import.meta.glob('./**/*.ts')
 
@@ -155,7 +165,6 @@ describe('pipeline idempotency', () => {
       await t.mutation(internal.pipeline.saveReport, {
         sessionId: s.sessionId,
         report: REPORT,
-        paraverbal: null,
         partial: false,
         model: 'test-model',
       })
@@ -208,7 +217,6 @@ describe('pipeline idempotency', () => {
       t.mutation(internal.pipeline.saveReport, {
         sessionId: s.sessionId,
         report: { ...REPORT, orgId: otherOrg } as typeof REPORT,
-        paraverbal: null,
         partial: false,
         model: 'test-model',
       }),
@@ -251,15 +259,15 @@ describe('pipeline idempotency', () => {
  * Audit 2026-09-22,
  * `convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`.
  *
- * The answer length behind the para-verbal measures and every quote anchor
- * was the number the candidate's browser reported. It is now what the server
+ * The answer length behind every quote anchor was the number the
+ * candidate's browser reported. It is now what the server
  * observed at transcription, so the report cannot move with the argument.
  */
 describe('the answer length the report measures', () => {
   let t: ReturnType<typeof newTest>
   let s: Seed
 
-  // Two timed chunks over eight seconds, under a 120-second limit.
+  // Two timed chunks over eight seconds.
   const words = [
     { start: 0, end: 3.9, text: 'We migrated the billing service' },
     { start: 4.1, end: 8, text: 'and cut the release cycle from two weeks' },
@@ -283,13 +291,6 @@ describe('the answer length the report measures', () => {
     const answer = inputs.answers[0]
     return {
       durationSeconds: answer.durationSeconds,
-      paraverbal: computeParaverbal(
-        inputs.answers.map((a) => ({
-          chunks: a.chunks,
-          durationSeconds: a.durationSeconds ?? 0,
-          maxResponseSeconds: a.maxResponseSeconds,
-        })),
-      ),
       anchor: chooseStartSeconds({
         chunks: answer.chunks,
         quote: 'cut the release cycle from two weeks',
@@ -313,7 +314,6 @@ describe('the answer length the report measures', () => {
       await inputsFor(1),
     ]
     expect(results[0].durationSeconds).toBe(9.5)
-    expect(results[0].paraverbal).not.toBeNull()
     expect(results[0].anchor).toBe(4.1)
     expect(results[1]).toEqual(results[0])
     expect(results[2]).toEqual(results[0])
@@ -338,8 +338,103 @@ describe('the answer length the report measures', () => {
     })
     const result = await inputsFor(60)
     expect(result.durationSeconds).toBeNull()
-    // Left out of the delivery profile rather than measured against a guess.
-    expect(result.paraverbal).toBeNull()
+  })
+})
+
+/**
+ * Audit 2026-09-15, Pipe M9, and product decision n° 2 of 2026-09-24: the
+ * para-verbal figures are retired. Nothing computes them, nothing writes them.
+ */
+describe('para-verbal analysis', () => {
+  let t: ReturnType<typeof newTest>
+  let s: Seed
+
+  const OUTPUT: ReportOutput = {
+    verdictHeadline: 'A solid backend engineer.',
+    executiveSummary:
+      'Led a billing migration and explained its trade-offs clearly.',
+    overallScore: 71,
+    recommendation: 'yes',
+    strengths: ['Led a migration'],
+    concerns: [],
+    criteria: [
+      {
+        criterionIndex: 0,
+        score: 71,
+        level: 'solid',
+        rationale: 'Concrete migration, measured outcome.',
+        evidence: [],
+      },
+    ],
+    answers: [
+      {
+        answerIndex: 0,
+        score: 7,
+        summary: 'A migration, told well.',
+        depth: 'concrete',
+        evidence: null,
+      },
+    ],
+    highlights: [],
+  }
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seed(t)
+    modelOutput.value = OUTPUT
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.sessionId))!
+      await ctx.db.insert('criteria', {
+        orgId: session.orgId,
+        projectId: session.projectId,
+        label: 'Delivery',
+        weight: 100,
+        orderIndex: 0,
+      })
+    })
+    // Timed words and a measured length: everything the old computation
+    // needed to produce a profile.
+    await t.mutation(internal.pipeline.saveTranscript, {
+      segmentId: s.segmentId,
+      text: 'We migrated the billing service, euh, in two weeks.',
+      words: [
+        { start: 0, end: 3, text: 'We migrated the billing service,' },
+        { start: 5, end: 8, text: 'euh, in two weeks.' },
+      ],
+      model: 'voxtral-mini-latest',
+      audioSeconds: 9,
+    })
+  })
+
+  it('is not part of a generated report', async () => {
+    await t.action(internal.pipeline.generateReport, {
+      sessionId: s.sessionId,
+    })
+
+    const report = await t.run(async (ctx) =>
+      ctx.db
+        .query('reports')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .unique(),
+    )
+    expect(report?.overallScore).toBe(71)
+    expect(report).not.toHaveProperty('paraverbal')
+  })
+
+  it('cannot be written through saveReport', async () => {
+    await expect(
+      t.mutation(internal.pipeline.saveReport, {
+        sessionId: s.sessionId,
+        report: REPORT,
+        partial: false,
+        model: 'test-model',
+        paraverbal: {
+          dimensions: [{ key: 'pace', score: 8, measure: 140 }],
+          wordsPerMinute: 140,
+          totalSpeakingSeconds: 9,
+        },
+      } as never),
+    ).rejects.toThrow(/paraverbal/)
   })
 })
 
@@ -384,7 +479,6 @@ describe('purge', () => {
     await t.mutation(internal.pipeline.saveReport, {
       sessionId: s.sessionId,
       report: REPORT,
-      paraverbal: null,
       partial: false,
       model: 'test-model',
     })

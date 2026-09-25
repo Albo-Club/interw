@@ -28,7 +28,7 @@ export const mediaPool = new Workpool(components.mediaWorkpool, {
   defaultRetryBehavior: RETRY,
 })
 
-/** Report, para-verbal and notification — one long job per session. */
+/** Report and notification — one long job per session. */
 export const reportPool = new Workpool(components.reportWorkpool, {
   maxParallelism: 3,
   retryActionsByDefault: true,

@@ -6,8 +6,9 @@ import { toast } from 'sonner'
 import { api } from '../../../../convex/_generated/api'
 import type { WizardProject } from './types'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { MediaRecorderField } from '~/components/projects/MediaRecorderField'
+import { useProjectPlayback } from '~/components/projects/useProjectPlayback'
 import { Input } from '~/components/ui/input'
-import { Textarea } from '~/components/ui/textarea'
 import {
   Field,
   FieldDescription,
@@ -22,7 +23,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 
-const INTRO_MODES = ['none', 'text', 'audio', 'video'] as const
+const INTRO_MODES = ['none', 'video'] as const
 
 export function StepBasics({ project }: { project: WizardProject }) {
   const { t } = useTranslation(['projects', 'common'])
@@ -33,9 +34,12 @@ export function StepBasics({ project }: { project: WizardProject }) {
   const [personaName, setPersonaName] = useState(project.personaName ?? '')
   const [duration, setDuration] = useState(String(project.maxDurationMinutes))
   const [introMode, setIntroMode] = useState(project.introMode)
-  const [introText, setIntroText] = useState(project.introText ?? '')
   const [expiresAt, setExpiresAt] = useState(
     project.expiresAt ? toDateInput(project.expiresAt) : '',
+  )
+  const { playback, refresh: refreshPlayback } = useProjectPlayback(
+    project._id,
+    project.hasIntroMedia ? 'intro' : '',
   )
 
   // Re-seed when the underlying project changes (another tab, or a save that
@@ -197,19 +201,19 @@ export function StepBasics({ project }: { project: WizardProject }) {
             </Select>
           </Field>
 
-          {introMode === 'text' && (
+          {introMode === 'video' && (
             <Field>
-              <FieldLabel htmlFor="project-intro-text">
-                {t('projects:basics.intro.text')}
-              </FieldLabel>
-              <Textarea
-                id="project-intro-text"
-                rows={5}
-                value={introText}
-                placeholder={t('projects:basics.intro.textPlaceholder')}
-                onChange={(event) => setIntroText(event.target.value)}
-                onBlur={() => void save({ projectId: project._id, introText })}
+              <MediaRecorderField
+                target={{ kind: 'intro', projectId: project._id }}
+                hasMedia={project.hasIntroMedia}
+                playback={
+                  playback?.intro ? { url: playback.intro, kind: 'video' } : null
+                }
+                onChanged={refreshPlayback}
               />
+              <FieldDescription>
+                {t('projects:basics.intro.media.hint')}
+              </FieldDescription>
             </Field>
           )}
         </FieldGroup>

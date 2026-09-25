@@ -18,6 +18,13 @@ crons.interval(
 )
 
 crons.interval(
+  'expire the open sessions of roles past their deadline',
+  { hours: 1 },
+  internal.sessions.expireOverdueSessions,
+  { cursor: null },
+)
+
+crons.interval(
   'remove old emails from the resend component',
   { hours: 1 },
   internal.crons.cleanupResend,

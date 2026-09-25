@@ -13,7 +13,7 @@ import { effectiveIntroMode } from './lib/candidateView'
 import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
-  isCreator,
+  leaveTeam,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
   sharedProjectIds,
@@ -105,13 +105,13 @@ export const list = query({
           .withIndex('by_org', (q) => q.eq('orgId', orgId))
           .order('desc')
           .take(LIST_CAP)
-    const visible = await filterVisibleProjects(ctx, rows, member)
+    const visible = await filterVisibleProjects(ctx, rows, user._id, member.role)
     // Owners and admins see every role but are emailed only about the ones
     // whose team they are on; the list says which (audit recruiter F6).
     const shared = await sharedProjectIds(ctx, user._id)
     return visible.map((project) => ({
       ...toSummary(project),
-      onTeam: isCreator(project, member) || shared.has(project._id),
+      onTeam: shared.has(project._id),
     }))
   },
 })
@@ -124,7 +124,7 @@ export const list = query({
 export const getBySlug = query({
   args: { orgId: v.id('organizations'), slug: v.string() },
   handler: async (ctx, { orgId, slug }) => {
-    const { member } = await requireOrgMember(ctx, orgId)
+    const { user, member } = await requireOrgMember(ctx, orgId)
     // `.first()`, not `.unique()` (Back M4): Convex has no unique constraint,
     // and a duplicate slug written before `create` asked the index made
     // `.unique()` throw — on the page of both roles, for good. A degraded page
@@ -134,7 +134,12 @@ export const getBySlug = query({
       .withIndex('by_org_and_slug', (q) => q.eq('orgId', orgId).eq('slug', slug))
       .first()
     if (!project) throw new ConvexError('not_found')
-    const visible = await filterVisibleProjects(ctx, [project], member)
+    const visible = await filterVisibleProjects(
+      ctx,
+      [project],
+      user._id,
+      member.role,
+    )
     if (visible.length === 0) throw new ConvexError('not_found')
 
     const questions = await ctx.db
@@ -190,7 +195,6 @@ export const create = mutation({
   handler: async (ctx, { orgId, title, jobTitle, language, team }) => {
     const { user } = await requireOrgMember(ctx, orgId)
     const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
-    const now = Date.now()
 
     const slug = await uniqueSlug(
       cleanTitle,
@@ -203,6 +207,7 @@ export const create = mutation({
           .first()) !== null,
     )
 
+    const now = Date.now()
     const projectId = await ctx.db.insert('projects', {
       orgId,
       slug,
@@ -218,10 +223,19 @@ export const create = mutation({
       sessionCount: 0,
       completedSessionCount: 0,
     })
+    // The creator's seat is a row like anyone's (T17-2), so removal, which
+    // deletes the rows, also takes it: `createdBy` alone grants nothing.
+    await ctx.db.insert('projectShares', {
+      orgId,
+      projectId,
+      userId: user._id,
+      grantedBy: user._id,
+      grantedAt: now,
+    })
     if (team) {
       await writeTeam(
         ctx,
-        { _id: projectId, orgId, createdBy: user._id, createdAt: now },
+        { _id: projectId, orgId, createdBy: user._id },
         team,
         user._id,
       )
@@ -407,26 +421,18 @@ export const remove = mutation({
 })
 
 /**
- * Replace a role's team with `userIds`. The creator is on every team by
- * construction, so naming them is a no-op rather than a stored row — unless
- * they were removed since and re-invited: that seat is gone (`isCreator`), and
- * a row is the only way back onto the team.
+ * Replace a role's team with `userIds`. The creator's seat is never dropped
+ * here, named or not: nobody unticks the person who opened the search. Once
+ * removal has taken it, naming them puts them back like anyone else.
  */
 async function writeTeam(
   ctx: MutationCtx,
-  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'createdBy' | 'createdAt'>,
+  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'createdBy'>,
   userIds: Array<Id<'users'>>,
   grantedBy: Id<'users'>,
 ) {
   if (userIds.length > TEAM_MAX) throw new ConvexError('team_too_large')
   const wanted = new Set(userIds)
-  const creator = await ctx.db
-    .query('organizationMembers')
-    .withIndex('by_org_and_user', (q) =>
-      q.eq('orgId', project.orgId).eq('userId', project.createdBy),
-    )
-    .unique()
-  if (creator && isCreator(project, creator)) wanted.delete(project.createdBy)
 
   // Everyone named must already be a member of this organisation — a team
   // must never become a side door into another org's data.
@@ -445,10 +451,10 @@ async function writeTeam(
     .withIndex('by_project', (q) => q.eq('projectId', project._id))
     .collect()
   for (const share of existing) {
-    if (!wanted.has(share.userId)) {
-      await ctx.db.delete('projectShares', share._id)
-    } else {
+    if (wanted.has(share.userId)) {
       wanted.delete(share.userId)
+    } else if (share.userId !== project.createdBy) {
+      await leaveTeam(ctx, share)
     }
   }
   for (const userId of wanted) {
@@ -475,18 +481,9 @@ export const team = query({
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
       .collect()
-    const creator = await ctx.db
-      .query('organizationMembers')
-      .withIndex('by_org_and_user', (q) =>
-        q.eq('orgId', project.orgId).eq('userId', project.createdBy),
-      )
-      .unique()
     return {
       createdBy: project.createdBy,
       creator: await memberName(ctx, project.orgId, project.createdBy),
-      // False once the creator was removed, even if re-invited since: the
-      // picker then lists them as anyone else, so they can be added back.
-      creatorSeated: creator !== null && isCreator(project, creator),
       members: rows.map((row) => row.userId),
     }
   },

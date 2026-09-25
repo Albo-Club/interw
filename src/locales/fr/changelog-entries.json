@@ -1,7 +1,11 @@
 {
   "invitations-and-names-hardening": {
     "title": "Invitations renforcées, et un écran d’entretien plus rapide",
-    "body": "Une invitation d'équipe cesse de fonctionner si l'admin qui l'a envoyée quitte l'organisation ou perd ses droits d'admin ; un autre admin peut la renvoyer. Une personne retirée de votre organisation puis réinvitée ne retrouve plus les postes qu'elle avait créés. Nous avons aussi renforcé l'affichage des noms, et l'écran d'entretien se charge un peu plus vite."
+    "body": "Une invitation d'équipe cesse de fonctionner si l'admin qui l'a envoyée quitte l'organisation ou perd ses droits d'admin ; un autre admin peut la renvoyer. Nous avons aussi renforcé l'affichage des noms, et l'écran d'entretien se charge un peu plus vite."
+  },
+  "role-access-tightened": {
+    "title": "Nous avons resserré qui garde l’accès à un poste",
+    "body": "Quitter l’équipe d’un poste, ou votre organisation, met désormais fin à tout ce qui venait avec cette place dans l’équipe. Une personne qui revient ne voit aucun poste tant qu’elle n’a pas été rajoutée à son équipe. Les nouveaux postes reçoivent aussi une courte terminaison aléatoire dans leur lien."
   },
   "candidate-emails-job-title": {
     "title": "Les e-mails aux candidats ne nomment le poste que par son intitulé",

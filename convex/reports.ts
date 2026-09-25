@@ -19,7 +19,6 @@ import { languageValidator, recruiterDecisionValidator } from './schema'
 import { requireOrgMember } from './lib/auth'
 import {
   canSeeProject,
-  isCreator,
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
@@ -39,7 +38,7 @@ export const forSession = query({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    const { project, member } = await requireProjectAccess(
+    const { project, user, member } = await requireProjectAccess(
       ctx,
       session.projectId,
     )
@@ -106,7 +105,7 @@ export const forSession = query({
       canManage:
         member.role === 'owner' ||
         member.role === 'admin' ||
-        isCreator(project, member),
+        project.createdBy === user._id,
       session: {
         _id: session._id,
         candidateName: session.candidateName,
@@ -358,7 +357,7 @@ export const sessionMediaUrls = action({
 export const searchCandidates = query({
   args: { orgId: v.id('organizations'), text: v.string() },
   handler: async (ctx, { orgId, text }) => {
-    const { member } = await requireOrgMember(ctx, orgId)
+    const { user, member } = await requireOrgMember(ctx, orgId)
     const trimmed = text.trim()
     if (trimmed.length < 2) return []
 
@@ -383,7 +382,7 @@ export const searchCandidates = query({
       if (!project) continue
       // Project-level visibility applies to search too, otherwise a
       // confidential role leaks through the search box.
-      if (!(await canSeeProject(ctx, project, member))) continue
+      if (!(await canSeeProject(ctx, project, user._id, member.role))) continue
       visible.push({
         sessionId: session._id,
         candidateName: session.candidateName,

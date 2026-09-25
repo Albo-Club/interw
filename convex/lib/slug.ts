@@ -21,28 +21,32 @@ export function slugify(input: string): string {
 }
 
 const SUFFIX_LENGTH = 6
+const SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
-/** Six base36 characters. For uniqueness only: a slug is not a credential. */
 function randomSuffix(): string {
   const bytes = new Uint8Array(SUFFIX_LENGTH)
   crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => (byte % 36).toString(36)).join('')
+  return Array.from(
+    bytes,
+    (b) => SUFFIX_ALPHABET[b % SUFFIX_ALPHABET.length],
+  ).join('')
 }
 
 /**
- * A slug for which `isTaken` answers false: the title's slug plus a random
- * suffix, on every role. Falls back to `project` when the title has no usable
- * characters at all (a title in a non-Latin script, or only punctuation) — an
- * empty slug would produce a double slash in every link.
+ * `<title>-<6 random characters>`, redrawn until `isTaken` answers false.
+ * Falls back to `project` when the title has no usable characters at all (a
+ * title in a non-Latin script, or only punctuation) — an empty slug would
+ * produce a double slash in every link.
  *
- * Always suffixed (T17-3): `isTaken` sees every role in the org, including
- * the ones hidden from the caller, so "plain when free, `-2` when taken"
- * told a member that a confidential role with that title existed, and the
- * number told them how many. A collision on a random suffix reveals nothing.
+ * Every new slug carries the suffix, taken or not (audit T17-3). Slugs are
+ * unique across the organisation, roles the caller cannot see included, and
+ * the old `-2`, `-3` counter handed that back: "Replace Paul" returning
+ * `replace-paul-2` told a member a role of that title existed, hidden from
+ * them. A random suffix says nothing about the others.
  *
  * A predicate rather than a set of taken slugs (Back M4): the caller asks the
- * `by_org_and_slug` index, so uniqueness holds however many roles the
- * organisation has.
+ * `by_org_and_slug` index about each candidate, so uniqueness holds however
+ * many roles the organisation has.
  */
 export async function uniqueSlug(
   base: string,
@@ -51,7 +55,7 @@ export async function uniqueSlug(
   const root = (slugify(base) || 'project')
     .slice(0, MAX_LENGTH - SUFFIX_LENGTH - 1)
     .replace(/-+$/g, '')
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = `${root}-${randomSuffix()}`
     if (!(await isTaken(candidate))) return candidate
   }

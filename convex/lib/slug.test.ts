@@ -30,25 +30,27 @@ const takenIn = (slugs: Array<string>) => {
 }
 
 describe('uniqueSlug', () => {
-  const shape = /^product-manager-[a-z0-9]{6}$/
+  const SLUG = /^product-manager-[a-z0-9]{6}$/
 
-  // T17-3: the result must not depend on which slugs are taken, since the
-  // caller's predicate also sees roles hidden from them.
-  it('has the same shape whether or not the title is taken', async () => {
-    expect(await uniqueSlug('Product Manager', takenIn([]))).toMatch(shape)
+  it('suffixes every slug, free or not', async () => {
+    expect(await uniqueSlug('Product Manager', takenIn([]))).toMatch(SLUG)
     expect(
       await uniqueSlug('Product Manager', takenIn(['product-manager'])),
-    ).toMatch(shape)
+    ).toMatch(SLUG)
   })
 
-  it('draws again on a collision', async () => {
-    let calls = 0
-    const firstTaken = () => Promise.resolve(calls++ === 0)
-    expect(await uniqueSlug('Product Manager', firstTaken)).toMatch(shape)
-    expect(calls).toBe(2)
+  it('draws again when the suffix is taken', async () => {
+    const asked: Array<string> = []
+    const slug = await uniqueSlug('Product Manager', (candidate) => {
+      asked.push(candidate)
+      return Promise.resolve(asked.length === 1)
+    })
+    expect(asked).toHaveLength(2)
+    expect(slug).toBe(asked[1])
+    expect(slug).toMatch(SLUG)
   })
 
-  it('stays within the length limit and never doubles a hyphen', async () => {
+  it('stays within 60 characters and never doubles a hyphen', async () => {
     const slug = await uniqueSlug(`${'a'.repeat(52)} b`, takenIn([]))
     expect(slug.length).toBeLessThanOrEqual(60)
     expect(slug).not.toContain('--')

@@ -1,7 +1,11 @@
 {
   "invitations-and-names-hardening": {
     "title": "Invitations hardened, and a faster interview screen",
-    "body": "A team invitation now stops working if the admin who sent it leaves or loses admin rights; another admin can resend it. Someone removed from your organisation and invited back no longer gets back the roles they had created. We also hardened how names are displayed, and the interview screen loads a little faster."
+    "body": "A team invitation now stops working if the admin who sent it leaves or loses admin rights; another admin can resend it. We also hardened how names are displayed, and the interview screen loads a little faster."
+  },
+  "role-access-tightened": {
+    "title": "We tightened who keeps access to a role",
+    "body": "Leaving a role's team, or your organization, now ends everything that came with that place on the team. Someone who comes back sees no role until they are added to its team again. New roles also get a short random ending in their link."
   },
   "candidate-emails-job-title": {
     "title": "Candidate emails name the role by its job title only",

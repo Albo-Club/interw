@@ -6,6 +6,7 @@ import fr from '~/locales/fr/changelog-entries.json'
 // add the entry here AND in both files.
 export const CHANGELOG_ENTRIES = [
   { id: 'invitations-and-names-hardening', date: '2026-09-25' },
+  { id: 'role-access-tightened', date: '2026-09-25' },
   { id: 'candidate-emails-job-title', date: '2026-09-25' },
   { id: 'share-highlights-and-deadlines', date: '2026-09-25' },
   { id: 'assistant-history-purged', date: '2026-09-25' },

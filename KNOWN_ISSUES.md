@@ -1786,7 +1786,18 @@ them — where the app cannot search. So the candidate-reading tools record a
 `chatThreadSessions` row in the same transaction as the read, and
 `purge.deleteChildRows` deletes those whole threads. Any new tool that returns
 candidate data must record the same row, or its output survives erasure.
-Threads created before this change carry no row and are not covered.
+Threads created before this change carry no row, so erasure cannot find them;
+they are purged once by `migrations.purgeLegacyAssistantThreads`, an hourly
+cron that fixes its cutoff at its first run on each deployment (on staging,
+that also takes the threads created between the two changes — deliberately),
+deletes every thread older than it with its `chatThreadSessions` rows, and
+sets `doneAt` after a full pass finds none left. The component lists no
+threads globally: the pass walks `users.listUsersWithThreads`, which reads the
+component's own table, so a removed member's scope is reached too; only a
+thread with no `userId` is invisible to it, and the app never creates one.
+This is the owner's one-off retention decision, not a pipeline catch-up
+script: it repairs no lost step, and once `doneAt` is set on every deployment
+the function, its cron and the `migrations` table can be deleted.
 `chat.listMessages` answers an empty page for a thread that no longer exists,
 because erasure may delete a thread a recruiter has open.
 

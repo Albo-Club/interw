@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "assistant-history-purged": {
+      "title": "Older assistant conversations deleted",
+      "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."
+    },
     "auth-hardening-sep-25": {
       "title": "Sign-in hardened",
       "body": "We hardened sign-in and team invitations against misuse, and reserved administrator access to the operator's own address. Completing an email verification link now only asks for the password you chose, so you never lose it along the way."

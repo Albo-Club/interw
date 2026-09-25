@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "assistant-history-purged": {
+      "title": "Anciennes conversations avec l’assistant supprimées",
+      "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
+    },
     "auth-hardening-sep-25": {
       "title": "Connexion renforcée",
       "body": "Nous avons renforcé la connexion et les invitations d’équipe contre les usages abusifs, et réservé l’accès administrateur à l’adresse de l’opérateur. Valider un lien de vérification d’e-mail ne demande plus que le mot de passe que vous avez choisi, pour ne jamais le perdre en chemin."

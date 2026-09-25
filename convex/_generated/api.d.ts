@@ -57,6 +57,7 @@ import type * as lib_userPrefs from "../lib/userPrefs.js";
 import type * as lib_weights from "../lib/weights.js";
 import type * as lib_workpools from "../lib/workpools.js";
 import type * as media from "../media.js";
+import type * as migrations from "../migrations.js";
 import type * as notifications from "../notifications.js";
 import type * as orgErasure from "../orgErasure.js";
 import type * as organizations from "../organizations.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "lib/weights": typeof lib_weights;
   "lib/workpools": typeof lib_workpools;
   media: typeof media;
+  migrations: typeof migrations;
   notifications: typeof notifications;
   orgErasure: typeof orgErasure;
   organizations: typeof organizations;

@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "backend-hardening": {
+      "title": "Des limites resserrées autour des liens et des envois",
+      "body": "Nous avons renforcé ce que permettent un lien candidat, un lien de partage de rapport et les envois de fichiers : les vérifications d’expiration et d’horloge ne reposent plus que sur nos serveurs, les fenêtres et tailles d’envoi suivent la durée de chaque question, et les liens de partage suivent les mêmes limites de débit que le reste du produit. Sur un rapport partagé, une réponse enregistrée sans caméra se lit désormais en audio plutôt qu’en vidéo noire, et l’intitulé interne du poste n’apparaît jamais."
+    },
     "assistant-panel": {
       "title": "Un assistant plus léger et plus discret",
       "body": "L’assistant IA reste fermé tant que vous ne l’ouvrez pas, et ne se charge qu’à ce moment-là : les pages recruteur s’ouvrent plus vite. Sur téléphone ou dans une fenêtre étroite, il s’ouvre dans une vraie fenêtre de dialogue, que l’on quitte avec Échap ou en touchant à côté. La zone de saisie indique la longueur de votre message face à la limite de 8 000 caractères, et le dit clairement quand il est trop long. Nous avons aussi resserré les liens et les images vers lesquels les réponses de l’assistant peuvent pointer."

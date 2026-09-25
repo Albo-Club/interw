@@ -2349,3 +2349,23 @@ A computed code (`new ConvexError(someVariable)`) fails the test until it is
 registered in the test's `DYNAMIC` map with the codes it can carry — derive
 them from the code itself (as for `gate.state` and `publishBlockers`), never
 list them by hand.
+
+## An answer's byte cap and PUT lifetime come from its question
+
+`reserveSegment` used to accept 300 MB per answer and sign its PUT for 15
+minutes, whatever the question. Both now follow `question.maxResponseSeconds`
+(`convex/interview.ts`):
+
+- **Bytes**: `(maxResponseSeconds + 5) × rate + 1 MB`, with 512 KB/s for video
+  and 32 KB/s for audio — **four times** what the recorder asks for
+  (`src/lib/media/recorder.ts`: 1 Mbit/s, 64 kbit/s). The headroom is
+  deliberate: `videoBitsPerSecond` is a request, a browser may overshoot it,
+  and a candidate gets one attempt. If you raise the recorder's bitrates,
+  raise these with them, or long answers start failing `media_too_large`
+  before they upload.
+- **PUT lifetime**: `maxResponseSeconds + 3 min`. S3 checks expiry when the
+  request *starts*, so the window has to cover the audio upload, the video
+  PUT that follows it and the client's retries (1 s, 2 s backoff) — not the
+  transfer itself. Shortening it further breaks the video retry on a slow
+  uplink; lengthening it re-opens the "bytes land after `finish` or erasure"
+  window h01/h02 described.

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "backend-hardening": {
+      "title": "Tighter limits around links and uploads",
+      "body": "We hardened what a candidate link, a report share link and file uploads can do: expiry and time checks rely only on our servers, upload windows and sizes now match each question's length, and share links follow the same rate limits as the rest of the product. On a shared report, an answer recorded without a camera now plays as audio instead of a black video, and the internal role name is never shown."
+    },
     "assistant-panel": {
       "title": "A lighter, quieter assistant panel",
       "body": "The AI assistant now stays closed until you open it, and loads only then, so recruiter pages open faster. On a phone or a narrow window it opens as a proper dialog you can leave with Escape or a tap outside. The composer shows how long your message is against the 8,000-character limit, and says so plainly when it is too long. We also tightened which links and images the assistant's answers can point to."

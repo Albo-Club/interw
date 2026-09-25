@@ -9,6 +9,18 @@
       "title": "Clearer account settings",
       "body": "Your profile now follows an email change step by step, shows the ways you can really sign in, and lets you set a password if your account has none. An account-deletion link opened on another device now leads to a clear page, and an account can no longer leave an organization without an owner. We also hardened our security notices: you now get an email after a password reset too."
     },
+    "sign-in-with-a-code": {
+      "title": "Sign in with a code from your email",
+      "body": "Enter your email and we send you a 6-digit code — or a button that fills it in for you. The same steps create your account, so there is no password to choose; you can still sign in with one if you have it. Invitations use the same sign-in, and a session that expires now brings you back to the page you were on."
+    },
+    "verification-link-guidance": {
+      "title": "Clearer email verification",
+      "body": "Opening a verification link while signed in to another account, or after it has expired, now tells you what to do next instead of leaving you on a plain sign-in page. Sign-up also asks you to type your password twice."
+    },
+    "team-invitations": {
+      "title": "Smoother team invitations",
+      "body": "Invite several teammates at once, see who invited whom and when, resend an invitation or copy its link, and spot an email that bounced. Expired invitations are marked as such and can be sent again. People who sign up without the link now see the invitation waiting for them instead of creating a second organization, and anyone can create another organization from the organization menu. The invitation email now says which role you are offered and until when."
+    },
     "sturdier-interview": {
       "title": "A sturdier interview for your candidates",
       "body": "Candidates now see themselves while they record, can carry on with audio alone when their camera is taken by another app, watch their answers upload, and see what is missing before they finish. The interview speaks your role's language whatever their browser's, and they get an email when it reaches you — with a link to see or delete their data. We also hardened how their interview links are handled in our error monitoring."

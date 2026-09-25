@@ -21,6 +21,20 @@ describe('scrubCandidateTokens', () => {
     )
   })
 
+  it('masks a sign-in code carried in a /login/code fragment', () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: 'navigation',
+          data: { to: '/login/code#email=a%40b.co&code=482913' },
+        },
+      ],
+    }
+    const scrubbed = JSON.stringify(scrubCandidateTokens(event))
+    expect(scrubbed).not.toContain('482913')
+    expect(scrubbed).toContain('code=[code]')
+  })
+
   it('leaves other paths alone', () => {
     const event = { request: { url: 'https://interw.com/app/acme/roles' } }
     expect(scrubCandidateTokens(event)).toEqual(event)

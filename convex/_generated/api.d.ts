@@ -36,6 +36,7 @@ import type * as lib_evidence from "../lib/evidence.js";
 import type * as lib_htmlText from "../lib/htmlText.js";
 import type * as lib_instructions from "../lib/instructions.js";
 import type * as lib_invitations from "../lib/invitations.js";
+import type * as lib_locale from "../lib/locale.js";
 import type * as lib_objectStore from "../lib/objectStore.js";
 import type * as lib_paraverbal from "../lib/paraverbal.js";
 import type * as lib_projectAccess from "../lib/projectAccess.js";
@@ -102,6 +103,7 @@ declare const fullApi: ApiFromModules<{
   "lib/htmlText": typeof lib_htmlText;
   "lib/instructions": typeof lib_instructions;
   "lib/invitations": typeof lib_invitations;
+  "lib/locale": typeof lib_locale;
   "lib/objectStore": typeof lib_objectStore;
   "lib/paraverbal": typeof lib_paraverbal;
   "lib/projectAccess": typeof lib_projectAccess;

@@ -70,34 +70,42 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | #   | Step                                                   | Expected result                                                                   |
 | --- | ------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | A0  | `/` in EN then FR                                      | Value proposition (questions on camera → candidate answers when they want → every claim linked to its second of video) + primary "Create account" CTA. No "MVP starter" anywhere, including the browser tab title. |
-| A1  | `/register` → submit, verify the email (A12), onboarding org "Acme" | Redirects to `/app/acme`, user created, `superAdmin: true` (first user). If `DEV_NOTIFY_EMAIL` is set, a "[interw] New signup: …" email arrives in that inbox (1× per new user, not on re-login). |
+| A1  | `/register` (→ `/login?mode=signup`, "Create your account") → email → code → "What should we call you?" → onboarding org "Acme" | Redirects to `/app/acme`, user created, `superAdmin: true` (first user). If `DEV_NOTIFY_EMAIL` is set, a "[interw] New signup: …" email arrives in that inbox (1× per new user, not on re-login). |
 | A2  | Sign out → re-sign in correct                          | Redirects to `/app/acme` (last org via `lastOrgSlug`)                              |
-| A3  | Sign in with wrong password                            | Inline destructive `<Alert>` above the form (not a toast). No session.            |
-| A4  | `/app/acme` unauthenticated                            | Redirects to `/login` (bare — the app never generates `?redirect=`, so the return URL is **not** preserved; see `KNOWN_ISSUES.md` § "A return-URL search param needs the URL parser") |
+| A3  | "Use my password instead", wrong password                | Inline destructive `<Alert>` above the form (not a toast), focus back in the password field. No session. Tab order: email → password → Sign in → "Forgot your password?" |
+| A4  | `/app/acme/projects` unauthenticated | Redirects to `/login?redirect=/app/acme/projects`; signing in lands back there. Signed in, then the session dies without a sign-out (delete the `interw.session_*` cookies, or revoke the session from another device) → `/app` bounces with "Your session expired. Sign in to continue." A voluntary sign-out shows no such notice |
 | A5  | `/app/me` → change password                            | Success toast **+ "Password changed" email** (anti-takeover, sent by the server — also for a change made through the API alone) + other sessions invalidated. The email links to `/app/me?tab=sessions`, which opens on the Sessions tab |
 | A5b | Change password 3× within a minute                     | Two "Password changed" emails, then none; each change still succeeds (`passwordChangedNotify` bucket, per user) |
-| A6  | Magic link for registered + unregistered email         | Identical privacy-respecting toast. No `users` row created for unknown email.     |
+| A6  | Email code for a registered **and** an unregistered address | Identical "Check your inbox" step, both get a code email (subject "`123456` is your interw sign-in code", in the language of the page for a new address). Unregistered: the code creates the account and asks for a name. No `users` row before `/app` |
+| A6b | Code errors                                             | Wrong code → "That code isn't right…" under the field, field cleared and focused. 5 wrong codes → "Too many incorrect tries", even the right one is refused until "Resend code". Code older than 10 min → "This code has expired". "Resend code" is disabled for 30 s with a countdown; after a resend the previous code no longer works |
+| A6c | Code email link ("Continue signing in")                 | Opens `/login/code`: address + code shown, **nothing happens until "Confirm and sign in"**. The address bar shows `/login/code` with no `#…` once loaded; no code in Vercel/Convex logs. Same browser → lands where the sign-in started (e.g. an invitation); another device → `/app`. Opened by a mail scanner (e.g. `curl` the URL): the code still works when typed |
+| A6d | Squatted address: a legacy **unverified** password account (created before password sign-up was turned off) | Code sign-in succeeds, then "Your previous password was turned off" screen → Continue. The old password now gets "Email or password is incorrect" |
+| A6e | "Open Gmail" / "Open Outlook" on the code step           | `@gmail.com` → Gmail only; `@outlook.com`/`@hotmail.*` → Outlook only; a work domain → both; `@yahoo.*`/`@orange.fr` → none. Each opens in a new tab |
 | A7  | Forgot → reset chain (email → token → new password)    | Sign-in with new password works. All pre-reset sessions invalidated. **"Password changed" email** arrives.              |
 | A8  | `/reset-password?token=expired` (or no token)          | Card "Invalid or expired link" + primary CTA "Send a new reset link"              |
-| A9  | `/register` with already-registered email              | **Same** "Check your inbox" screen as a new signup (anti-enumeration), no email sent |
-| A10 | Rate-limit (sign-in 6×, sign-up 4×, magic 4× /60s)    | "Too many attempts…" toast via classifier (no raw BA message)                     |
+| A9  | "Last used" badge                                       | After a code sign-in, sign out: "Last used" on "Continue with email"; after a password sign-in, on "Use my password instead"; after Google, on the Google button. Private window → no badge, no error |
+| A10 | Rate-limit                                              | Password sign-in 6× /60s, or 4 code requests /60s from one browser → "Too many attempts…". 4 codes to **one address** within the hour → "We've already sent several emails to this address…" — same answer for an address with no account. Same on "Forgot your password?" and "Resend verification email" |
 | A11 | `/app/me` → change email                               | **Approval email** arrives at the **current** address (anti-takeover), not the new one |
-| A12 | **Verification needs the password** | `/register`, click the email link | Lands on `/login` ("Sign in with the password you chose…"), **not** signed in yet. Enter the password → signed in and redirected. Hijack variant: browser A registers B's address with password P; in B's mailbox click the link and enter any other password → "invalid email or password", still unverified; A signing in with P → "email not verified" |
+| A12 | **Verification needs the password** (legacy accounts) | A legacy unverified password account: "Use my password instead" → "not verified" banner → Resend, click the email link | Lands on `/login` with a "Last step: enter the password you chose…" notice, **not** signed in yet. Enter the password → signed in and redirected. Hijack variant: in B's mailbox click the link and enter any other password → "invalid email or password", still unverified; A signing in with P → "email not verified" |
+| A12b | Verification link opened while signed in to **another** account | Sign in as A, then open B's verification link | "You're signed in as A…" card, **not** a bounce to `/app`. "Sign out and continue" → login form with the notice; B's password verifies B. "Stay signed in" → `/app` |
+| A12c | Expired verification link | Open a sign-up link more than 1 h old (or tamper with `token=`) | `/login` with "This verification link has expired…" notice. Correct password → "not verified" banner + Resend; the new link works |
+| A12d | Google on an unverified password account | "Continue with Google" with the address of a legacy unverified password account | Back on `/login` with an inline "An account already exists for this address, but it isn't confirmed yet. Continue with your email…" alert (not a toast, not the generic provider error); `redirect` preserved |
 | A13 | Email change, cross-device | `/app/me` → change email, approve from the old inbox, then click the new-address link in a fresh browser | Sent to `/login`; after signing in with the old address and password the change completes. Without signing in, nothing changes |
-| A23 | Password constraints (`/register`, `/reset-password`, `/app/me`) | <12 chars → Zod block. HIBP leak → "appeared in known data breaches". zxcvbn meter visible. |
+| A23 | Password constraints (`/reset-password`, `/app/me`) | <12 chars → Zod block. HIBP leak → "appeared in known data breaches". zxcvbn meter visible. |
 | A26 | Password match feedback (`/reset-password`, `/app/me`)   | Match → green ✓ "Passwords match". Mismatch → red case-sensitive hint.           |
 | A14 | Resend (verification & reset)                          | 2nd email arrives if address exists. Neutral privacy-respecting toast.            |
-| A15 | Network error (offline) on magic-link + forgot         | Inline `<Alert>` "Network error" (no misleading false "link sent").               |
+| A15 | Network error (offline) on "Continue with email" + forgot | Inline `<Alert>` "Network error" (no misleading "Check your inbox" / "link sent"). |
 | A16 | `/app/me` Sessions → list + Revoke + "Sign out others" | Current session = "Current" badge, no Revoke button. Revoking others works. "Sign out other devices" asks confirmation then invalidates all except current. |
 | A17 | **Cross-tab persistence** (localhost regression)       | Sign in on tab A → open tab B on `/app/acme` → stays logged in. Hard-refresh each tab 3× → still logged in. |
 | A18 | Onboarding org with reserved slug (`admin`, `api`, `me`) | Inline "This slug is reserved" feedback below the input. Submit toast "slug_reserved". |
 | A19 | Onboarding org with already-taken slug                 | Inline "This slug is already taken" feedback in real time (before submit). Submit toast "slug_taken". |
-| A20 | **Google sign-in** — without `GOOGLE_CLIENT_ID/SECRET` | `/login` + `/register`: **no** "Continue with Google" button or separator (clean template, no errors). |
+| A20 | **Google sign-in** — without `GOOGLE_CLIENT_ID/SECRET` | `/login` + `/register` + `/accept-invite/…`: **no** "Continue with Google" button or separator (clean template, no errors). |
 | A21 | **Google sign-in** — with credentials + redirect URI in Google Console (`${SITE_URL}/api/auth/callback/google`) | Button visible. New user → redirects to `/app`, `users` row created. Email matching an existing password account → **no** duplicate `users` row (email dedup). |
-| A22 | Google OAuth failure (cancelled / error)               | Returns to `/login?error=…` → toast "Couldn't sign in with that provider".        |
+| A22 | Google OAuth failure (cancelled / error), started from `/login?redirect=/app/acme/projects` | Returns to `/login?redirect=…&error=…` → inline alert ("Google sign-in was cancelled…" or "Couldn't sign in with that provider"); signing in then lands on `/app/acme/projects` |
 | A22b | **Google in prod** — after `pnpm run setup:prod` (Google creds present in dev) | `convex env list --prod` contains `GOOGLE_CLIENT_ID`; prod redirect URI added to the same Google client; button visible on prod domain, sign-in works. |
 | A24 | **Open redirect** — sign in from `/login?redirect=https://evil.com`, then from `/login?redirect=/%09/evil.com` (tab-smuggling) | Both land on `/app`, **never** off-site. The hostile param is dropped silently — normal login page, no error screen. Repeat with `//evil.com` and `/\evil.com`. |
-| A25 | **Return URL preserved** — sign in from `/login?redirect=/app/acme/projects` | Lands on `/app/acme/projects` (internal paths still work — the guard rejects origins, not paths). |
+| A25 | **Return URL preserved** — sign in from `/login?redirect=/app/acme/projects`; then, still signed in, open `/login?redirect=/app/acme/projects` again | Both land on `/app/acme/projects` (internal paths still work — the guard rejects origins, not paths; an already signed-in visitor goes to the return URL, not `/app`). |
+| A27 | Auth pages, keyboard and phone                          | `/login` at 390 px wide: every button/field ≥ 44 px tall, language switcher top-right (switching re-renders in place), one `<h1>` per step. Submitting an invalid email focuses the email field. The code field accepts a pasted "123 456" and submits by itself at 6 digits |
 
 > **Known gap**: no NewDeviceEmail — see `KNOWN_ISSUES.md` § "Post-event
 > notification coverage".
@@ -158,12 +166,12 @@ Still logged in as Alice. Prepare a second browser for Bob.
 
 | #   | Step                                                        | Expected result                                                     |
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| M1  | `/app/acme/settings/invitations` → invite `bob@test.local`  | Email sent, listed as pending                                       |
+| M1  | `/app/acme/settings/invitations` → invite `bob@test.local`  | Email sent (names the role, what interw is, the expiry date), listed as pending with "Invited by Alice on <date>" in the app locale |
 | M2  | Browser 2 (incognito) → open the invitation link            | `/accept-invite/<token>` accessible unauthenticated                 |
-| M3  | Sign up Bob via the invitation flow                         | Bob created, automatically a member of Acme with "member" role. **No email-verification step**: the invite token pre-verifies the email (token-gated), Bob is signed in and lands on `/app/acme` directly |
+| M3  | Sign up Bob via the invitation flow                         | The page says "Alice invited you to join Acme as Member". Bob created, automatically a member of Acme with "member" role. **No email-verification step**: the invite token pre-verifies the email (token-gated), Bob is signed in, lands on `/app/acme` directly with a "You joined Acme as Member" toast |
 | M4  | Bob visits `/app/acme/projects`                             | Sees the roles he is allowed to see, can create one                 |
 | M5  | Alice changes Bob's role → "admin"                          | Persists, Bob sees the updated badge                                |
-| M6  | Bob creates a second org "Beta"                             | Switches to `/app/beta`, Alice is NOT a member                      |
+| M6  | Bob creates a second org "Beta" from the org switcher → "Create organization" | `/app/onboarding` titled "Create an organization" (not "first"), with a "Back to my organization" link. Submit switches to `/app/beta`, Alice is NOT a member |
 | M7  | Alice navigates to `/app/beta` directly                     | Redirects to `/app` or 403                                          |
 | M8  | Roles isolated: Alice sees Acme roles only                  | No Beta role on Alice's side                                        |
 | M9  | Switch org via the sidebar org switcher                     | Routes recalculated, roles reloaded                                 |
@@ -175,16 +183,32 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | #  | Step                                                       | Expected result                                                     |
 | -- | ---------------------------------------------------------- | ------------------------------------------------------------------- |
 | I1 | Invite an email already a member                           | Error "already_member", no duplicate                                |
-| I2 | Invite the same email twice (both pending)                 | Rejected or replaces the invitation, no duplicate                   |
-| I3 | Accept an expired invitation (force `expiresAt` in past), not yet a member | Error "expired", no member added                          |
-| I4 | Re-open an invite link already accepted (still a member)   | **No error**: idempotent no-op, re-lands on `/app/<org>` (the accept effect can fire twice / second tab — replayable) |
-| I5 | Accept invitation with a different account than the one invited | `/accept-invite` shows the "wrong account" switch card; a forced backend `accept` for a non-member with a mismatched email throws "email_mismatch" |
-| I6 | Spam 25 invitations in < 1h                                | Rate-limit triggers → "rate_limited" after threshold                |
-| I7 | Revoke a pending invitation                                | Disappears from list, link becomes invalid                          |
+| I2 | Invite the same email twice (both pending)                 | Second one rejected ("Already has a pending invitation"), no duplicate |
+| I3 | Accept an expired invitation (force `expiresAt` in past), not yet a member | "Invitation expired" card naming the org and inviter ("Ask Alice from Acme for a new invitation"), with "Sign in" (signed out) or "Go to the app" (signed in); no member added |
+| I4 | Re-open an invite link already accepted (still a member)   | **No error**: idempotent no-op, re-lands on `/app/<org>` (the accept effect can fire twice / second tab — replayable). Signed out, the "already used" card offers "Sign in", which returns to the link and then to the org |
+| I5 | Accept invitation with a different account than the one invited | `/accept-invite` shows the "wrong account" card: "Sign out & switch account", "Stay signed in and go to my app", and a hint to ask the inviter to invite the current address. Also for an account created seconds ago (no Convex row yet): same card, never a raw "email_mismatch" |
+| I6 | Spam 25 invitations in < 1h                                | Rate-limit triggers → "Invitation limit reached: you can send about 20 per hour" on the address that hit it; the rest of a pasted list is marked "Not sent" and left in the box |
+| I7 | Revoke a pending invitation                                | Confirmation dialog, spinner on confirm; disappears from list, link becomes invalid |
 | I8 | Verify `RESEND_TEST_MODE=true` sends no real email         | Convex logs show "skipped (test mode)"                              |
 | I9 | **Token-gated security** — sign up at `/register` with NO valid invite token (normal signup) | Email is **not** pre-verified: verification email sent, `emailVerified` stays false until the link is clicked. A signup whose `inviteToken` is absent/stale/for another email never bypasses verification |
 | I10 | Email-match casing — invite `Bob@Test.local`, accept signed in as `bob@test.local` | Accepted (match is case- and whitespace-insensitive on both sides) |
 | I11 | Sign up from `/register?redirect=/accept-invite/<token>` (not the inline accept page) | Lands **in the org** (`/app/<org>`), not stuck on `/app`: token-gated signup → signin → full nav to the accept page, which attaches the member. Parity with the inline `/accept-invite` flow |
+
+### Invitation management and pending invitations (10 min)
+
+Server rules are covered by `convex/invitations.test.ts`; these rows check the screens.
+
+| #      | Step | Expected result |
+| ------ | ---- | --------------- |
+| INV-1  | Force an invitation's `expiresAt` into the past, reload `/app/acme/settings/invitations` | Row shows an "Expired" badge and "Expired on <date>", no "Copy link". Inviting the same address again succeeds and replaces the row |
+| INV-2  | Paste `a@test.local, b@test.local` + a line with an existing member's address, send | One result line per address: two "Invitation sent", one "Already a member of this organization"; toast "2 invitations sent"; only the failed address stays in the box |
+| INV-3  | "Resend" on a pending row | Second email received with the same link; "Expires on" moves 7 days out; "Invited by" becomes the admin who resent |
+| INV-4  | "Copy link" on a pending row | Toast "Invite link copied"; the clipboard holds `<SITE_URL>/accept-invite/<token>` |
+| INV-5  | Invite `bounced@resend.dev` (Resend's bounce test address; needs `RESEND_TEST_MODE=false` and the webhook set up) | After the webhook fires, the row says the email bounced, in red |
+| INV-6  | Invite `carol@test.local`, then Carol signs up at `/register` **without** the link | Onboarding shows "Alice invited you to join Acme as Member — Join Acme" above the create form; Join lands in `/app/acme` with the welcome toast, no duplicate org |
+| INV-7  | Invite an existing user of another org (Bob, member of Beta) to Acme | Inside Beta, a banner under the header offers "Join Acme"; after joining, the banner is gone and Bob is in `/app/acme` |
+| INV-8  | Signed in as someone else, check onboarding / the banner | Never shows an invitation addressed to another email |
+| INV-9  | Onboarding with no invitation | "Waiting for an invitation?" hint naming the account's email, a language switcher and "Sign out". Typing a name fills the web address (editable), shows `<host>/app/<address>` and "can't be changed later"; submit disabled while the address is being checked or taken |
 
 ## Level 4 — Uploads (5 min)
 

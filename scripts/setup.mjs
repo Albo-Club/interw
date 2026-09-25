@@ -254,7 +254,7 @@ async function promptSecrets() {
     ok(`RESEND_API_KEY already set (${mask(cx.RESEND_API_KEY)})`)
   } else {
     console.log(
-      `\n  ${C.bold}Resend API key${C.reset} — for transactional emails (magic links, invitations).\n  ${C.cyan}→ Get yours: https://resend.com/api-keys${C.reset}`,
+      `\n  ${C.bold}Resend API key${C.reset} — for transactional emails (sign-in codes, invitations).\n  ${C.cyan}→ Get yours: https://resend.com/api-keys${C.reset}`,
     )
     let key = ''
     while (!key) {

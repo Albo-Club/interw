@@ -4,6 +4,7 @@ import {
   getRequestHeader,
   setCookie,
 } from '@tanstack/react-start/server'
+import { localeFromAcceptLanguage } from '../../convex/lib/locale'
 
 export const LOCALES = ['en', 'fr'] as const
 export type Locale = (typeof LOCALES)[number]
@@ -13,32 +14,6 @@ const ONE_YEAR = 60 * 60 * 24 * 365
 
 export function isLocale(value: unknown): value is Locale {
   return value === 'en' || value === 'fr'
-}
-
-/**
- * Resolve a locale from an Accept-Language header (or a single navigator tag).
- * English is the default; French wins only when a French variant (fr, fr-CA,
- * fr-BE, …) is the highest-priority language the client asked for.
- */
-export function localeFromAcceptLanguage(
-  header: string | null | undefined,
-): Locale {
-  if (!header) return DEFAULT_LOCALE
-  const ranked = header
-    .split(',')
-    .map((part) => {
-      const [tag, ...params] = part.trim().split(';')
-      const qParam = params.find((p) => p.trim().startsWith('q='))
-      const q = qParam ? Number.parseFloat(qParam.split('=')[1]) : 1
-      return { tag: tag.toLowerCase(), q: Number.isFinite(q) ? q : 1 }
-    })
-    .sort((a, b) => b.q - a.q)
-
-  for (const { tag } of ranked) {
-    if (tag === 'fr' || tag.startsWith('fr-')) return 'fr'
-    if (tag === 'en' || tag.startsWith('en-')) return 'en'
-  }
-  return DEFAULT_LOCALE
 }
 
 function readLocaleCookie(): Locale | null {

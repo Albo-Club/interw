@@ -2,12 +2,12 @@
   "menu": {
     "accountMenu": "Menu du compte",
     "profile": "Votre profil",
-    "switchOrg": "Changer d'organisation",
     "superAdmin": "Super-admin",
     "signOutEverywhere": "Se déconnecter partout",
     "signOut": "Se déconnecter",
     "signOutEverywhereTitle": "Se déconnecter partout ?",
-    "signOutEverywhereDescription": "Cela vous déconnecte de tous les appareils, y compris celui-ci. Vous devrez vous reconnecter."
+    "signOutEverywhereDescription": "Cela vous déconnecte de tous les appareils, y compris celui-ci. Vous devrez vous reconnecter.",
+    "createOrg": "Créer une organisation"
   },
   "time": {
     "justNow": "à l'instant",

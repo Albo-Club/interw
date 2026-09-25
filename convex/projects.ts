@@ -10,9 +10,11 @@ import {
 } from './schema'
 import { requireOrgMember, requireOrgRole } from './lib/auth'
 import { effectiveIntroMode } from './lib/candidateView'
+import { introSlotKeys, questionSlotKeys } from './media'
 import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
+  isCreator,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
   sharedProjectIds,
@@ -103,13 +105,13 @@ export const list = query({
           .withIndex('by_org', (q) => q.eq('orgId', orgId))
           .order('desc')
           .take(LIST_CAP)
-    const visible = await filterVisibleProjects(ctx, rows, user._id, member.role)
+    const visible = await filterVisibleProjects(ctx, rows, member)
     // Owners and admins see every role but are emailed only about the ones
     // whose team they are on; the list says which (audit recruiter F6).
     const shared = await sharedProjectIds(ctx, user._id)
     return visible.map((project) => ({
       ...toSummary(project),
-      onTeam: project.createdBy === user._id || shared.has(project._id),
+      onTeam: isCreator(project, member) || shared.has(project._id),
     }))
   },
 })
@@ -122,7 +124,7 @@ export const list = query({
 export const getBySlug = query({
   args: { orgId: v.id('organizations'), slug: v.string() },
   handler: async (ctx, { orgId, slug }) => {
-    const { user, member } = await requireOrgMember(ctx, orgId)
+    const { member } = await requireOrgMember(ctx, orgId)
     // `.first()`, not `.unique()` (Back M4): Convex has no unique constraint,
     // and a duplicate slug written before `create` asked the index made
     // `.unique()` throw — on the page of both roles, for good. A degraded page
@@ -132,12 +134,7 @@ export const getBySlug = query({
       .withIndex('by_org_and_slug', (q) => q.eq('orgId', orgId).eq('slug', slug))
       .first()
     if (!project) throw new ConvexError('not_found')
-    const visible = await filterVisibleProjects(
-      ctx,
-      [project],
-      user._id,
-      member.role,
-    )
+    const visible = await filterVisibleProjects(ctx, [project], member)
     if (visible.length === 0) throw new ConvexError('not_found')
 
     const questions = await ctx.db
@@ -193,6 +190,7 @@ export const create = mutation({
   handler: async (ctx, { orgId, title, jobTitle, language, team }) => {
     const { user } = await requireOrgMember(ctx, orgId)
     const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
+    const now = Date.now()
 
     const slug = await uniqueSlug(
       cleanTitle,
@@ -216,14 +214,14 @@ export const create = mutation({
       maxDurationMinutes: 20,
       candidateFields: DEFAULT_CANDIDATE_FIELDS,
       createdBy: user._id,
-      createdAt: Date.now(),
+      createdAt: now,
       sessionCount: 0,
       completedSessionCount: 0,
     })
     if (team) {
       await writeTeam(
         ctx,
-        { _id: projectId, orgId, createdBy: user._id },
+        { _id: projectId, orgId, createdBy: user._id, createdAt: now },
         team,
         user._id,
       )
@@ -378,8 +376,8 @@ export const remove = mutation({
     // data too, and deleting only the rows left them in the bucket with
     // nothing pointing at them: unreachable by any later purge, billed
     // indefinitely, and removable only by hand.
-    const keys: Array<string> = []
-    if (project.introMediaKey) keys.push(project.introMediaKey)
+    const keys = new Set(introSlotKeys(project))
+    if (project.introMediaKey) keys.add(project.introMediaKey)
 
     for (const table of ['questions', 'criteria'] as const) {
       const rows = await ctx.db
@@ -387,8 +385,9 @@ export const remove = mutation({
         .withIndex('by_project', (q) => q.eq('projectId', projectId))
         .collect()
       for (const row of rows) {
-        if (table === 'questions' && 'mediaKey' in row && row.mediaKey) {
-          keys.push(row.mediaKey)
+        if (table === 'questions' && 'mediaKey' in row) {
+          for (const key of questionSlotKeys(row)) keys.add(key)
+          if (row.mediaKey) keys.add(row.mediaKey)
         }
         await ctx.db.delete(table, row._id)
       }
@@ -400,26 +399,34 @@ export const remove = mutation({
     for (const share of shares) await ctx.db.delete('projectShares', share._id)
 
     await ctx.db.delete('projects', projectId)
-    if (keys.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
-    }
+    await ctx.scheduler.runAfter(0, internal.media.deleteKeys, {
+      keys: [...keys],
+    })
     return null
   },
 })
 
 /**
  * Replace a role's team with `userIds`. The creator is on every team by
- * construction, so naming them is a no-op rather than a stored row.
+ * construction, so naming them is a no-op rather than a stored row — unless
+ * they were removed since and re-invited: that seat is gone (`isCreator`), and
+ * a row is the only way back onto the team.
  */
 async function writeTeam(
   ctx: MutationCtx,
-  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'createdBy'>,
+  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'createdBy' | 'createdAt'>,
   userIds: Array<Id<'users'>>,
   grantedBy: Id<'users'>,
 ) {
   if (userIds.length > TEAM_MAX) throw new ConvexError('team_too_large')
   const wanted = new Set(userIds)
-  wanted.delete(project.createdBy)
+  const creator = await ctx.db
+    .query('organizationMembers')
+    .withIndex('by_org_and_user', (q) =>
+      q.eq('orgId', project.orgId).eq('userId', project.createdBy),
+    )
+    .unique()
+  if (creator && isCreator(project, creator)) wanted.delete(project.createdBy)
 
   // Everyone named must already be a member of this organisation — a team
   // must never become a side door into another org's data.

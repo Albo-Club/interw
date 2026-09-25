@@ -28,7 +28,7 @@ const RECENT_COUNT = 8
 export const overview = query({
   args: { orgId: v.id('organizations'), now: v.number() },
   handler: async (ctx, { orgId, now }) => {
-    const { user, member } = await requireOrgMember(ctx, orgId)
+    const { member } = await requireOrgMember(ctx, orgId)
     // The caller's clock keeps the window reactive; it does not choose it.
     // See convex/lib/clock.ts.
     const since = effectiveNow(now) - WINDOW_DAYS * 24 * 60 * 60 * 1000
@@ -39,7 +39,7 @@ export const overview = query({
     async function canSee(project: Doc<'projects'>) {
       let ok = seen.get(project._id)
       if (ok === undefined) {
-        ok = await canSeeProject(ctx, project, user._id, member.role)
+        ok = await canSeeProject(ctx, project, member)
         seen.set(project._id, ok)
       }
       return ok

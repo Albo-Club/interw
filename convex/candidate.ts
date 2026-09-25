@@ -46,6 +46,7 @@ import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
+  DOCUMENT_TYPES,
   candidateDocumentKey,
   deleteObjects,
   presignPut,
@@ -58,14 +59,6 @@ import type { DataModel, Doc } from './_generated/dataModel'
 const PHONE_MAX = 40
 const LINKEDIN_MAX = 200
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
-
-/** Extension per accepted document type. A CV is a document, not a web page. */
-const DOCUMENT_TYPES: Record<string, string> = {
-  'application/pdf': 'pdf',
-  'application/msword': 'doc',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    'docx',
-}
 
 /**
  * Resolve a token to its session, or fail the same way for every token that
@@ -308,13 +301,17 @@ export const requestDocumentUpload = action({
   },
 })
 
-/** Rate limiting needs a mutation; actions borrow it through here. */
+/**
+ * Rate limiting needs a mutation; actions borrow it through here. The token
+ * resolves first: an unresolved one writes nothing, not even a limiter row
+ * under a key the caller chose (T17-4).
+ */
 export const consumeWriteLimit = internalMutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
-    if (!looksLikeToken(token)) throw new ConvexError('not_found')
+    const { session } = await requireSession(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
-    return null
+    return session._id
   },
 })
 
@@ -412,19 +409,11 @@ export const privacySummary = query({
 export const deleteMyData = action({
   args: { token: v.string() },
   handler: async (ctx, { token }): Promise<{ deleted: true }> => {
-    await ctx.runMutation(internal.candidate.consumeWriteLimit, { token })
-    const sessionId = await ctx.runQuery(internal.candidate.sessionIdForToken, {
-      token,
-    })
+    const sessionId = await ctx.runMutation(
+      internal.candidate.consumeWriteLimit,
+      { token },
+    )
     await eraseSession(ctx, sessionId, 'candidate_request')
     return { deleted: true }
-  },
-})
-
-export const sessionIdForToken = internalQuery({
-  args: { token: v.string() },
-  handler: async (ctx, { token }) => {
-    const { session } = await requireSession(ctx, token)
-    return session._id
   },
 })

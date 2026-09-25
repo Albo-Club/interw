@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import schema from '../schema'
 import { canSeeProject, filterVisibleProjects } from './projectAccess'
+import type { AppRole } from './auth'
 import type { Id } from '../_generated/dataModel'
 
 const modules = import.meta.glob('../**/*.ts')
@@ -15,6 +16,11 @@ type Seed = {
   memberId: Id<'users'>
   sharedProject: Id<'projects'>
   confidentialProject: Id<'projects'>
+}
+
+/** The membership a check runs as; `joinedAt` 0 predates every seeded role. */
+function as(userId: Id<'users'>, role: AppRole, joinedAt = 0) {
+  return { userId, role, joinedAt }
 }
 
 function newTest() {
@@ -98,29 +104,40 @@ describe('project visibility', () => {
   it('shows a role to a member of its team', async () => {
     await t.run(async (ctx) => {
       const project = (await ctx.db.get('projects', s.sharedProject))!
-      expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(true)
+      expect(await canSeeProject(ctx, project, as(s.memberId, 'member'))).toBe(true)
     })
   })
 
   it('hides a role from a member who is not on its team', async () => {
     await t.run(async (ctx) => {
       const project = (await ctx.db.get('projects', s.confidentialProject))!
-      expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(false)
+      expect(await canSeeProject(ctx, project, as(s.memberId, 'member'))).toBe(false)
     })
   })
 
   it('shows a role to its creator, who is never a stored row', async () => {
     await t.run(async (ctx) => {
       const project = (await ctx.db.get('projects', s.confidentialProject))!
-      expect(await canSeeProject(ctx, project, s.authorId, 'member')).toBe(true)
+      expect(await canSeeProject(ctx, project, as(s.authorId, 'member'))).toBe(true)
+    })
+  })
+
+  // T17-2: removal ends the creator's seat. The same person re-invited later
+  // joins after the role was created and is a plain member again.
+  it('does not give a creator back their role after a re-invitation', async () => {
+    await t.run(async (ctx) => {
+      const project = (await ctx.db.get('projects', s.confidentialProject))!
+      expect(
+        await canSeeProject(ctx, project, as(s.authorId, 'member', 1)),
+      ).toBe(false)
     })
   })
 
   it('shows every role to admins and owners', async () => {
     await t.run(async (ctx) => {
       const project = (await ctx.db.get('projects', s.confidentialProject))!
-      expect(await canSeeProject(ctx, project, s.memberId, 'admin')).toBe(true)
-      expect(await canSeeProject(ctx, project, s.memberId, 'owner')).toBe(true)
+      expect(await canSeeProject(ctx, project, as(s.memberId, 'admin'))).toBe(true)
+      expect(await canSeeProject(ctx, project, as(s.memberId, 'owner'))).toBe(true)
     })
   })
 
@@ -132,7 +149,7 @@ describe('project visibility', () => {
         restricted: false,
       })
       const project = (await ctx.db.get('projects', s.confidentialProject))!
-      expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(false)
+      expect(await canSeeProject(ctx, project, as(s.memberId, 'member'))).toBe(false)
     })
   })
 })
@@ -146,7 +163,7 @@ describe('filterVisibleProjects', () => {
         .query('projects')
         .withIndex('by_org', (q) => q.eq('orgId', s.orgId))
         .collect()
-      const visible = await filterVisibleProjects(ctx, all, s.memberId, 'member')
+      const visible = await filterVisibleProjects(ctx, all, as(s.memberId, 'member'))
       expect(visible.map((p) => p.title)).toEqual(['Shared'])
     })
   })
@@ -159,7 +176,7 @@ describe('filterVisibleProjects', () => {
         .query('projects')
         .withIndex('by_org', (q) => q.eq('orgId', s.orgId))
         .collect()
-      const visible = await filterVisibleProjects(ctx, all, s.memberId, 'admin')
+      const visible = await filterVisibleProjects(ctx, all, as(s.memberId, 'admin'))
       expect(visible).toHaveLength(2)
     })
   })

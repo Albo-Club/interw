@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { internal } from './_generated/api'
 import schema from './schema'
+import { candidateDocumentKeys } from './lib/objectStore'
 import { chooseStartSeconds } from './lib/evidence'
 import type { Id } from './_generated/dataModel'
 import type * as ai from './lib/ai'
@@ -465,12 +466,19 @@ describe('purge', () => {
     const objects = await t.query(internal.purge.collectSessionObjects, {
       sessionId: s.sessionId,
     })
-    expect(objects?.keys.sort()).toEqual([
-      'orgs/o/sessions/s/cv.pdf',
-      'orgs/o/sessions/s/q0.weba',
-      'orgs/o/sessions/s/q1.weba',
-      'orgs/o/sessions/s/q1.webm',
-    ])
+    const session = await t.run(
+      async (ctx) => (await ctx.db.get('sessions', s.sessionId))!,
+    )
+    expect(objects?.keys.sort()).toEqual(
+      [
+        'orgs/o/sessions/s/cv.pdf',
+        'orgs/o/sessions/s/q0.weba',
+        'orgs/o/sessions/s/q1.weba',
+        'orgs/o/sessions/s/q1.webm',
+        // Every document key a slot could have issued, attached or not.
+        ...candidateDocumentKeys(session.orgId, session._id),
+      ].sort(),
+    )
   })
 
   it('removes every row of a session and records the erasure', async () => {

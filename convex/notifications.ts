@@ -4,6 +4,7 @@ import { internalMutation } from './_generated/server'
 import { RESEND_FROM, resend } from './email'
 import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
+import { isCreator } from './lib/projectAccess'
 import type { Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL!
@@ -93,12 +94,12 @@ export const sendReportReady = internalMutation({
     // The role's team and nobody else: its creator plus the colleagues they
     // chose. Admins and owners see every role but are only mailed about the
     // ones they follow — an org of 40 used to get 40 emails per candidate.
-    const recipients = new Set<Id<'users'>>([project.createdBy])
     const team = await ctx.db
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
-    for (const row of team) recipients.add(row.userId)
+    const teamIds = new Set(team.map((row) => row.userId))
+    const recipients = new Set<Id<'users'>>([project.createdBy, ...teamIds])
 
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
@@ -112,6 +113,9 @@ export const sendReportReady = internalMutation({
         )
         .unique()
       if (!membership) continue
+      // A creator re-invited after removal is not the creator of this
+      // membership: only a team row puts them back on the list (T17-2).
+      if (!teamIds.has(userId) && !isCreator(project, membership)) continue
       const user = await ctx.db.get('users', userId)
       if (!user) continue
       const { subject, html, text } = reportReadyEmail({

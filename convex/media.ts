@@ -44,6 +44,38 @@ const INTRO_RECORDING_TYPES = ['video/webm', 'video/mp4']
 /** ~2 minutes of 720p WebM leaves plenty of headroom. */
 const MAX_PROJECT_MEDIA_BYTES = 100 * 1024 * 1024
 
+/**
+ * Every key an intro slot of this role can be issued under. Like candidate
+ * documents, a slot is signed before any row names its key, so erasure
+ * deletes all of them rather than only the one the row names (T17-5).
+ */
+export function introSlotKeys(
+  project: Pick<Doc<'projects'>, '_id' | 'orgId'>,
+): Array<string> {
+  return INTRO_RECORDING_TYPES.map((type) =>
+    projectMediaKey(
+      project.orgId,
+      project._id,
+      'intro',
+      extensionForMimeType(type),
+    ),
+  )
+}
+
+/** Same, for a question's recording. */
+export function questionSlotKeys(
+  question: Pick<Doc<'questions'>, '_id' | 'orgId' | 'projectId'>,
+): Array<string> {
+  return ALLOWED_RECORDING_TYPES.map((type) =>
+    projectMediaKey(
+      question.orgId,
+      question.projectId,
+      `q-${question._id}`,
+      extensionForMimeType(type),
+    ),
+  )
+}
+
 function normalizeMimeType(
   mimeType: string,
   allowed: ReadonlyArray<string> = ALLOWED_RECORDING_TYPES,

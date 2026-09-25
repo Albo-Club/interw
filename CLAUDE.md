@@ -624,7 +624,10 @@ verification is in `TESTING.md`.
   bucket with nothing pointing at it.
 - A segment row is written **before** its upload, carrying the keys. That is
   what makes erasure exact — even an answer whose upload failed is named in
-  the database.
+  the database. Where a slot is signed before any row can name its key
+  (candidate documents, recruiter recordings), erasure derives every key the
+  slot could have issued from the row's ids instead (`candidateDocumentKeys`,
+  `introSlotKeys`, `questionSlotKeys`).
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
 - Organization deletion runs the same session core (`purge.ts`), never a

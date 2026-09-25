@@ -509,6 +509,33 @@ describe('removing a member revokes what was granted through them', () => {
       }),
     ).rejects.toThrow('not_found')
   })
+
+  // T17-2: `createdBy` is an attribution, not a seat that survives removal.
+  it('does not give them back the roles they created on re-invitation', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('projects', w.backendProjectId, { createdBy: userId })
+      await ctx.db.insert('organizationMembers', {
+        orgId: w.acmeOrgId,
+        userId,
+        role: 'member',
+        joinedAt: 2,
+      })
+    })
+    await expect(
+      as(t, 'acmeShared').query(api.projects.getBySlug, {
+        orgId: w.acmeOrgId,
+        slug: 'backend',
+      }),
+    ).rejects.toThrow('not_found')
+    await expect(
+      as(t, 'acmeShared').mutation(api.projects.archive, {
+        projectId: w.backendProjectId,
+      }),
+    ).rejects.toThrow('not_found')
+    const recipients = await completeInterviewOn(t, w, w.backendProjectId)
+    expect(recipients).not.toContain('acmeShared@example.test')
+  })
 })
 
 const userId = (t: ReturnType<typeof newTest>, who: string) =>

@@ -74,7 +74,7 @@ export const record = internalMutation({
 export const recent = query({
   args: { orgId: v.id('organizations'), limit: v.optional(v.number()) },
   handler: async (ctx, { orgId, limit }) => {
-    const { user, member } = await requireOrgMember(ctx, orgId)
+    const { member } = await requireOrgMember(ctx, orgId)
     const rows = await ctx.db
       .query('emailLog')
       .withIndex('by_org_and_created', (q) => q.eq('orgId', orgId))
@@ -97,7 +97,7 @@ export const recent = query({
           const project = await ctx.db.get('projects', session.projectId)
           ok =
             project !== null &&
-            (await canSeeProject(ctx, project, user._id, member.role))
+            (await canSeeProject(ctx, project, member))
           visibleByProject.set(session.projectId, ok)
         }
         if (!ok) continue

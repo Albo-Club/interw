@@ -73,7 +73,7 @@ export const listRolesInternal = internalQuery({
 
     const visible = []
     for (const project of projects) {
-      if (!(await canSeeProject(ctx, project, actorUserId, member.role))) continue
+      if (!(await canSeeProject(ctx, project, member))) continue
       visible.push({
         projectId: project._id,
         slug: project.slug,
@@ -107,7 +107,7 @@ export const listCandidatesInternal = internalMutation({
         )
         .unique()
       if (!project) throw new ConvexError('not_found')
-      if (!(await canSeeProject(ctx, project, actorUserId, member.role))) {
+      if (!(await canSeeProject(ctx, project, member))) {
         throw new ConvexError('not_found')
       }
       sessions = await ctx.db
@@ -127,7 +127,7 @@ export const listCandidatesInternal = internalMutation({
     for (const session of sessions) {
       const project = await ctx.db.get('projects', session.projectId)
       if (!project) continue
-      if (!(await canSeeProject(ctx, project, actorUserId, member.role))) continue
+      if (!(await canSeeProject(ctx, project, member))) continue
       const report = await ctx.db
         .query('reports')
         .withIndex('by_session', (q) => q.eq('sessionId', session._id))
@@ -162,7 +162,7 @@ export const readReportInternal = internalMutation({
     if (!session || session.orgId !== orgId) throw new ConvexError('not_found')
     const project = await ctx.db.get('projects', session.projectId)
     if (!project) throw new ConvexError('not_found')
-    if (!(await canSeeProject(ctx, project, actorUserId, member.role))) {
+    if (!(await canSeeProject(ctx, project, member))) {
       throw new ConvexError('not_found')
     }
     await recordThreadReads(ctx, threadId, [sessionId])

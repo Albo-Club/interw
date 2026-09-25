@@ -5,6 +5,7 @@ import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, internal } from './_generated/api'
+import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -211,5 +212,36 @@ describe('requesting a document slot', () => {
     })
     expect(Object.keys(slot).sort()).toEqual(['contentType', 'uploadUrl'])
     expect(slot.contentType).toBe('application/pdf')
+  })
+})
+
+/**
+ * T17-4. `consumeWriteLimit` used to check only the token's shape, then
+ * charge the limiter on it: anyone could write limiter rows under keys they
+ * chose, rows that are never removed. It resolves the token first now, so a
+ * well-formed token that names no session fails like every other one, and the
+ * limiter is never reached.
+ */
+describe('candidate write limit', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('never reaches the limiter with a token that does not resolve', async () => {
+    const t = newTest()
+    await seed(t)
+    const limit = vi.spyOn(rateLimiter, 'limit')
+    const unknown = 'x'.repeat(43)
+    // Past the bucket's capacity of 30: a limiter keyed on the argument
+    // would start answering `rate_limited` here.
+    for (let i = 0; i < 32; i++) {
+      await expect(
+        t.action(api.candidate.deleteMyData, { token: unknown }),
+      ).rejects.toThrow('not_found')
+      await expect(
+        t.action(api.interview.promptMediaUrls, { token: unknown }),
+      ).rejects.toThrow('not_found')
+    }
+    expect(limit).not.toHaveBeenCalled()
   })
 })

@@ -12,7 +12,9 @@
  *
  * The creator is on the team by construction and is never stored as a row:
  * they cannot be dropped from it, so the person who opened the search always
- * sees it and always hears about its reports.
+ * sees it and always hears about its reports. That seat belongs to the
+ * membership the role was created in (`isCreator`): removal ends it, and a
+ * re-invitation does not bring it back (T17-2).
  */
 
 import { ConvexError } from 'convex/values'
@@ -23,24 +25,39 @@ import type { AppRole } from './auth'
 import type { DataModel, Doc, Id } from '../_generated/dataModel'
 
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
+type Viewer = Pick<Doc<'organizationMembers'>, 'userId' | 'role' | 'joinedAt'>
 
 /** Admins and owners see every project in their organisation. */
 function seesEverything(role: AppRole): boolean {
   return role === 'admin' || role === 'owner'
 }
 
+/**
+ * Created the role during their current membership. `createdBy` alone would
+ * outlive a removal: a former member re-invited as a plain member would get
+ * back every role they created, owner-tier actions included. A role can only
+ * be created by a member, so `createdAt >= joinedAt` means "this membership".
+ */
+export function isCreator(
+  project: Pick<Doc<'projects'>, 'createdBy' | 'createdAt'>,
+  member: Pick<Doc<'organizationMembers'>, 'userId' | 'joinedAt'>,
+): boolean {
+  return (
+    project.createdBy === member.userId && project.createdAt >= member.joinedAt
+  )
+}
+
 export async function canSeeProject(
   ctx: Ctx,
   project: Doc<'projects'>,
-  userId: Id<'users'>,
-  role: AppRole,
+  member: Viewer,
 ): Promise<boolean> {
-  if (seesEverything(role)) return true
-  if (project.createdBy === userId) return true
+  if (seesEverything(member.role)) return true
+  if (isCreator(project, member)) return true
   const share = await ctx.db
     .query('projectShares')
     .withIndex('by_project_and_user', (q) =>
-      q.eq('projectId', project._id).eq('userId', userId),
+      q.eq('projectId', project._id).eq('userId', member.userId),
     )
     .unique()
   return share !== null
@@ -62,7 +79,7 @@ export async function requireProjectAccess(
   const project = await ctx.db.get('projects', projectId)
   if (!project) throw new ConvexError('not_found')
   const { user, member } = await requireOrgMember(ctx, project.orgId)
-  if (!(await canSeeProject(ctx, project, user._id, member.role))) {
+  if (!(await canSeeProject(ctx, project, member))) {
     throw new ConvexError('not_found')
   }
   return { project, user, member }
@@ -100,7 +117,7 @@ export async function requireProjectOwnerOrAdmin(
   const access = await requireProjectAccess(ctx, projectId)
   if (
     !seesEverything(access.member.role) &&
-    access.project.createdBy !== access.user._id
+    !isCreator(access.project, access.member)
   ) {
     throw new ConvexError('insufficient_role')
   }
@@ -114,16 +131,15 @@ export async function requireProjectOwnerOrAdmin(
 export async function filterVisibleProjects(
   ctx: Ctx,
   projects: Array<Doc<'projects'>>,
-  userId: Id<'users'>,
-  role: AppRole,
+  member: Viewer,
 ): Promise<Array<Doc<'projects'>>> {
-  if (seesEverything(role)) return projects
-  const shared = await sharedProjectIds(ctx, userId)
-  return projects.filter((p) => p.createdBy === userId || shared.has(p._id))
+  if (seesEverything(member.role)) return projects
+  const shared = await sharedProjectIds(ctx, member.userId)
+  return projects.filter((p) => isCreator(p, member) || shared.has(p._id))
 }
 
 /** Roles this person was added to the team of. Their own roles, whose team
- *  they are on as creator, are not in it: compare `createdBy` for those. */
+ *  they are on as creator, are not in it: use `isCreator` for those. */
 export async function sharedProjectIds(
   ctx: Ctx,
   userId: Id<'users'>,

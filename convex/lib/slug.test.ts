@@ -30,20 +30,34 @@ const takenIn = (slugs: Array<string>) => {
 }
 
 describe('uniqueSlug', () => {
-  it('returns the plain slug when it is free', async () => {
-    expect(await uniqueSlug('Product Manager', takenIn([]))).toBe(
-      'product-manager',
-    )
+  const shape = /^product-manager-[a-z0-9]{6}$/
+
+  // T17-3: the result must not depend on which slugs are taken, since the
+  // caller's predicate also sees roles hidden from them.
+  it('has the same shape whether or not the title is taken', async () => {
+    expect(await uniqueSlug('Product Manager', takenIn([]))).toMatch(shape)
+    expect(
+      await uniqueSlug('Product Manager', takenIn(['product-manager'])),
+    ).toMatch(shape)
   })
 
-  it('suffixes until it finds a free one', async () => {
-    const taken = takenIn(['product-manager', 'product-manager-2'])
-    expect(await uniqueSlug('Product Manager', taken)).toBe('product-manager-3')
+  it('draws again on a collision', async () => {
+    let calls = 0
+    const firstTaken = () => Promise.resolve(calls++ === 0)
+    expect(await uniqueSlug('Product Manager', firstTaken)).toMatch(shape)
+    expect(calls).toBe(2)
+  })
+
+  it('stays within the length limit and never doubles a hyphen', async () => {
+    const slug = await uniqueSlug(`${'a'.repeat(52)} b`, takenIn([]))
+    expect(slug.length).toBeLessThanOrEqual(60)
+    expect(slug).not.toContain('--')
   })
 
   // An empty slug would produce a double slash in every link a recruiter pastes.
   it('falls back for a title with no usable characters', async () => {
-    expect(await uniqueSlug('日本語', takenIn([]))).toBe('project')
-    expect(await uniqueSlug('日本語', takenIn(['project']))).toBe('project-2')
+    expect(await uniqueSlug('日本語', takenIn([]))).toMatch(
+      /^project-[a-z0-9]{6}$/,
+    )
   })
 })

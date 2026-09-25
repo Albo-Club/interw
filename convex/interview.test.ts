@@ -768,6 +768,26 @@ describe('the completion email', () => {
     expect(logged.map((row) => row.template)).toEqual(['candidate-completed'])
   })
 
+  // T17-1: the role here has an internal title ("Backend") and no public one.
+  // The internal title is the recruiter's private label: no email to the
+  // candidate may fall back to it.
+  it('never carries the internal title, nor does the invitation', async () => {
+    await t.mutation(internal.interview.sendCompletionEmail, {
+      sessionId: s.sessionId,
+    })
+    await t.mutation(internal.sessions.sendInvitationBatch, {
+      sessionIds: [s.sessionId],
+    })
+    const toCandidate = sent.filter((email) => email.to === 'alex@example.test')
+    expect(toCandidate.length).toBeGreaterThanOrEqual(2)
+    for (const email of toCandidate) {
+      expect(`${email.subject} ${email.html} ${email.text}`).not.toContain(
+        'Backend',
+      )
+      expect(email.text).not.toContain('null')
+    }
+  })
+
   it('is not sent for a session erased in the meantime', async () => {
     await t.run((ctx) => ctx.db.delete('sessions', s.sessionId))
     await t.mutation(internal.interview.sendCompletionEmail, {

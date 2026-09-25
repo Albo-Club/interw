@@ -245,6 +245,32 @@ export function candidateDocumentKey(
   return `${sessionPrefix(orgId, sessionId)}/${kind}.${extension}`
 }
 
+/** Extension per accepted document type. A CV is a document, not a web page. */
+export const DOCUMENT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+}
+
+/**
+ * Every document key this session can have been issued. A slot is signed
+ * before any row names its key, and attaching may name another type than the
+ * one uploaded, so erasure deletes them all rather than only what the row
+ * names (T17-5). Deleting an object that was never written is a 404, which
+ * `deleteObjects` counts as done.
+ */
+export function candidateDocumentKeys(
+  orgId: string,
+  sessionId: string,
+): Array<string> {
+  return (['cv', 'cover'] as const).flatMap((kind) =>
+    Object.values(DOCUMENT_TYPES).map((extension) =>
+      candidateDocumentKey(orgId, sessionId, kind, extension),
+    ),
+  )
+}
+
 export function projectMediaKey(
   orgId: string,
   projectId: string,

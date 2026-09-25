@@ -205,7 +205,7 @@ async function sendInvitation(
   const { subject, html, text } = candidateInvitationEmail({
     locale: project.language,
     candidateName: session.candidateName,
-    jobTitle: project.jobTitle ?? project.title,
+    jobTitle: project.jobTitle ?? null,
     orgName,
     startUrl: invitationUrl(session.accessToken),
     durationMinutes: project.maxDurationMinutes,

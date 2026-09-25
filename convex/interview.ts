@@ -690,7 +690,7 @@ export const sendCompletionEmail = internalMutation({
     const { subject, html, text } = candidateCompletedEmail({
       locale: project.language,
       candidateName: session.candidateName,
-      jobTitle: project.jobTitle ?? project.title,
+      jobTitle: project.jobTitle ?? null,
       orgName: org?.name ?? '',
       privacyUrl: `${siteUrl.replace(/\/+$/, '')}/s/${session.accessToken}/privacy`,
     })

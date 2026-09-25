@@ -139,9 +139,10 @@ describe("role slugs past 200 roles (Back M4)", () => {
     f = await seed(t);
   });
 
-  it("suffixes a slug taken by the 250th role", async () => {
+  it("never reuses a slug taken by the 250th role", async () => {
     // The old guard read the first 200 roles of the org: a slug taken by any
-    // later one was invisible to it, and a duplicate was inserted.
+    // later one was invisible to it, and a duplicate was inserted. Every slug
+    // is suffixed now (T17-3), so this checks the new one is distinct.
     await t.run(async (ctx) => {
       for (let i = 0; i < 248; i++) {
         await ctx.db.insert(
@@ -161,7 +162,7 @@ describe("role slugs past 200 roles (Back M4)", () => {
       language: "en",
     });
 
-    expect(slug).toBe("product-manager-2");
+    expect(slug).toMatch(/^product-manager-[a-z0-9]{6}$/);
   });
 
   it("still opens a role whose slug was duplicated before the fix", async () => {

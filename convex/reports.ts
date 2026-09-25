@@ -125,11 +125,11 @@ export const forSession = query({
       report: report ? serializeReport(report) : null,
       // The last few pipeline transitions, so "why is there no report yet?" is
       // answerable on the page instead of in a support thread.
+      // No `error`: it holds raw provider output, which is for operators.
       pipeline: events.map((event) => ({
         step: event.step,
         outcome: event.outcome,
         at: event.at,
-        error: event.error ?? null,
       })),
     }
   },

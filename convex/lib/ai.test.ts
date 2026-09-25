@@ -225,6 +225,25 @@ describe('the completion request', () => {
   })
 
   /**
+   * Audit 2026-09-15, Pipe F10. The retry decision was a regex over the error
+   * message, and the message quotes up to 500 characters of the provider's
+   * body — so a 400 whose body mentioned "HTTP 503" was sent again.
+   */
+  it('does not retry a 400 whose body happens to say HTTP 503', async () => {
+    const calls: Array<Call> = []
+    stubFetch(
+      calls,
+      () => new Response('upstream said HTTP 503 earlier', { status: 400 }),
+    )
+
+    const error = await ask().catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(AiError)
+    expect((error as AiError).status).toBe(400)
+    expect(calls).toHaveLength(1)
+  })
+
+  /**
    * Found by running the real model, not by reading its docs: every stub in
    * this file sent `content` as a string, which is what the OpenAI-compatible
    * shape says, and what Mistral's own models send. GLM answers in blocks, and
@@ -320,6 +339,35 @@ describe('the completion request', () => {
     const result = await ask()
 
     expect(result.usage).toEqual({ promptTokens: 1234, completionTokens: 56 })
+  })
+
+  /** Audit C6.2: a reasoning model bills thinking nobody sees. What it
+   *  spent there is kept apart, when the provider says. */
+  it('reports the reasoning share of the completion when given', async () => {
+    const calls: Array<Call> = []
+    stubFetch(
+      calls,
+      () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"verdict":"fine"}' } }],
+            usage: {
+              prompt_tokens: 10,
+              completion_tokens: 900,
+              completion_tokens_details: { reasoning_tokens: 850 },
+            },
+          }),
+          { status: 200 },
+        ),
+    )
+
+    const result = await ask()
+
+    expect(result.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 900,
+      reasoningTokens: 850,
+    })
   })
 
   /**

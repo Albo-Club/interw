@@ -56,6 +56,12 @@ async function resolveShare(
     .withIndex('by_token', (q) => q.eq('token', token))
     .unique()
   if (!share) return { state: 'not_found', share: null }
+  // An organisation being deleted takes its share links down with it at once,
+  // not when erasure reaches the report — and fails like any unknown link.
+  const org = await ctx.db.get('organizations', share.orgId)
+  if (!org || org.deletingAt !== undefined) {
+    return { state: 'not_found', share: null }
+  }
   if (share.revokedAt !== undefined) return { state: 'revoked', share: null }
   if (share.expiresAt !== undefined && share.expiresAt < now) {
     return { state: 'expired', share: null }

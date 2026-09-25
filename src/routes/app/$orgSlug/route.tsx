@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar'
 import { AppSidebar } from '~/components/app-shell/AppSidebar'
 import { AppHeader } from '~/components/app-shell/AppHeader'
 import { AiPanel } from '~/components/ai/AiPanel'
+import { PendingInvitations } from '~/components/app-shell/PendingInvitations'
 import { cn } from '~/lib/utils'
 
 // AI panel open/closed persists in a 7-day cookie (same pattern as shadcn's
@@ -110,6 +111,7 @@ function OrgLayout() {
           orgId={org?._id}
           onToggleAiPanel={() => setAiPanelOpen(!aiOpen)}
         />
+        <PendingInvitations variant="banner" />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </div>

@@ -77,8 +77,10 @@ async function requireOpenSession(
   const session = await resolveSessionByToken(ctx, token)
   const project = await ctx.db.get('projects', session.projectId)
   if (!project) throw new ConvexError('not_found')
+  const org = await ctx.db.get('organizations', session.orgId)
+  if (!org) throw new ConvexError('not_found')
 
-  const gate = evaluateSessionGate({ session, project, now })
+  const gate = evaluateSessionGate({ session, project, org, now })
   if (gate.state !== 'ready' && gate.state !== 'resumable') {
     throw new ConvexError(gate.state)
   }
@@ -560,6 +562,8 @@ export const finish = mutation({
 
     const project = await ctx.db.get('projects', session.projectId)
     if (!project) throw new ConvexError('not_found')
+    const org = await ctx.db.get('organizations', session.orgId)
+    if (!org) throw new ConvexError('not_found')
 
     // Not `requireOpenSession`, for one reason only: a candidate who has just
     // recorded their answers must be able to finish even if the role's own
@@ -568,7 +572,7 @@ export const finish = mutation({
     // other blocker stays terminal here as it is everywhere else — a cancelled
     // link, a session that is itself expired, a role that is not live — or
     // finishing would undo the recruiter's decision and start the pipeline.
-    const gate = evaluateSessionGate({ session, project, now })
+    const gate = evaluateSessionGate({ session, project, org, now })
     const roleDeadlinePassed =
       gate.state === 'expired' &&
       session.status !== 'expired' &&

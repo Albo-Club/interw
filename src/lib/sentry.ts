@@ -3,10 +3,11 @@ import * as Sentry from '@sentry/react'
 let initialized = false
 
 /**
- * A candidate's link, `/s/<token>`, and a report share link, `/r/<token>`:
- * each token opens what it names to whoever holds it.
+ * A candidate's link, `/s/<token>`, a report share link, `/r/<token>`, and a
+ * role's public link, `/apply/<token>`: each token opens what it names to
+ * whoever holds it.
  */
-const TOKEN_PATH = /\/([sr])\/[A-Za-z0-9_-]+/g
+const TOKEN_PATH = /\/(s|r|apply)\/[A-Za-z0-9_-]+/g
 
 /** The sign-in code in a `/login/code#…&code=` link: it opens the account. */
 const SIGN_IN_CODE = /([#&]code=)\d+/g

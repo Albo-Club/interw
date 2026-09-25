@@ -346,9 +346,14 @@ export default defineSchema({
      *  `.collect().length` over a project's sessions does not scale. */
     sessionCount: v.number(),
     completedSessionCount: v.number(),
+    /** The role's public candidate link, `/apply/<token>`: anyone holding it
+     *  opens a session on this role. Minted on a recruiter's request, so a
+     *  role is never reachable from outside until someone asked for that. */
+    applyToken: v.optional(v.string()),
   })
     .index('by_org', ['orgId'])
     .index('by_org_and_status', ['orgId', 'status'])
+    .index('by_apply_token', ['applyToken'])
     // Read by the expiry cron (B6): the roles whose deadline has passed.
     .index('by_expires_at', ['expiresAt'])
     // Slugs are unique per organisation, not globally: two customers may both
@@ -386,9 +391,9 @@ export default defineSchema({
     .index('by_project', ['projectId', 'orderIndex'])
     .index('by_org', ['orgId']),
 
-  /** One candidate on one project. Only a recruiter creates these: with no
-   *  public project page in scope, no anonymous caller ever writes here
-   *  without a pre-existing token. */
+  /** One candidate on one project. Created by a recruiter's invitation, or by
+   *  the candidate through the role's public link (`convex/apply.ts`) — never
+   *  without a token that proves one or the other. */
   sessions: defineTable({
     orgId: v.id('organizations'),
     projectId: v.id('projects'),
@@ -440,7 +445,8 @@ export default defineSchema({
     recruiterDecisionBy: v.optional(v.id('users')),
     recruiterDecisionAt: v.optional(v.number()),
     recruiterNote: v.optional(v.string()),
-    invitedBy: v.id('users'),
+    /** Absent when the candidate came through the role's public link. */
+    invitedBy: v.optional(v.id('users')),
     invitedAt: v.number(),
     /** Retention clock. Set at invitation with a short window and pushed out
      *  when the interview completes; the purge cron deletes media past it and

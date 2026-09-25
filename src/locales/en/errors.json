@@ -67,6 +67,7 @@
     "no_report": "The report is not ready yet, so it cannot be shared.",
     "not_a_member": "That person is no longer in the organisation. Reload the page and try again.",
     "not_found": "This no longer exists, or you no longer have access to it.",
+    "not_invited": "This candidate came through the role's public link, so they have their link already. To email one, invite their address.",
     "not_requested": "This role did not ask for that.",
     "not_started": "The interview has not started yet.",
     "not_super_admin": "Only a super admin can do this.",

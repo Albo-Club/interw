@@ -205,7 +205,7 @@ describe('answers are joined to questions by id', () => {
         orgId: session!.orgId,
         reportId,
         token,
-        createdBy: session!.invitedBy,
+        createdBy: session!.invitedBy!,
         viewCount: 0,
         createdAt: 0,
       })

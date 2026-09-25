@@ -1,6 +1,10 @@
 {
   "metaTitle": "Votre entretien",
   "screens": {
+    "apply": {
+      "title": "Candidater — votre entretien",
+      "description": "Indiquez qui vous êtes, puis enregistrez un court entretien vidéo depuis votre navigateur."
+    },
     "welcome": {
       "title": "Bienvenue — votre entretien",
       "description": "Découvrez le déroulé de votre entretien vidéo, puis acceptez l'enregistrement avant de commencer."
@@ -47,6 +51,18 @@
       "title": "Vous avez déjà terminé cet entretien",
       "body": "Merci — vous n'avez plus rien à faire. Vos réponses ont été envoyées et l'équipe reviendra vers vous directement."
     }
+  },
+  "apply": {
+    "title": "Entretien pour le poste de {{jobTitle}}",
+    "titleNoRole": "Entretien avec {{org}}",
+    "intro": "{{org}} aimerait vous entendre. C’est un court entretien vidéo, de {{count}} minutes au plus, que vous enregistrez vous-même depuis ce navigateur.",
+    "name": "Nom complet",
+    "email": "Adresse e-mail",
+    "emailHint": "{{org}} l’utilisera pour revenir vers vous au sujet de ce poste.",
+    "submit": "Commencer",
+    "submitting": "Démarrage…",
+    "closed": "Ce poste n’accepte pas d’entretiens pour le moment.",
+    "expired": "La date limite de ce poste est passée."
   },
   "welcome": {
     "greeting": "Bonjour {{name}}",

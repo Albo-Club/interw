@@ -67,6 +67,7 @@
     "no_report": "Le rapport n'est pas encore prêt, il ne peut donc pas être partagé.",
     "not_a_member": "Cette personne ne fait plus partie de l'organisation. Rechargez la page et réessayez.",
     "not_found": "Cet élément n'existe plus, ou vous n'y avez plus accès.",
+    "not_invited": "Cette personne est passée par le lien public du poste : elle a déjà son lien. Pour lui en envoyer un par e-mail, invitez son adresse.",
     "not_requested": "Ce poste ne le demande pas.",
     "not_started": "L'entretien n'a pas encore commencé.",
     "not_super_admin": "Seul un super admin peut faire cela.",

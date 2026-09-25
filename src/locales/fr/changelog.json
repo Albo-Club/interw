@@ -7,7 +7,7 @@
   "entries": {
     "share-highlights-and-deadlines": {
       "title": "Extraits marquants sur les rapports partagés, plus d'invitations mortes",
-      "body": "Un rapport partagé liste désormais les moments à regarder, comme le rapport dans l'application. Une invitation qui a rebondi est signalée sur son candidat, quel que soit le nombre d'e-mails envoyés depuis par l'organisation. Un poste dont la date limite est passée n'envoie plus d'invitations ni de relances qui ouvriraient sur un entretien fermé, et quand le créateur d'un poste part sans personne d'autre dans son équipe, les admins sont prévenus quand un rapport est prêt."
+      "body": "Un rapport partagé liste désormais les moments à regarder, comme le rapport dans l'application. Une invitation qui a rebondi est signalée sur son candidat, quel que soit le nombre d'e-mails envoyés depuis par l'organisation. Un poste archivé ou dont la date limite est passée n'envoie plus d'invitations ni de relances qui ouvriraient sur un entretien fermé, et quand le créateur d'un poste part sans personne d'autre dans son équipe, les admins sont prévenus quand un rapport est prêt."
     },
     "calmer-interface": {
       "title": "Une interface plus calme et plus cohérente",

@@ -87,8 +87,8 @@ function ProjectDetailPage() {
 
   const { project, questions, criteria } = data
   const expired = project.expiresAt !== null && project.expiresAt < Date.now()
-  // Mirrors `assertBeforeDeadline` in convex/sessions.ts: past its deadline a
-  // role mails no new link, since the candidate would find it already closed.
+  // Mirrors `assertAcceptsCandidates` in convex/sessions.ts: only a live role
+  // mails a link, since the candidate would otherwise find it already closed.
   const canInvite = project.status === 'active' && !expired
   // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
   // spares a member an action the server would refuse.

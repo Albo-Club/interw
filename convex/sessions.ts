@@ -131,12 +131,14 @@ export const listByProject = query({
 })
 
 /**
- * A role past its deadline takes no new invitation and no reminder: the
- * candidate would open a link that already reads "This interview has closed".
- * The 24 h grace in `expireOverdueSessions` is for interviews already under
- * way, not for sending new ones.
+ * Only a live role mails a link: a draft, archived or past-deadline one would
+ * send the candidate to a page that already reads closed. The 24 h grace in
+ * `expireOverdueSessions` is for interviews already under way, not for
+ * sending new ones.
  */
-function assertBeforeDeadline(project: Doc<'projects'>) {
+function assertAcceptsCandidates(project: Doc<'projects'>) {
+  if (project.status === 'archived') throw new ConvexError('project_archived')
+  if (project.status !== 'active') throw new ConvexError('project_not_active')
   if (isPastDeadline(project, Date.now())) {
     throw new ConvexError('project_expired')
   }
@@ -171,8 +173,7 @@ export const invite = mutation({
   },
   handler: async (ctx, { projectId, candidates }) => {
     const { project, user } = await requireProjectAccess(ctx, projectId)
-    if (project.status !== 'active') throw new ConvexError('project_not_active')
-    assertBeforeDeadline(project)
+    assertAcceptsCandidates(project)
     if (candidates.length === 0) throw new ConvexError('no_candidates')
     if (candidates.length > MAX_BULK_INVITES) {
       throw new ConvexError('too_many_candidates')
@@ -310,7 +311,7 @@ export const resendInvitation = mutation({
     if (session.status !== 'pending' && session.status !== 'in_progress') {
       throw new ConvexError('session_closed')
     }
-    assertBeforeDeadline(project)
+    assertAcceptsCandidates(project)
     // Pipe F9: an address that hard-bounced (or reported us as spam) does not
     // get the same mail again. Every retry costs the sending domain
     // reputation, and the fix is a corrected address — a new invitation.

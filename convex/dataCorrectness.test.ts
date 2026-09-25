@@ -317,6 +317,16 @@ describe("sessions past their role deadline (B6)", () => {
     );
     await expect(invite()).resolves.toMatchObject({ created: 1 });
   });
+
+  it("sends no reminder for an archived role", async () => {
+    const sessionId = await t.run(async (ctx) => {
+      await ctx.db.patch("projects", f.projectId, { status: "archived" });
+      return ctx.db.insert("sessions", sessionFields(f));
+    });
+    await expect(
+      asOwner(t).mutation(api.sessions.resendInvitation, { sessionId }),
+    ).rejects.toThrow(/project_archived/);
+  });
 });
 
 /* ── Pipe F9 / h07 ───────────────────────────────────────────────────────── */

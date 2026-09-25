@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "role-access-tightened": {
+      "title": "We tightened who keeps access to a role",
+      "body": "Leaving a role's team, or your organization, now ends everything that came with that place on the team. Someone who comes back sees no role until they are added to its team again. New roles also get a short random ending in their link."
+    },
     "assistant-history-purged": {
       "title": "Older assistant conversations deleted",
       "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."

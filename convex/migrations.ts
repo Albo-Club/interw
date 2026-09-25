@@ -128,6 +128,73 @@ export const purgeLegacyAssistantThreads = internalMutation({
   },
 })
 
+const BACKFILL_CREATOR_SEATS = 'backfillCreatorSeats'
+/** Roles examined per step. */
+const ROLE_BATCH = 100
+
+/**
+ * Gives every existing role its creator's seat as a `projectShares` row.
+ *
+ * The seat used to be `projects.createdBy` itself, which removal cannot
+ * touch: a creator removed and re-invited got every role they had opened back
+ * (audit T17-2). `projects.create` now writes the row and nothing reads
+ * `createdBy` as a grant, so roles from before need theirs, once. A creator
+ * who is no longer a member gets none — removal is exactly what revokes it.
+ *
+ * One walk over `projects`, a bounded page per step. Idempotent: a role whose
+ * creator already holds a seat is left alone, so a tick landing mid-walk, or a
+ * step run twice, writes nothing twice.
+ */
+export const backfillCreatorSeats = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const run = await ensureRun(ctx, BACKFILL_CREATOR_SEATS)
+    if (run.doneAt !== undefined) return null
+
+    const roles = await ctx.db.query('projects').paginate({
+      numItems: ROLE_BATCH,
+      cursor: run.projectsCursor ?? null,
+    })
+    for (const project of roles.page) {
+      const member = await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', project.orgId).eq('userId', project.createdBy),
+        )
+        .unique()
+      if (!member) continue
+      const seat = await ctx.db
+        .query('projectShares')
+        .withIndex('by_project_and_user', (q) =>
+          q.eq('projectId', project._id).eq('userId', project.createdBy),
+        )
+        .unique()
+      if (seat) continue
+      await ctx.db.insert('projectShares', {
+        orgId: project.orgId,
+        projectId: project._id,
+        userId: project.createdBy,
+        grantedBy: project.createdBy,
+        grantedAt: project.createdAt,
+      })
+    }
+
+    if (roles.isDone) {
+      console.log(`[migrations] ${run.name} done`)
+      await ctx.db.patch('migrations', run._id, {
+        doneAt: Date.now(),
+        projectsCursor: undefined,
+      })
+      return null
+    }
+    await ctx.db.patch('migrations', run._id, {
+      projectsCursor: roles.continueCursor,
+    })
+    await ctx.scheduler.runAfter(0, internal.migrations.backfillCreatorSeats, {})
+    return null
+  },
+})
+
 async function ensureRun(
   ctx: MutationCtx,
   name: string,

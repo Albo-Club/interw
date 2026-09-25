@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "role-access-tightened": {
+      "title": "Nous avons resserré qui garde l’accès à un poste",
+      "body": "Quitter l’équipe d’un poste, ou votre organisation, met désormais fin à tout ce qui venait avec cette place dans l’équipe. Une personne qui revient ne voit aucun poste tant qu’elle n’a pas été rajoutée à son équipe. Les nouveaux postes reçoivent aussi une courte terminaison aléatoire dans leur lien."
+    },
     "assistant-history-purged": {
       "title": "Anciennes conversations avec l’assistant supprimées",
       "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."

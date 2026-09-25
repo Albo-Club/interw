@@ -15,6 +15,7 @@ import { ConvexError, v } from 'convex/values'
 import { internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { deleteObjects } from './lib/objectStore'
+import { canSeeProject } from './lib/projectAccess'
 import type { ActionCtx } from './_generated/server'
 import type { GenericMutationCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -97,6 +98,23 @@ export const collectSessionObjects = internalQuery({
 const DELETE_BATCH = 100
 
 /**
+ * Erase the whole thread a read landed in, with the row that named it. The
+ * component deletes the thread page by page on its own schedule, committed in
+ * this transaction with the row, so neither can outlive the other.
+ */
+async function eraseThread(
+  ctx: GenericMutationCtx<DataModel>,
+  read: Doc<'chatThreadSessions'>,
+): Promise<void> {
+  await ctx.scheduler.runAfter(
+    0,
+    components.agent.threads.deleteAllForThreadIdAsync,
+    { threadId: read.threadId },
+  )
+  await ctx.db.delete('chatThreadSessions', read._id)
+}
+
+/**
  * Delete up to `budget` child rows of a session. Returns how many it spent.
  *
  * Order matters only for `reports` → `reportShares`: a share must not outlive
@@ -128,21 +146,14 @@ async function deleteChildRows(
 
   // An assistant thread that read this candidate holds a copy of them — the
   // tool result, and the answer written from it. The whole thread goes: the
-  // answer cannot be told apart from the rest of the conversation. The
-  // component deletes it page by page on its own schedule, committed in this
-  // transaction with the row that named it, so neither can outlive the other.
+  // answer cannot be told apart from the rest of the conversation.
   if (spent >= budget) return spent
   const reads = await ctx.db
     .query('chatThreadSessions')
     .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
     .take(budget - spent)
   for (const read of reads) {
-    await ctx.scheduler.runAfter(
-      0,
-      components.agent.threads.deleteAllForThreadIdAsync,
-      { threadId: read.threadId },
-    )
-    await ctx.db.delete('chatThreadSessions', read._id)
+    await eraseThread(ctx, read)
     spent += 1
   }
 
@@ -334,5 +345,73 @@ export const sessionsDueForPurge = internalQuery({
       )
       .take(limit)
     return due.map((session) => session._id)
+  },
+})
+
+/** Candidates of the role examined per step. */
+const ROLE_SESSION_BATCH = 50
+
+/**
+ * Erase `userId`'s assistant threads that read a candidate of `projectId`,
+ * scheduled by `leaveTeam` when their seat on its team goes. A tool result is
+ * their copy of the candidate; with the seat gone they could no longer read
+ * it anywhere else. Found the way erasure finds them — by session, through
+ * `chatThreadSessions` — and narrowed to the scope of their threads in that
+ * organisation (`${orgId}:${userId}`, lib/agentScope.ts).
+ *
+ * Runs after the seat's removal commits, so a membership ended in the same
+ * transaction is already gone. Does nothing if by then they can see the role
+ * anyway — an admin or owner, or someone put back on the team.
+ */
+export const eraseRoleThreads = internalMutation({
+  args: {
+    projectId: v.id('projects'),
+    userId: v.id('users'),
+    cursor: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, { projectId, userId, cursor }) => {
+    const project = await ctx.db.get('projects', projectId)
+    if (!project) return null
+    const member = await ctx.db
+      .query('organizationMembers')
+      .withIndex('by_org_and_user', (q) =>
+        q.eq('orgId', project.orgId).eq('userId', userId),
+      )
+      .unique()
+    if (member && (await canSeeProject(ctx, project, userId, member.role))) {
+      return null
+    }
+
+    const scope = `${project.orgId}:${userId}`
+    // One thread often read several candidates of the role: ask its owner once.
+    const theirs = new Map<string, boolean>()
+    const sessions = await ctx.db
+      .query('sessions')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .paginate({ numItems: ROLE_SESSION_BATCH, cursor })
+    for (const session of sessions.page) {
+      const reads = await ctx.db
+        .query('chatThreadSessions')
+        .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+        .collect()
+      for (const read of reads) {
+        if (!theirs.has(read.threadId)) {
+          const thread = await ctx.runQuery(
+            components.agent.threads.getThread,
+            { threadId: read.threadId },
+          )
+          theirs.set(read.threadId, thread?.userId === scope)
+        }
+        if (theirs.get(read.threadId)) await eraseThread(ctx, read)
+      }
+    }
+    if (!sessions.isDone) {
+      await ctx.scheduler.runAfter(0, internal.purge.eraseRoleThreads, {
+        projectId,
+        userId,
+        cursor: sessions.continueCursor,
+      })
+    }
+    return null
   },
 })

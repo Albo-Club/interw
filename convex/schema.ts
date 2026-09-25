@@ -569,10 +569,10 @@ export default defineSchema({
     // org or deletes their account, their links are revoked with them.
     .index('by_creator_and_org', ['createdBy', 'orgId']),
 
-  /** A role's team: the colleagues who follow it. One row per member, on top
-   *  of the creator, who is always on the team and never stored here. The
-   *  team decides both who sees the role (with org admins/owners) and who is
-   *  emailed when a report is ready. Named `projectShares` for history: the
+  /** A role's team: the colleagues who follow it. One row per member, the
+   *  creator's included (`projects.create` writes it; `projects.createdBy` is
+   *  attribution only). The team decides both who sees the role (with org
+   *  admins/owners) and who is emailed when a report is ready. Named `projectShares` for history: the
    *  rows of the former "restricted" roles already meant exactly this. */
   projectShares: defineTable({
     orgId: v.id('organizations'),
@@ -656,6 +656,7 @@ export default defineSchema({
     scope: v.optional(v.string()),
     threadsCursor: v.optional(v.string()),
     foundInPass: v.optional(v.boolean()),
+    projectsCursor: v.optional(v.string()),
   }).index('by_name', ['name']),
 
   /** Every pipeline state transition, with its duration and outcome. This is

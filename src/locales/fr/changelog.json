@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "invitations-hardening": {
+      "title": "Invitations d’équipe resserrées",
+      "body": "Une invitation ne reste valable que tant que la personne qui l’a envoyée peut encore inviter : si elle quitte l’organisation ou n’est plus admin, l’invitation cesse de fonctionner et s’affiche « Plus valable », et vous pouvez inviter l’adresse de nouveau. S’inscrire depuis une invitation conserve l’adresse invitée, et nous avons renforcé l’affichage des noms dans l’application et dans les e-mails."
+    },
     "role-access-tightened": {
       "title": "Nous avons resserré qui garde l’accès à un poste",
       "body": "Quitter l’équipe d’un poste, ou votre organisation, met désormais fin à tout ce qui venait avec cette place dans l’équipe. Une personne qui revient ne voit aucun poste tant qu’elle n’a pas été rajoutée à son équipe. Les nouveaux postes reçoivent aussi une courte terminaison aléatoire dans leur lien."

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "invitations-hardening": {
+      "title": "Team invitations tightened",
+      "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."
+    },
     "role-access-tightened": {
       "title": "We tightened who keeps access to a role",
       "body": "Leaving a role's team, or your organization, now ends everything that came with that place on the team. Someone who comes back sees no role until they are added to its team again. New roles also get a short random ending in their link."

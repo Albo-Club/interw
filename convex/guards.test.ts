@@ -307,43 +307,17 @@ describe('project visibility inside an organisation', () => {
 
   /**
    * Audit 2026-09-22, `convex/emailEvents.ts:recent:org-scope-without-project-visibility`.
-   * The deliverability list is derived from the invitations, so it inherits
-   * the visibility of the role each one was sent for.
+   * The org-wide deliverability list lost its only screen when the candidate
+   * table started reading each invitation's own delivery (PR #45), so it is
+   * gone rather than kept filtered for nobody.
    */
-  it('does not leak the candidates of a role through the deliverability list', async () => {
-    await t.run(async (ctx) => {
-      const hidden = await ctx.db.insert('sessions', {
-        orgId: w.acmeOrgId,
-        projectId: w.chiefProjectId,
-        accessToken: 'h'.repeat(43),
-        candidateName: 'Sam Hidden',
-        candidateEmail: 'hidden@candidate.test',
-        status: 'pending',
-        lastQuestionIndex: 0,
-        invitedBy: (await ctx.db.get('projects', w.chiefProjectId))!
-          .createdBy,
-        invitedAt: 0,
-      })
-      await ctx.db.insert('emailLog', {
-        orgId: w.acmeOrgId,
-        template: 'candidate-invitation',
-        recipient: 'hidden@candidate.test',
-        status: 'sent',
-        sessionId: hidden,
-        createdAt: 1,
-      })
-    })
-
-    const excluded = await as(t, 'acmeMember').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(excluded.map((row) => row.recipient)).not.toContain(
-      'hidden@candidate.test',
-    )
-    const named = await as(t, 'acmeShared').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(named.map((row) => row.recipient)).toContain('hidden@candidate.test')
+  it('no longer exposes the org-wide deliverability list', async () => {
+    await expect(
+      as(t, 'acmeMember').query(
+        makeFunctionReference<'query'>('emailEvents:recent'),
+        { orgId: w.acmeOrgId },
+      ),
+    ).rejects.toThrow()
   })
 
   /**

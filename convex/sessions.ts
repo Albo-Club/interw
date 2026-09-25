@@ -22,6 +22,7 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
+import { isPastDeadline } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
@@ -78,26 +79,28 @@ function toRecruiterRow(
   }
 }
 
-type DeliveryIssue = 'bounced' | 'complained' | 'failed'
+type DeliveryIssue = Exclude<Doc<'emailLog'>['status'], 'sent' | 'delivered'>
 
 /**
  * Whether the latest invitation sent to this candidate failed to reach them.
  *
- * Read per row, off the session's own `emailLog` rows — a handful each — and
- * not off the organisation's last 200 emails: one bulk campaign used to push
- * an older bounce out of that window, and the recruiter never saw it. Newest
- * first, so a re-send that got through clears an earlier failure.
+ * Read per row, off the session's own latest invitation, and not off the
+ * organisation's last 200 emails: one bulk campaign used to push an older
+ * bounce out of that window, and the recruiter never saw it. A re-send that
+ * got through clears an earlier failure. Keyed on the template too, so the
+ * report-ready mail and its delivery webhooks do not re-run the list.
  */
 async function inviteDeliveryIssue(
   ctx: GenericQueryCtx<DataModel>,
   sessionId: Id<'sessions'>,
 ): Promise<DeliveryIssue | null> {
-  const sends = await ctx.db
+  const latest = await ctx.db
     .query('emailLog')
-    .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+    .withIndex('by_session_and_template', (q) =>
+      q.eq('sessionId', sessionId).eq('template', 'candidate-invitation'),
+    )
     .order('desc')
-    .collect()
-  const latest = sends.find((entry) => entry.template === 'candidate-invitation')
+    .first()
   if (!latest || latest.status === 'sent' || latest.status === 'delivered') {
     return null
   }
@@ -134,7 +137,7 @@ export const listByProject = query({
  * way, not for sending new ones.
  */
 function assertBeforeDeadline(project: Doc<'projects'>) {
-  if (project.expiresAt !== undefined && Date.now() > project.expiresAt) {
+  if (isPastDeadline(project, Date.now())) {
     throw new ConvexError('project_expired')
   }
 }

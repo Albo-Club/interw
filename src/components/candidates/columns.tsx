@@ -35,7 +35,7 @@ export function buildCandidateColumns({
   locale: string
   /** Owner, admin or the role's creator: what `invitationLink` requires. */
   canManage: boolean
-  /** Active and before its deadline: what `resendInvitation` requires. */
+  /** The role is active and before its deadline, so a link would open. */
   canInvite: boolean
   onCopyLink: (row: CandidateRow) => void
   onResend: (row: CandidateRow) => void

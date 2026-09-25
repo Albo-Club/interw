@@ -25,7 +25,7 @@ import type { DataModel, Doc, Id } from '../_generated/dataModel'
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 
 /** Admins and owners see every project in their organisation. */
-function seesEverything(role: AppRole): boolean {
+export function seesEverything(role: AppRole): boolean {
   return role === 'admin' || role === 'owner'
 }
 

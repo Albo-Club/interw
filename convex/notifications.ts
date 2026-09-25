@@ -4,6 +4,7 @@ import { internalMutation } from './_generated/server'
 import { RESEND_FROM, resend } from './email'
 import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
+import { seesEverything } from './lib/projectAccess'
 import type { Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL!
@@ -102,15 +103,27 @@ export const sendReportReady = internalMutation({
 
     // Membership is checked here, at send time: `createdBy` and a team row are
     // attributions inside the org, never a grant that outlives removal.
-    const members = await ctx.db
-      .query('organizationMembers')
-      .withIndex('by_org', (q) => q.eq('orgId', session.orgId))
-      .collect()
-    let audience = members.filter((m) => team.has(m.userId))
+    let audience = (
+      await Promise.all(
+        [...team].map((userId) =>
+          ctx.db
+            .query('organizationMembers')
+            .withIndex('by_org_and_user', (q) =>
+              q.eq('orgId', session.orgId).eq('userId', userId),
+            )
+            .unique(),
+        ),
+      )
+    ).filter((member) => member !== null)
     // A creator who left alone on their role would leave its reports landing
     // with nobody told. The admins, who can already see it, inherit it.
     if (audience.length === 0) {
-      audience = members.filter((m) => m.role === 'admin' || m.role === 'owner')
+      audience = (
+        await ctx.db
+          .query('organizationMembers')
+          .withIndex('by_org', (q) => q.eq('orgId', session.orgId))
+          .collect()
+      ).filter((member) => seesEverything(member.role))
     }
 
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`

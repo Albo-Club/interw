@@ -611,6 +611,7 @@ export default defineSchema({
     // the report notification has to be able to ask "did I already send this
     // one?" exactly rather than by scanning the last 200 emails of the org.
     .index('by_session', ['sessionId'])
+    .index('by_session_and_template', ['sessionId', 'template'])
     .index('by_invitation', ['invitationId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,

@@ -430,7 +430,6 @@ the recorder — Chrome, Edge and Safari record MP4.
 | ID8 | **Removal ends access** | Put member B on a role's team, have B create another role and a report share link, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed; B's share link now shows "This link was revoked" (h03); after re-invite B does **not** see the first role (the team row went with the membership) |
 | ID8b | Account deletion clears the same | Same setup, but B deletes their account | No `projectShares` row names B; B's report links are revoked |
 | ID9 | Restore is admin-tier | As a plain member who did not create it, restore an archived role | Refused (`insufficient_role`), stays archived. Owner, admin and the role's creator succeed — same tier as Archive |
-| ID10 | Deliverability respects role teams | As a member not on a role's team, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
 
 ## Interw E — Retention and erasure (10 min)
 

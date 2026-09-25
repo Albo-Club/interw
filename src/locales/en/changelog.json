@@ -79,7 +79,7 @@
     },
     "recordings-play-everywhere": {
       "title": "Answers that play everywhere, and a phone that stays awake",
-      "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included, so jumping to a quote in a report lands where it should. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."
+      "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."
     },
     "delete-organization": {
       "title": "Delete an organization",

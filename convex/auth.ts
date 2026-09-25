@@ -295,6 +295,10 @@ const lifecycleEffects = (
     requireRunMutationCtx(ctx).runQuery(internal.users.soleOwnedOrgNames, {
       betterAuthId: userId,
     }),
+  lastSuperAdmin: (userId) =>
+    requireRunMutationCtx(ctx).runQuery(internal.users.lastSuperAdmin, {
+      betterAuthId: userId,
+    }),
   passwordChanged: async (userId) => {
     // The change is committed by now; a failed notice must not report it as
     // failed, so it is logged rather than rethrown.

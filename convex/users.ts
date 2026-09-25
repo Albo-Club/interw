@@ -17,7 +17,7 @@ import { revokeMemberGrants } from './lib/projectAccess'
 import { release, resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 import type { EmailChange } from './lib/userPrefs'
 import type { GenericQueryCtx } from 'convex/server'
-import type { DataModel, Id } from './_generated/dataModel'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 export const me = query({
   args: {},
@@ -194,6 +194,23 @@ async function soleOwnedOrgs(
   return orgs
 }
 
+/**
+ * The platform's only super admin. Deleting them would leave nobody able to
+ * reach the admin screens — the same `last_super_admin` rule
+ * `admin.setSuperAdmin` applies to a self-demotion.
+ */
+async function isLastSuperAdmin(
+  ctx: GenericQueryCtx<DataModel>,
+  user: Doc<'users'>,
+): Promise<boolean> {
+  if (!user.superAdmin) return false
+  const superAdmins = await ctx.db
+    .query('users')
+    .withIndex('by_superAdmin', (q) => q.eq('superAdmin', true))
+    .take(2)
+  return superAdmins.length < 2
+}
+
 function userByBetterAuthId(
   ctx: GenericQueryCtx<DataModel>,
   betterAuthId: string,
@@ -209,7 +226,10 @@ export const accountDeletionBlockers = query({
   args: {},
   handler: async (ctx) => {
     const user = await requireAppUser(ctx)
-    return await soleOwnedOrgs(ctx, user._id)
+    return {
+      soleOwnedOrgs: await soleOwnedOrgs(ctx, user._id),
+      lastSuperAdmin: await isLastSuperAdmin(ctx, user),
+    }
   },
 })
 
@@ -220,6 +240,15 @@ export const soleOwnedOrgNames = internalQuery({
     const appUser = await userByBetterAuthId(ctx, betterAuthId)
     if (!appUser) return []
     return (await soleOwnedOrgs(ctx, appUser._id)).map((org) => org.name)
+  },
+})
+
+/** Internal — the same check, for Better Auth's delete endpoints. */
+export const lastSuperAdmin = internalQuery({
+  args: { betterAuthId: v.string() },
+  handler: async (ctx, { betterAuthId }): Promise<boolean> => {
+    const appUser = await userByBetterAuthId(ctx, betterAuthId)
+    return appUser ? await isLastSuperAdmin(ctx, appUser) : false
   },
 })
 
@@ -326,6 +355,9 @@ export const cascadeDelete = internalMutation({
     // endpoints: throwing here aborts the deletion before anything is gone.
     if ((await soleOwnedOrgs(ctx, appUser._id)).length > 0) {
       throw new ConvexError('sole_owner')
+    }
+    if (await isLastSuperAdmin(ctx, appUser)) {
+      throw new ConvexError('last_super_admin')
     }
 
     const memberships = await ctx.db

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
 import { TeamPicker } from './TeamPicker'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { MemberName } from '~/components/MemberName'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
@@ -71,6 +72,18 @@ export function ProjectTeamDialog({
           <DialogTitle>{t('projects:team.title')}</DialogTitle>
           <DialogDescription>{t('projects:team.subtitle')}</DialogDescription>
         </DialogHeader>
+
+        {/* A current creator is the locked first row of the picker; one
+            removed since is no longer in it, but keeps the credit. */}
+        {team?.creator.removed && (
+          <p className="text-muted-foreground text-sm">
+            <Trans
+              t={t}
+              i18nKey="projects:team.createdBy"
+              components={{ name: <MemberName member={team.creator} /> }}
+            />
+          </p>
+        )}
 
         <TeamPicker
           orgId={orgId}

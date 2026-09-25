@@ -34,6 +34,10 @@
     "admin": "Admin",
     "member": "Member"
   },
+  "member": {
+    "removed": "{{name}} (removed)",
+    "former": "Former member"
+  },
   "demo": "Demo",
   "comingSoon": "Coming soon",
   "theme": {

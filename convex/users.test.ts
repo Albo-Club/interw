@@ -71,7 +71,10 @@ describe('account deletion and sole ownership', () => {
       await t
         .withIdentity({ subject: 'ba_alice' })
         .query(api.users.accountDeletionBlockers, {}),
-    ).toMatchObject([{ name: 'Acme', slug: 'acme' }])
+    ).toMatchObject({
+      soleOwnedOrgs: [{ name: 'Acme', slug: 'acme' }],
+      lastSuperAdmin: false,
+    })
     expect(
       await t.query(internal.users.soleOwnedOrgNames, {
         betterAuthId: 'ba_alice',
@@ -97,7 +100,7 @@ describe('account deletion and sole ownership', () => {
       await t
         .withIdentity({ subject: 'ba_alice' })
         .query(api.users.accountDeletionBlockers, {}),
-    ).toEqual([])
+    ).toEqual({ soleOwnedOrgs: [], lastSuperAdmin: false })
 
     await t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_alice' })
     await t.run(async (ctx) => {
@@ -112,6 +115,50 @@ describe('account deletion and sole ownership', () => {
 
   it('never blocks a plain member', async () => {
     const { t, bob } = await world(false)
+    await t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_bob' })
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get('users', bob)).toBeNull()
+    })
+  })
+})
+
+describe('account deletion and the last super admin', () => {
+  const promote = (t: Awaited<ReturnType<typeof world>>['t'], userId: Id<'users'>) =>
+    t.run((ctx) => ctx.db.patch('users', userId, { superAdmin: true }))
+
+  it('refuses to delete the only super admin', async () => {
+    const { t, bob } = await world(false)
+    await promote(t, bob)
+
+    expect(
+      await t
+        .withIdentity({ subject: 'ba_bob' })
+        .query(api.users.accountDeletionBlockers, {}),
+    ).toEqual({ soleOwnedOrgs: [], lastSuperAdmin: true })
+    expect(
+      await t.query(internal.users.lastSuperAdmin, { betterAuthId: 'ba_bob' }),
+    ).toBe(true)
+    await expect(
+      t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_bob' }),
+    ).rejects.toThrow('last_super_admin')
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get('users', bob)).not.toBeNull()
+    })
+  })
+
+  it('lets a super admin go once another one remains', async () => {
+    const { t, alice, bob } = await world(true)
+    await promote(t, alice)
+    await promote(t, bob)
+
+    expect(
+      await t
+        .withIdentity({ subject: 'ba_bob' })
+        .query(api.users.accountDeletionBlockers, {}),
+    ).toEqual({ soleOwnedOrgs: [], lastSuperAdmin: false })
+    expect(
+      await t.query(internal.users.lastSuperAdmin, { betterAuthId: 'ba_bob' }),
+    ).toBe(false)
     await t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_bob' })
     await t.run(async (ctx) => {
       expect(await ctx.db.get('users', bob)).toBeNull()

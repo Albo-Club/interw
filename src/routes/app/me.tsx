@@ -256,8 +256,11 @@ function ProfilePage() {
     : accountsFailed
       ? true
       : undefined
+  const soleOwnedOrgs = deletionBlockers?.soleOwnedOrgs ?? []
   const deletionBlocked =
-    deletionBlockers === undefined || deletionBlockers.length > 0
+    deletionBlockers === undefined ||
+    soleOwnedOrgs.length > 0 ||
+    deletionBlockers.lastSuperAdmin
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6">
@@ -509,13 +512,21 @@ function ProfilePage() {
           <CardDescription>{t('account:danger.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {deletionBlockers && deletionBlockers.length > 0 && (
+          {deletionBlockers?.lastSuperAdmin && (
+            <Alert>
+              <AlertTitle>{t('account:danger.lastSuperAdminTitle')}</AlertTitle>
+              <AlertDescription>
+                {t('account:danger.lastSuperAdmin')}
+              </AlertDescription>
+            </Alert>
+          )}
+          {soleOwnedOrgs.length > 0 && (
             <Alert>
               <AlertTitle>{t('account:danger.blockedTitle')}</AlertTitle>
               <AlertDescription>
                 <p>{t('account:danger.blocked')}</p>
                 <ul className="list-disc pl-4">
-                  {deletionBlockers.map((org) => (
+                  {soleOwnedOrgs.map((org) => (
                     <li key={org._id}>
                       <Link
                         to="/app/$orgSlug/settings/members"

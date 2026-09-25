@@ -30,6 +30,11 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 2,
   },
+  // Password sign-ins: per account (keyed on a hash of the address), charged
+  // by `perEmailQuota` on every attempt. Better Auth's per-IP rule trusts a
+  // header the client can set; this one does not. Room for a few fumbles,
+  // then one guess every six minutes — the email code stays available.
+  passwordSignIn: { kind: 'token bucket', rate: 10, period: HOUR, capacity: 5 },
   // "Your password was changed" notices: per user. Only a real change sends
   // one (server-side hooks), but a burst of changes should not become a burst
   // of emails.

@@ -31,6 +31,7 @@ import type * as lib_ai from "../lib/ai.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_candidateReturns from "../lib/candidateReturns.js";
 import type * as lib_candidateView from "../lib/candidateView.js";
+import type * as lib_clientIp from "../lib/clientIp.js";
 import type * as lib_clock from "../lib/clock.js";
 import type * as lib_evidence from "../lib/evidence.js";
 import type * as lib_htmlText from "../lib/htmlText.js";
@@ -99,6 +100,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/candidateReturns": typeof lib_candidateReturns;
   "lib/candidateView": typeof lib_candidateView;
+  "lib/clientIp": typeof lib_clientIp;
   "lib/clock": typeof lib_clock;
   "lib/evidence": typeof lib_evidence;
   "lib/htmlText": typeof lib_htmlText;

@@ -411,6 +411,26 @@ describe('accepting by token', () => {
     })
     expect(again).toMatchObject({ orgSlug: 'acme', joined: false })
   })
+
+  it("never lets a member consume someone else's invitation", async () => {
+    const invitationId = await as(t, 'owner').mutation(
+      api.invitations.create,
+      { orgId: w.acmeOrgId, email: 'newcomer@example.test', role: 'member' },
+    )
+    const inv = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    // A member holding the link lands in the org, as for their own link...
+    const member = await as(t, 'member').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(member).toMatchObject({ orgSlug: 'acme', joined: false })
+    // ...but the invitation stays the invitee's.
+    const after = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    expect(after?.acceptedAt).toBeUndefined()
+    const invitee = await as(t, 'newcomer').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(invitee).toMatchObject({ orgSlug: 'acme', joined: true })
+  })
 })
 
 describe('creating a second organisation', () => {

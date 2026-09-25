@@ -241,6 +241,10 @@ function StartStep({
   // The cursor goes where the next keystroke goes: the password once the
   // address is known, the address otherwise.
   const focusPassword = passwordMode && !!email
+  // A verification link completes only with the account's password. A code
+  // would delete that password (the account is unverified), and Google
+  // refuses the account and points to the code: neither is offered here.
+  const passwordOnly = !!verifyToken
 
   const onResendVerification = async () => {
     if (!unverified) return
@@ -269,10 +273,12 @@ function StartStep({
         }}
       >
         <CardContent className="flex flex-col gap-6">
-          <SocialAuthButtons
-            redirect={redirect}
-            lastUsed={lastMethod === 'google'}
-          />
+          {!passwordOnly && (
+            <SocialAuthButtons
+              redirect={redirect}
+              lastUsed={lastMethod === 'google'}
+            />
+          )}
           {notice}
           {submitError && (
             <Alert variant="destructive">
@@ -406,19 +412,21 @@ function StartStep({
                 )}
               </form.Subscribe>
             )}
-            <button
-              type="button"
-              onClick={() =>
-                onPasswordChange(!passwordMode, form.getFieldValue('email').trim())
-              }
-              className={cn(
-                'text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm underline-offset-4 hover:underline',
-                AUTH_CONTROL,
-              )}
-            >
-              {passwordMode ? t('auth:start.useCode') : t('auth:start.usePassword')}
-              <LastUsed show={!passwordMode && lastMethod === 'password'} />
-            </button>
+            {!passwordOnly && (
+              <button
+                type="button"
+                onClick={() =>
+                  onPasswordChange(!passwordMode, form.getFieldValue('email').trim())
+                }
+                className={cn(
+                  'text-muted-foreground hover:text-foreground inline-flex items-center gap-2 text-sm underline-offset-4 hover:underline',
+                  AUTH_CONTROL,
+                )}
+              >
+                {passwordMode ? t('auth:start.useCode') : t('auth:start.usePassword')}
+                <LastUsed show={!passwordMode && lastMethod === 'password'} />
+              </button>
+            )}
           </div>
         </CardFooter>
       </form>

@@ -74,8 +74,17 @@ together):
 pnpm dev
 ```
 
-Then open **http://localhost:3000** and create your first account. The first
-user across the deployment becomes `superAdmin: true` automatically.
+Then open **http://localhost:3000** and create your first account. To be the
+super-admin (`/app/admin`), name your address on the Convex deployment
+**before** signing up:
+
+```bash
+pnpm exec convex env set SUPER_ADMIN_EMAIL you@example.com
+```
+
+Unset, nobody is promoted — never "whoever signs up first". An existing
+account keeps its flag either way; `pnpm run setup:prod` mirrors the variable
+to prod.
 
 ## Day 1 — GitHub repo settings
 

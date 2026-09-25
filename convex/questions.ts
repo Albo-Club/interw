@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values'
 
 import { mutation } from './_generated/server'
+import { internal } from './_generated/api'
 import { requireProjectEditable } from './lib/projectAccess'
 import type { GenericMutationCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -167,6 +168,15 @@ export const remove = mutation({
     const question = await loadQuestionForEdit(ctx, questionId)
     await requireNoSessions(ctx, question.projectId)
     await ctx.db.delete('questions', questionId)
+    // The recruiter's takes go with the question: once its row is gone,
+    // nothing names them. Same shape as `media.clearQuestionMedia`.
+    const keys = [
+      question.mediaKey,
+      ...(question.pendingMediaKeys ?? []),
+    ].filter((key): key is string => key !== undefined)
+    if (keys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
+    }
 
     // Close the gap so indexes stay 0..n-1: the candidate engine walks them by
     // position, and a hole would end the interview early.

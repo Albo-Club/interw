@@ -84,7 +84,7 @@ const keyFor = (s: Seed, name: string) =>
   `orgs/${s.orgId}/sessions/${s.sessionId}/${name}`
 
 /**
- * `attachDocument` deletes the object it replaced. `resolveDocumentUpload`
+ * `attachDocument` deletes the object it replaced. `reserveDocumentUpload`
  * checks the gate and whether the field is even asked for; `swapDocumentKey`,
  * which is what actually rewrites the row, checked neither — so anyone still
  * holding the link could point `cvKey` at a name that does not exist and
@@ -211,5 +211,83 @@ describe('requesting a document slot', () => {
     })
     expect(Object.keys(slot).sort()).toEqual(['contentType', 'uploadUrl'])
     expect(slot.contentType).toBe('application/pdf')
+  })
+})
+
+// Fingerprint: convex/candidate.ts:requestDocumentUpload:signed-before-named
+// A slot signed a PUT before any row named its key. A CV uploaded and never
+// attached — a closed tab, a dropped connection — or attached under another
+// type was named nowhere, so erasure could not find it and the candidate was
+// told everything was deleted.
+describe('a document slot is named before the upload', () => {
+  let t: ReturnType<typeof newTest>
+  let s: Seed
+  let deleted: Array<string>
+
+  beforeEach(async () => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+    vi.stubEnv('PURGE_HASH_SALT', 'test-salt')
+    deleted = []
+    vi.spyOn(await import('./lib/objectStore'), 'deleteObjects').mockImplementation(
+      (keys: Array<string>) => {
+        deleted.push(...keys)
+        return Promise.resolve()
+      },
+    )
+    t = newTest()
+    s = await seed(t)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  const requestSlot = (mimeType: string) =>
+    t.action(api.candidate.requestDocumentUpload, {
+      token: TOKEN,
+      kind: 'cv',
+      mimeType,
+      contentLength: 1_000,
+    })
+  const named = async () =>
+    (await t.query(internal.purge.collectSessionObjects, {
+      sessionId: s.sessionId,
+    }))!.keys.sort()
+
+  it('is erased even if it is never attached', async () => {
+    await requestSlot(DOCX)
+    await t.action(api.candidate.deleteMyData, { token: TOKEN })
+    expect(deleted).toContain(keyFor(s, 'cv.docx'))
+  })
+
+  it('stays named when attached under another type', async () => {
+    await requestSlot('application/msword')
+    await t.action(api.candidate.attachDocument, {
+      token: TOKEN,
+      kind: 'cv',
+      mimeType: DOCX,
+    })
+    expect(await named()).toEqual(
+      [keyFor(s, 'cv.doc'), keyFor(s, 'cv.docx')].sort(),
+    )
+    await t.action(api.candidate.deleteMyData, { token: TOKEN })
+    expect(deleted).toContain(keyFor(s, 'cv.doc'))
+  })
+
+  it('is named once, by the row, once attached', async () => {
+    await requestSlot(DOCX)
+    await t.action(api.candidate.attachDocument, {
+      token: TOKEN,
+      kind: 'cv',
+      mimeType: DOCX,
+    })
+    // The replaced CV was deleted by the attach; the new one is `cvKey`.
+    expect(deleted).toEqual([keyFor(s, 'cv.pdf')])
+    expect(await named()).toEqual([keyFor(s, 'cv.docx')])
   })
 })

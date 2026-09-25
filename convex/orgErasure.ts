@@ -206,7 +206,11 @@ export const projectBatch = internalQuery({
           .collect()
         const keys = [
           project.introMediaKey,
-          ...questions.map((question) => question.mediaKey),
+          ...(project.pendingMediaKeys ?? []),
+          ...questions.flatMap((question) => [
+            question.mediaKey,
+            ...(question.pendingMediaKeys ?? []),
+          ]),
         ].filter((key): key is string => key !== undefined)
         return { projectId: project._id, keys }
       }),

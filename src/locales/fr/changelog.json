@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "candidate-emails-job-title": {
+      "title": "Les e-mails aux candidats ne nomment le poste que par son intitulé",
+      "body": "L’invitation et la confirmation que reçoit un candidat ne désignent plus le poste que par l’intitulé affiché au candidat. Un poste sans intitulé est présenté comme un entretien avec votre organisation, jamais sous le nom que votre équipe lui donne. Nous avons aussi renforcé le suivi des fichiers envoyés, pour que supprimer un candidat, une question ou un poste supprime chacun des fichiers qui lui appartiennent, et renforcé la protection du lien d’entretien du candidat."
+    },
     "assistant-history-purged": {
       "title": "Anciennes conversations avec l’assistant supprimées",
       "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."

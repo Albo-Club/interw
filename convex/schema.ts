@@ -312,6 +312,10 @@ export default defineSchema({
     /** Retired with the `text` intro mode: written and read by nothing. */
     introText: v.optional(v.string()),
     introMediaKey: v.optional(v.string()),
+    /** Intro keys an upload slot was signed for and no attach has claimed
+     *  yet, named before the PUT so deletion can find them. At most one per
+     *  accepted type. See `reserveIntroUpload`. */
+    pendingMediaKeys: v.optional(v.array(v.string())),
     maxDurationMinutes: v.number(),
     candidateFields: candidateFieldsValidator,
     expiresAt: v.optional(v.number()),
@@ -345,6 +349,8 @@ export default defineSchema({
     /** Recruiter-recorded prompt. The AI never speaks: it evaluates. */
     mediaKey: v.optional(v.string()),
     mediaKind: v.optional(mediaKindValidator),
+    /** Prompt keys signed and not yet attached; see `reserveQuestionUpload`. */
+    pendingMediaKeys: v.optional(v.array(v.string())),
     hintText: v.optional(v.string()),
     maxResponseSeconds: v.number(),
   })
@@ -380,6 +386,10 @@ export default defineSchema({
     candidateLinkedin: v.optional(v.string()),
     cvKey: v.optional(v.string()),
     coverLetterKey: v.optional(v.string()),
+    /** Document keys an upload slot was signed for and no attach has claimed
+     *  yet, written before the PUT is signed so erasure can name them. At
+     *  most one per kind and accepted type. See `reserveDocumentUpload`. */
+    pendingDocumentKeys: v.optional(v.array(v.string())),
     status: sessionStatusValidator,
     consentAcceptedAt: v.optional(v.number()),
     startedAt: v.optional(v.number()),

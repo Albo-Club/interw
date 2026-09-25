@@ -408,8 +408,13 @@ staging and production"). Vercel installs with the pnpm named in
 ```
 DEPLOY_CONVEX=true  →  npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL \
                                           --cmd 'pnpm build:app'
-otherwise           →  pnpm build:app          (vite build && tsc --noEmit)
+otherwise           →  pnpm build:app          (vite build)
 ```
+
+`build:app` does not type-check: `pnpm lint` runs `tsc`, and running it twice
+cost ~20 s of every CI run for nothing new. The consequence is that a type
+error no longer fails a Vercel build — CI's `check` job is the gate, so a
+branch that deploys must be one whose CI is green.
 
 So every push to an environment's branch **also** deploys Convex functions
 and schema in lockstep. You should never run `pnpm exec convex deploy --prod`
@@ -1001,7 +1006,8 @@ audit.
 - **Super-admin lacks impersonate** — out of scope for MVP, needs a careful
   session-signing flow.
 - **Sentry only on the front-end** — Convex Dashboard logs cover errors;
-  Sentry-on-Convex would need a fetch-to-envelope helper.
+  Sentry-on-Convex would need a fetch-to-envelope helper. What the front-end
+  sends is in § "Sentry collects errors only".
 
 ## Color theme picker SSR flash
 
@@ -2466,3 +2472,59 @@ a Vitest run — the CSS pipeline claims `.css` before the raw loader does. A
 test that asserts on stylesheet source reads it with `readFileSync` instead
 (`src/styles/design-pass.test.ts`). `.ts`/`.tsx` sources glob fine.
 
+## Sentry collects errors only
+
+Decided in audit T15: `src/lib/sentry.ts` registers no tracing, no replay and
+uploads no source maps. `tracesSampleRate` was removed because nothing read it
+— `browserTracingIntegration()` is not among `@sentry/react`'s defaults, so the
+option only suggested a performance view that never existed.
+`beforeSendTransaction` stays although it is inert today: whoever turns
+tracing on must not be the one who ships `/s/<token>` in transaction names.
+
+What that costs: a crash report, `InterviewCrash` included, arrives with a
+minified stack. Turning that around is three changes that go together —
+`build.sourcemap: 'hidden'` in `vite.config.ts`, `@sentry/vite-plugin` with a
+`SENTRY_AUTH_TOKEN` in the Vercel build, and deleting the maps from
+`.output/public` after upload so they are never served. Replay is a separate
+decision, and not a configuration one: on `/s/**` it would film a candidate's
+interview screen for a third party.
+
+## `pnpm audit` in CI: an override, or a lockfile refresh
+
+CI runs `pnpm audit --prod --audit-level=high`. `--prod` is less of a filter
+than it sounds: `@tanstack/react-start` is a runtime dependency, so its whole
+build chain (vite, postcss, babel, browserslist) counts. When the step goes
+red, in order:
+
+1. **The patched version is already inside the parent's range** — refresh
+   the lockfile for that package only:
+   `pnpm update --depth Infinity <pkg>`. `package.json` does not change. This
+   is how js-yaml, nanoid, postcss and browserslist were cleared.
+2. **The parent pins a vulnerable range** — add a `pnpm.overrides` entry in
+   `package.json` (never in `pnpm-workspace.yaml`, see § "pnpm 11 silently drops
+   `pnpm.overrides` and `onlyBuiltDependencies`"). Use a caret on the patched version (`^8.21.0`), not
+   `>=`: `>=` lets a future install jump the parent onto a new major it was
+   never built against. `ws` (via `convex`) and `dompurify` (via
+   `streamdown` → `mermaid`) are overridden this way; both reach users.
+
+Moderate and low advisories do not fail the step; Renovate clears most of
+them with their parents.
+
+## The candidate bundle budget reads the start manifest
+
+`pnpm bundle:budget` (after `pnpm build:app`; in CI after `pnpm build`) fails
+above 270 KiB gzip for what `/s/$token/interview` loads: the preloads TanStack
+Start lists for `__root__`, `/s/$token` and `/s/$token/interview` in
+`.output/server/_tanstack-start-manifest*.mjs`, plus their static imports.
+Lazy `import()` chunks are not counted.
+
+- **It was 265.2 KiB when the budget was set** — 4.8 KiB of headroom. The
+  shared entry chunk alone is ~148 KiB (Convex client, Better Auth client,
+  sonner). A change that crosses the line has to pay for itself, or move
+  something recruiter-only out of `~/lib/*`; raising the number is the last
+  resort and needs a reason in the PR.
+- **KiB, 1024 bytes.** Vite prints kB of 1000 bytes: the same build reads
+  271.6 kB there.
+- **A TanStack Start bump can rename or reshape the manifest.** The script
+  then fails loudly ("no start manifest", "route … is missing") rather than
+  measuring nothing — read the new manifest, don't delete the step.

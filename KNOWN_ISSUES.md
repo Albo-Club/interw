@@ -664,6 +664,21 @@ back into real bytes. The one thing that would break it is moving the pnpm
 store off the workspace volume: `clonefile()` cannot cross volumes, and the
 275 MB would become 6.8 GB overnight.
 
+## Agent worktrees sit inside the repository
+
+Claude Code checks each agent out under `.claude/worktrees/<name>/` — a full
+copy of the repository, inside it. Two globs then reach every copy: `tsc`'s
+`include: ["**/*.ts", …]` and `eslint .`. With a handful of agents running,
+`pnpm lint` in the main checkout linted every one of them and ran out of
+memory, and `tsc` reported each type error once per copy.
+
+Both ignore the directory now (`globalIgnores` in `eslint.config.mjs`,
+`exclude` in `tsconfig.json`). The trap in the second: setting `exclude`
+**replaces** TypeScript's default instead of extending it, so `node_modules`
+has to be listed again or `tsc` walks into it. Vitest is unaffected — its
+`include` is rooted at `src/` and `convex/`. A new tool that globs from the
+repository root needs the same exclusion.
+
 ## Convex skills were pruned — do not re-vendor them
 
 We vendored 6 Convex skills. **5 were removed; only `convex-create-component`

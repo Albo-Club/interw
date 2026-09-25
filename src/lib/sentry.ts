@@ -34,12 +34,11 @@ export function initSentry() {
     dsn,
     environment: (import.meta as { env: Record<string, string | undefined> })
       .env.MODE,
-    tracesSampleRate: 0.1,
     beforeSend: scrubAccessTokens,
-    beforeSendTransaction: scrubAccessTokens,
-    // No session replay, and no replay options: recording the DOM of an
-    // interview screen (candidate name, questions) would ship it to a third
-    // party. Adding `replayIntegration()` is a GDPR decision, not a config tweak.
+    // Errors only: no tracing, no replay, no source maps — see KNOWN_ISSUES.md
+    // § "Sentry collects errors only". Recording the DOM of an interview
+    // screen would ship it to a third party, so adding `replayIntegration()`
+    // is a GDPR decision, not a config tweak.
   })
   initialized = true
 }

@@ -179,14 +179,20 @@ export const cascadeDelete = internalMutation({
       .unique()
     if (prefs) await ctx.db.delete('userPrefs', prefs._id)
 
-    try {
-      await release(ctx, appUser.avatarStorageId, appUser._id)
-    } catch (error) {
-      // Storage may already be gone; the account deletion must not fail on it.
-      console.warn('[cascade-delete] avatar_release_failed', {
-        userId: appUser._id,
-        error: String(error),
-      })
+    // Objects before rows: a failed delete aborts the whole mutation, so the
+    // row survives to name the blob and the next attempt retries it. A blob
+    // that is already gone has nothing left to delete and is skipped.
+    const avatarId = appUser.avatarStorageId
+    if (avatarId && (await ctx.db.system.get('_storage', avatarId))) {
+      try {
+        await release(ctx, avatarId, appUser._id)
+      } catch (error) {
+        console.error('[cascade-delete] avatar_release_failed', {
+          userId: appUser._id,
+          error: String(error),
+        })
+        throw error
+      }
     }
 
     await ctx.db.delete("users", appUser._id)

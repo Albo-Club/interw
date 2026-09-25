@@ -954,6 +954,26 @@ describe('storage handles', () => {
     expect(await blobExists(avatarId)).toBe(false)
   })
 
+  it('still deletes the account when its avatar blob is already gone', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    await as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+      storageId: avatarId,
+    })
+    await t.run((ctx) => ctx.storage.delete(avatarId))
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_acmeMember'))
+        .unique(),
+    )
+    expect(row).toBeNull()
+  })
+
   it('keeps the blob when an avatar is re-attached', async () => {
     const avatarId = await t.run(async (ctx) =>
       ctx.storage.store(new Blob(['avatar'])),

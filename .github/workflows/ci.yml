@@ -8,19 +8,34 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned by commit SHA, the tag it resolved to alongside: a tag
+# can be moved to other code, a SHA cannot. Renovate bumps both together.
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A newer push to the same PR makes this run moot. Set on the job, not the
+    # workflow: a workflow-level group would also cancel e2e halfway through
+    # its staging deploy, which e2e's own group exists to prevent. Never on
+    # main, so every merged commit keeps its result.
+    concurrency:
+      group: check-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # No `version:` — the action reads `packageManager` from package.json,
       # so CI, Corepack and Vercel all resolve the same pnpm. Never re-pin here.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Runtime dependencies only: build-chain advisories do not reach a user.
+      # Red → an override in package.json `pnpm.overrides`, or a lockfile
+      # refresh when a patched version is already in range (KNOWN_ISSUES.md).
+      - run: pnpm audit --prod --audit-level=high
       # Catches a Convex module added without its codegen committed — CI has
       # no deployment, so `npx convex dev` cannot do it here.
       - run: pnpm codegen:api:check
@@ -31,6 +46,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # Fails above 270 KiB gzip on the candidate interview screen.
+      - run: pnpm bundle:budget
 
   # The candidate interview in real browsers (e2e/interview.spec.ts), Chromium
   # and WebKit, on fake camera and microphone. Its only backend is staging, so
@@ -41,6 +58,7 @@ jobs:
   e2e:
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     concurrency:
       group: e2e-staging
       cancel-in-progress: false
@@ -49,9 +67,9 @@ jobs:
       VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
       MEDIA_ORIGIN: ${{ secrets.MEDIA_ORIGIN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -69,7 +87,7 @@ jobs:
       - run: pnpm test:e2e
       # The report carries the recording-screen captures and, on failure, the
       # trace.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: playwright-report
@@ -87,9 +105,10 @@ jobs:
   # `--force` needed), then review the diff — see CLAUDE.md.
   skills-verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - run: node scripts/sync-skills.mjs --verify
@@ -101,9 +120,10 @@ jobs:
   # the SKILL.md diff, commit. Don't mute the check — see CLAUDE.md.
   skills-drift:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - run: node scripts/sync-skills.mjs --check

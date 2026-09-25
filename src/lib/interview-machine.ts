@@ -266,3 +266,11 @@ export function interviewReducer(
         : state
   }
 }
+
+/**
+ * An answer exists on this page and not on the server: leaving now loses it.
+ * `saveFailed` counts — the bytes wait there for "Try again".
+ */
+export function answerAtRisk(phase: Phase): boolean {
+  return phase === 'recording' || phase === 'saving' || phase === 'saveFailed'
+}

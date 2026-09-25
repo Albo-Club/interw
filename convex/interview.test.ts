@@ -716,24 +716,25 @@ describe('the completion email', () => {
   })
 })
 
-describe('the browser test fixtures', () => {
-  it('seed a fresh open session each time, on one org', async () => {
+// Cand M12: leaving mid-answer disposed the recorder and told no one.
+describe('an answer abandoned on the page', () => {
+  it('is recorded in the session journal', async () => {
     const t = newTest()
-    const first = await t.mutation(internal.interview.seedE2eSession, {})
-    const second = await t.mutation(internal.interview.seedE2eSession, {})
-    expect(first.token).not.toBe(second.token)
-
-    const landing = await t.query(api.candidate.landing, {
-      token: second.token,
-      now: Date.now(),
+    const s = await seedStarted(t)
+    await t.mutation(api.interview.logEvent, {
+      token: s.token,
+      kind: 'recording_abandoned',
+      detail: 'unsent',
     })
-    expect(landing.gate.state).toBe('ready')
-    const orgs = await t.run((ctx) => ctx.db.query('organizations').collect())
-    expect(orgs).toHaveLength(1)
-    expect(
-      await t.query(internal.interview.e2eSessionState, {
-        token: second.token,
-      }),
-    ).toEqual({ status: 'pending', uploadedSegments: 0 })
+    const events = await t.run((ctx) =>
+      ctx.db
+        .query('sessionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(events.at(-1)).toMatchObject({
+      kind: 'recording_abandoned',
+      detail: 'unsent',
+    })
   })
 })

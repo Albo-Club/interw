@@ -24,9 +24,11 @@ import {
   candidateTouchTargets,
 } from '~/components/candidate/CandidateShell'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/privacy')({
   component: CandidatePrivacy,
+  head: () => candidateHead('privacy'),
 })
 
 function CandidatePrivacy() {

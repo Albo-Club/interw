@@ -140,6 +140,8 @@ export const sessionEventKindValidator = v.union(
   v.literal('network_degraded'),
   v.literal('interview_resumed'),
   v.literal('render_error'),
+  /** The candidate left the page with an answer recorded but not sent. */
+  v.literal('recording_abandoned'),
 )
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  answerAtRisk,
   initialInterviewState,
   interviewReducer,
   nextOpenQuestion,
@@ -321,5 +322,28 @@ describe('events out of place', () => {
     ] as const) {
       expect(interviewReducer(prompt, event)).toBe(prompt)
     }
+  })
+})
+
+/** Cand M12: `saveFailed` holds unsent bytes and was left unguarded. */
+describe('answerAtRisk', () => {
+  it('guards every phase where an answer is on the page and not on the server', () => {
+    const phases = [
+      'loading',
+      'intro',
+      'prompt',
+      'recording',
+      'saving',
+      'saveFailed',
+      'recordingLost',
+      'review',
+      'finishing',
+      'finishFailed',
+    ] as const
+    expect(phases.filter(answerAtRisk)).toEqual([
+      'recording',
+      'saving',
+      'saveFailed',
+    ])
   })
 })

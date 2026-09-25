@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useBlocker, useNavigate } from '@tanstack/react-router'
 import {
   useConvexAction,
   useConvexMutation,
@@ -27,6 +27,7 @@ import { openInterviewStream } from '~/lib/media/devices'
 import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
 import { uploadToSignedUrl } from '~/lib/media/upload'
 import {
+  answerAtRisk,
   initialInterviewState,
   interviewReducer,
   opensOnIntro,
@@ -40,6 +41,7 @@ import { CameraPreview } from '~/components/candidate/CameraPreview'
 import { PromptMedia } from '~/components/candidate/PromptMedia'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 type DeviceChoice = { camera?: string; mic?: string }
 type EventKind = FunctionArgs<typeof api.interview.logEvent>['kind']
@@ -51,6 +53,7 @@ export const Route = createFileRoute('/s/$token/interview')({
     mic: typeof search.mic === 'string' ? search.mic : undefined,
   }),
   component: InterviewRunner,
+  head: () => candidateHead('interview'),
 })
 
 /** The countdown appears for the last 30 seconds, never before. */
@@ -133,13 +136,16 @@ function InterviewRunner() {
     }
   }, [log])
 
-  /* ── Closing the tab mid-upload loses the answer, so say so. ───────────── */
-  useEffect(() => {
-    if (state.phase !== 'saving' && state.phase !== 'recording') return
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [state.phase])
+  /* ── Leaving while an answer is on this page and not on the server loses
+        it: closing the tab, reloading, or the Back button. The router's
+        blocker covers both kinds of exit, and sets `returnValue` on unload,
+        which Safari still needs before it will ask. ───────────────────────── */
+  const atRisk = answerAtRisk(state.phase)
+  useBlocker({
+    shouldBlockFn: () => !window.confirm(t('interview:run.leaveConfirm')),
+    enableBeforeUnload: atRisk,
+    disabled: !atRisk,
+  })
 
   /* ── One camera acquisition for the interview, reopened only if a track
         died: re-requesting between questions makes the preview flicker and,
@@ -170,6 +176,16 @@ function InterviewRunner() {
     preview.srcObject = stream
     fireAndForget(preview.play(), 'camera preview autoplay')
   }, [preview, stream])
+
+  // Left anyway: the answer is gone, but the journal says it existed, so a
+  // missing answer does not read as a skipped one.
+  useEffect(
+    () => () => {
+      if (recorderRef.current) log('recording_abandoned', 'recording')
+      else if (recordingRef.current) log('recording_abandoned', 'unsent')
+    },
+    [log],
+  )
 
   useEffect(() => {
     return () => {

@@ -2,21 +2,26 @@ import * as Sentry from '@sentry/react'
 
 let initialized = false
 
-/** A candidate's link, `/s/<token>`: the token opens their interview. */
-const CANDIDATE_PATH = /\/s\/[A-Za-z0-9_-]+/g
+/**
+ * A candidate's link, `/s/<token>`, and a report share link, `/r/<token>`:
+ * each token opens what it names to whoever holds it.
+ */
+const TOKEN_PATH = /\/([sr])\/[A-Za-z0-9_-]+/g
 
 /**
- * Mask every candidate token in an event before it leaves the browser.
+ * Mask every candidate and share token in an event before it leaves the
+ * browser.
  *
- * The token is a path segment, not a query parameter, so no default scrubbing
- * touches it — and it grants read AND write on the candidate's session,
- * `deleteMyData` included. It sat in `request.url`, in navigation and fetch
- * breadcrumbs, and in transaction names. Rewriting the serialised event
+ * The tokens are path segments, not query parameters, so no default scrubbing
+ * touches them. A candidate token grants read AND write on the candidate's
+ * session, `deleteMyData` included; a share token opens a report and signs
+ * URLs on the candidate's video. They sat in `request.url`, in navigation and
+ * fetch breadcrumbs, and in transaction names. Rewriting the serialised event
  * catches all of them, including fields added by a future integration.
  */
-export function scrubCandidateTokens<T>(event: T): T {
+export function scrubAccessTokens<T>(event: T): T {
   return JSON.parse(
-    JSON.stringify(event).replace(CANDIDATE_PATH, '/s/[token]'),
+    JSON.stringify(event).replace(TOKEN_PATH, '/$1/[token]'),
   ) as T
 }
 
@@ -30,10 +35,11 @@ export function initSentry() {
     environment: (import.meta as { env: Record<string, string | undefined> })
       .env.MODE,
     tracesSampleRate: 0.1,
-    beforeSend: scrubCandidateTokens,
-    beforeSendTransaction: scrubCandidateTokens,
-    replaysOnErrorSampleRate: 1.0,
-    replaysSessionSampleRate: 0,
+    beforeSend: scrubAccessTokens,
+    beforeSendTransaction: scrubAccessTokens,
+    // No session replay, and no replay options: recording the DOM of an
+    // interview screen (candidate name, questions) would ship it to a third
+    // party. Adding `replayIntegration()` is a GDPR decision, not a config tweak.
   })
   initialized = true
 }

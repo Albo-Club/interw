@@ -16,6 +16,7 @@ import type * as chat from "../chat.js";
 import type * as criteria from "../criteria.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
+import type * as e2e from "../e2e.js";
 import type * as email from "../email.js";
 import type * as emailEvents from "../emailEvents.js";
 import type * as emailTemplates from "../emailTemplates.js";
@@ -82,6 +83,7 @@ declare const fullApi: ApiFromModules<{
   criteria: typeof criteria;
   crons: typeof crons;
   dashboard: typeof dashboard;
+  e2e: typeof e2e;
   email: typeof email;
   emailEvents: typeof emailEvents;
   emailTemplates: typeof emailTemplates;

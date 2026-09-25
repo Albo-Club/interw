@@ -69,6 +69,21 @@ describe('detectBrowserSupport', () => {
   it('survives being handed nothing at all', () => {
     expect(detectBrowserSupport({}).usable).toBe(false)
   })
+
+  // F3: over plain HTTP the camera API is hidden, and "use another browser"
+  // sends the candidate the wrong way.
+  it('tells an insecure page apart from an old browser', () => {
+    const plainHttp = {
+      ...chrome,
+      navigator: { userAgent: 'Chrome/120' },
+      isSecureContext: false,
+    }
+    expect(detectBrowserSupport(plainHttp)).toMatchObject({
+      usable: false,
+      insecureContext: true,
+    })
+    expect(detectBrowserSupport(chrome as never).insecureContext).toBe(false)
+  })
 })
 
 describe('levelFromTimeDomain', () => {

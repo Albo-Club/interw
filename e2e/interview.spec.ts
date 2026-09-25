@@ -35,7 +35,7 @@ test('a candidate records two answers, gets through a failed upload, and finishe
   page,
 }) => {
   const { token } = convexRun<{ token: string }>(
-    'interview:seedE2eSession',
+    'e2e:seedE2eSession',
     {},
   )
   try {
@@ -81,7 +81,7 @@ test('a candidate records two answers, gets through a failed upload, and finishe
       page.getByRole('heading', { name: "That's it — thank you" }),
     ).toBeVisible()
 
-    expect(convexRun('interview:e2eSessionState', { token })).toEqual({
+    expect(convexRun('e2e:e2eSessionState', { token })).toEqual({
       status: 'completed',
       uploadedSegments: 2,
     })

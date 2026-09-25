@@ -51,6 +51,12 @@
     "notAnswered": "No answer recorded",
     "uploadFailed": "The candidate recorded an answer, but it never reached us. This is a technical failure on our side, not a skipped question."
   },
+  "player": {
+    "loading": "Loading the answer…",
+    "loadingPercent": "Loading the answer… {{percent}}%",
+    "playAt": "Play from {{time}}",
+    "failed": "This answer could not be loaded. Reload the page to try again."
+  },
   "note": {
     "placeholder": "What you thought, what to ask next time…",
     "hint": "Only your team sees this. The candidate never does.",

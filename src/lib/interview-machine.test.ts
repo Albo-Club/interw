@@ -89,6 +89,37 @@ describe('resuming after a failed answer', () => {
   })
 })
 
+describe('an answer recovered after a reload', () => {
+  it('is sent straight away, and announced once it lands', () => {
+    const sending = run([boot(1), { type: 'recovered' }])
+    expect(sending).toMatchObject({ phase: 'saving', index: 1 })
+    const saved = run(
+      [{ type: 'saved', answered: [true, false, false, false], videoLost: false }],
+      sending,
+    )
+    expect(saved).toMatchObject({ phase: 'prompt', index: 2, stopReason: 'recovered' })
+  })
+
+  it('is sent even from the intro', () => {
+    expect(run([boot(0, 4, true), { type: 'recovered' }]).phase).toBe('saving')
+  })
+
+  it('offers the usual retry when it does not get through', () => {
+    const failed = run([
+      boot(0),
+      { type: 'recovered' },
+      { type: 'saveFailed', error: 'interview:errors.network' },
+    ])
+    expect(failed.phase).toBe('saveFailed')
+    expect(run([{ type: 'retry' }], failed).phase).toBe('saving')
+  })
+
+  it('is ignored mid-recording', () => {
+    const recording = run([boot(0), { type: 'recordingStarted' }])
+    expect(run([{ type: 'recovered' }], recording)).toBe(recording)
+  })
+})
+
 describe('recording', () => {
   it('clears the previous answer’s notices when a new one starts', () => {
     const state = run([

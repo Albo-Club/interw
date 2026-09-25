@@ -35,7 +35,6 @@ const ALLOWED_RECORDING_TYPES = [
   'video/mp4',
   'audio/webm',
   'audio/mp4',
-  'audio/mpeg',
 ]
 
 /** ~2 minutes of 720p WebM leaves plenty of headroom. */

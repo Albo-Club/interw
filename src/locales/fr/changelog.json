@@ -7,7 +7,7 @@
   "entries": {
     "assistant-history-purged": {
       "title": "Anciennes conversations avec l’assistant supprimées",
-      "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures au 24 septembre ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
+      "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
     },
     "delete-organization": {
       "title": "Supprimer une organisation",

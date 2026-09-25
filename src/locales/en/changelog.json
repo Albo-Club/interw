@@ -7,7 +7,7 @@
   "entries": {
     "assistant-history-purged": {
       "title": "Older assistant conversations deleted",
-      "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before 24 September have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."
+      "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."
     },
     "delete-organization": {
       "title": "Delete an organization",

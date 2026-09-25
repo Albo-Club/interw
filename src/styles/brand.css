@@ -30,6 +30,8 @@
   --color-info-subtle: var(--info-subtle);
   --color-info-strong: var(--info-strong);
   --color-border: var(--border);
+  --color-stage: var(--stage);
+  --color-stage-foreground: var(--stage-foreground);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-chart-1: var(--chart-1);
@@ -101,6 +103,11 @@
   --info-subtle: oklch(0.962 0.028 244.1);
   --info-strong: oklch(0.495 0.118 244.1);
   --border: oklch(0.922 0 0);
+  /* The candidate interview's video stage. Dark in both modes: it is the
+     letterbox around a recruiter's video and a candidate's camera, and the
+     captions laid over them read against it. */
+  --stage: oklch(0.2 0 0);
+  --stage-foreground: oklch(0.985 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.585 0.204 277.1);
   --chart-1: oklch(0.585 0.204 277.1);

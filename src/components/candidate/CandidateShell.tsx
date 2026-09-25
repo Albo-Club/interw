@@ -24,31 +24,43 @@ export const candidateTouchTargets =
  */
 export function CandidateShell({
   organisationName,
+  logoUrl,
   children,
   privacyToken,
   width = 'narrow',
 }: {
   organisationName?: string
+  logoUrl?: string | null
   children: ReactNode
   /** Links the footer to this candidate's data page. */
   privacyToken?: string
-  width?: 'narrow' | 'wide'
+  /** `stage` is the interview: exactly one screen tall, never scrolled, so
+   *  the video and the one button that ends an answer are always in view. */
+  width?: 'narrow' | 'wide' | 'stage'
 }) {
   const { t } = useTranslation('interview')
+  const column = width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl'
   return (
     <div
       className={cn(
-        'bg-background flex min-h-svh flex-col',
+        'bg-background flex flex-col',
+        width === 'stage' ? 'h-svh' : 'min-h-svh',
         candidateTouchTargets,
       )}
     >
       <header className="border-b">
         <div
-          className={cn(
-            'mx-auto flex h-14 items-center px-4',
-            width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
-          )}
+          className={cn('mx-auto flex h-14 items-center gap-3 px-4', column)}
         >
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt=""
+              width={24}
+              height={24}
+              className="size-6 rounded-sm object-contain"
+            />
+          )}
           <span className="text-sm font-semibold tracking-tight">
             {organisationName ?? 'interw'}
           </span>
@@ -57,8 +69,9 @@ export function CandidateShell({
 
       <main
         className={cn(
-          'mx-auto w-full flex-1 px-4 py-10',
-          width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
+          'mx-auto w-full flex-1 px-4',
+          width === 'stage' ? 'flex min-h-0 flex-col py-4' : 'py-10',
+          column,
         )}
       >
         {children}
@@ -69,7 +82,7 @@ export function CandidateShell({
           <div
             className={cn(
               'text-muted-foreground mx-auto px-4 py-6 text-xs',
-              width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
+              column,
             )}
           >
             <Link

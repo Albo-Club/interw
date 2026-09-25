@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "interview-stage": {
+      "title": "A calmer, video-first interview for your candidates",
+      "body": "Each question now fills one screen, like a video call: your recorded question plays on its own, with the candidate's camera in the corner to check their framing, and once they answer their camera takes the whole screen with the question kept as a caption. Time left is always visible, and your logo now appears at the top of every candidate page."
+    },
     "invitations-hardening": {
       "title": "Team invitations tightened",
       "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."

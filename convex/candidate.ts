@@ -45,6 +45,7 @@ import {
 } from './lib/candidateReturns'
 import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
+import { resolveLogoUrl } from './lib/storage'
 import { looksLikeToken } from './lib/tokens'
 import {
   candidateDocumentKey,
@@ -109,6 +110,7 @@ export const landing = query({
   // at the boundary. See convex/lib/candidateReturns.ts.
   returns: v.object({
     organisationName: v.string(),
+    organisationLogoUrl: v.union(v.string(), v.null()),
     session: candidateSessionReturns,
     project: candidateProjectReturns,
     gate: sessionGateReturns,
@@ -119,6 +121,7 @@ export const landing = query({
 
     return {
       organisationName: org.name,
+      organisationLogoUrl: await resolveLogoUrl(ctx, org),
       session: toCandidateSessionView(session),
       project: toCandidateProjectView(project, progress.questions.length),
       gate: {

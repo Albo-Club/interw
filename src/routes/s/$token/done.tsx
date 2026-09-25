@@ -31,7 +31,10 @@ function InterviewDone() {
   }
 
   return (
-    <CandidateShell organisationName={data.organisationName}>
+    <CandidateShell
+      organisationName={data.organisationName}
+      logoUrl={data.organisationLogoUrl}
+    >
       <div className="space-y-8">
         <div className="space-y-3">
           <CheckCircle2 className="text-success size-10" />

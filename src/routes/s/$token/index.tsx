@@ -121,6 +121,7 @@ function CandidateWelcome() {
   return (
     <CandidateShell
       organisationName={data.organisationName}
+      logoUrl={data.organisationLogoUrl}
       privacyToken={token}
     >
       <div className="space-y-10">

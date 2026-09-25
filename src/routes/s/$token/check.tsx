@@ -165,6 +165,7 @@ function DeviceCheck() {
   return (
     <CandidateShell
       organisationName={data.organisationName}
+      logoUrl={data.organisationLogoUrl}
       privacyToken={token}
     >
       <div className="space-y-8">

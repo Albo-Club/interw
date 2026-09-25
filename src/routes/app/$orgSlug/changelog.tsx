@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 
-import { CHANGELOG_ENTRIES } from '~/lib/changelog'
+import { CHANGELOG_ENTRIES, entryCopy } from '~/lib/changelog'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
@@ -21,8 +21,8 @@ export const Route = createFileRoute('/app/$orgSlug/changelog')({
 /**
  * Full "What's new" page: the complete release history, newest first. The
  * sidebar dialog shows a short preview and links here. Entries come from
- * CHANGELOG_ENTRIES (metadata) with bilingual copy resolved from the
- * `changelog` i18n namespace, keyed by `id`.
+ * CHANGELOG_ENTRIES (metadata) with bilingual copy from `entryCopy`, keyed
+ * by `id`.
  */
 function ChangelogPage() {
   const { t, i18n } = useTranslation('changelog')
@@ -49,10 +49,10 @@ function ChangelogPage() {
               {formatDate(entry.date)}
             </p>
             <h2 className="text-base font-semibold">
-              {t(`entries.${entry.id}.title`)}
+              {entryCopy(entry.id, i18n.language).title}
             </h2>
             <p className="text-foreground/90 text-sm leading-relaxed">
-              {t(`entries.${entry.id}.body`)}
+              {entryCopy(entry.id, i18n.language).body}
             </p>
           </article>
         ))}

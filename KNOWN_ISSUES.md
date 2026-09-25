@@ -2902,16 +2902,20 @@ is argued in the PR body, and its advisory id recorded here.
 ## The candidate bundle budget reads the start manifest
 
 `pnpm bundle:budget` (after `pnpm build:app`; in CI after `pnpm build`) fails
-above 280 KiB gzip for what `/s/$token/interview` loads: the preloads TanStack
+above 270 KiB gzip for what `/s/$token/interview` loads: the preloads TanStack
 Start lists for `__root__`, `/s/$token` and `/s/$token/interview` in
 `.output/server/_tanstack-start-manifest*.mjs`, plus their static imports.
 Lazy `import()` chunks are not counted.
 
-- **Raised from 270 to 280 KiB on 2026-09-25**, when the audit stack met #38
-  (crash-safe takes in IndexedDB, wake lock, live mic check): 275.8 KiB, all
-  of it candidate-facing features. The reduction is its own task — load i18n
-  namespaces per route (`i18n` chunk ~50 KiB) and keep the Better Auth client
-  out of the entry chunk candidates load.
+- **Back to 270 KiB on 2026-09-25, at 265.5 KiB.** It had been raised to 280
+  when the audit stack met #38 (276.3 KiB). The changelog's entries were in the
+  i18n resources, which every page bundles: 11 KiB of release notes shipped to
+  each candidate, growing with every release. They now live in
+  `src/locales/{en,fr}/changelog-entries.json`, read by `entryCopy` in
+  `src/lib/changelog.ts` — the one piece of copy that does not go through
+  `t()`. Next reductions, if needed: load the recruiter namespaces per route
+  (needs a hydration step, since `beforeLoad` does not re-run on hydrate) and
+  keep the Better Auth client out of the entry chunk.
 - **It was 265.2 KiB when the budget was first set** — 4.8 KiB of headroom. The
   shared entry chunk alone is ~148 KiB (Convex client, Better Auth client,
   sonner). A change that crosses the line has to pay for itself, or move

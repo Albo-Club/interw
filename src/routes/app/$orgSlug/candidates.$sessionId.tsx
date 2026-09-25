@@ -32,6 +32,7 @@ import {
 } from '~/components/ui/alert-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
+import { MemberName } from '~/components/MemberName'
 import { ShareReportDialog } from '~/components/report/ShareReportDialog'
 import {
   AnswerPlayer,
@@ -542,8 +543,7 @@ function CandidateReportPage() {
               {session.recruiterDecisionBy && (
                 <p className="text-muted-foreground text-xs">
                   <DecisionBadge decision={session.recruiterDecision} />{' '}
-                  {session.recruiterDecisionBy.name ??
-                    session.recruiterDecisionBy.email}
+                  <MemberName member={session.recruiterDecisionBy} />
                 </p>
               )}
             </CardContent>

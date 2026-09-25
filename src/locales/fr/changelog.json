@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "removed-members-credit": {
+      "title": "Les membres retirés gardent leur crédit",
+      "body": "Quand vous retirez quelqu'un de votre organisation, les décisions qu'il a prises et les invitations qu'il a envoyées affichent toujours son nom, grisé et marqué « (retiré) », au lieu de disparaître. Un membre dont le compte a été supprimé apparaît comme « Ancien membre ». Le dernier super-administrateur de la plateforme ne peut plus supprimer son compte par erreur."
+    },
     "delete-organization": {
       "title": "Supprimer une organisation",
       "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."

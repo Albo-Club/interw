@@ -250,7 +250,9 @@ export default defineSchema({
   })
     .index('by_betterAuthId', ['betterAuthId'])
     .index('by_email', ['email'])
-    .index('by_avatarStorageId', ['avatarStorageId']),
+    .index('by_avatarStorageId', ['avatarStorageId'])
+    // "Is this the last super admin?" reads two rows, not the whole table.
+    .index('by_superAdmin', ['superAdmin']),
 
   // Frequently-written per-user state, isolated from `users` on purpose:
   // every query reads the caller's `users` row (requireAppUser), so writes

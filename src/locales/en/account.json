@@ -127,6 +127,8 @@
     "confirmationSent": "Confirmation sent to {{email}}. Click the link within 1 hour to permanently delete.",
     "blockedTitle": "Make someone else an owner, or delete the organization",
     "blocked": "You're the only owner of the organizations below. An organization can't be left without an owner: make another member an owner of each one, or delete the organization, then come back.",
+    "lastSuperAdminTitle": "You're the last super admin",
+    "lastSuperAdmin": "The platform can't be left without a super admin: make someone else a super admin from the admin screen, then come back.",
     "manageMembers": "Manage members of {{name}}",
     "deleteOrg": "Delete",
     "deleteOrgLabel": "Delete {{name}}"

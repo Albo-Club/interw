@@ -5,6 +5,7 @@ import { invitationRoleValidator } from './schema'
 import { authComponent } from './auth'
 import { provisionAppUser, requireAppUser, requireOrgRole } from './lib/auth'
 import { emailsMatch, normalizeEmail } from './lib/invitations'
+import { memberName } from './lib/memberName'
 import { setLastOrgSlug } from './lib/userPrefs'
 import { RESEND_FROM, resend } from './email'
 import { invitationEmail } from './emailTemplates'
@@ -446,7 +447,7 @@ export const listForOrg = query({
             email: i.email,
             role: i.role,
             expiresAt: i.expiresAt,
-            invitedByName: await inviterName(ctx, i),
+            invitedBy: await memberName(ctx, orgId, i.invitedBy),
             sentAt: lastSend?.createdAt ?? i._creationTime,
             deliveryStatus: lastSend?.status ?? null,
           }

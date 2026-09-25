@@ -127,6 +127,8 @@
     "confirmationSent": "Confirmation envoyée à {{email}}. Cliquez sur le lien dans l'heure pour supprimer définitivement.",
     "blockedTitle": "Nommez un autre propriétaire, ou supprimez l'organisation",
     "blocked": "Vous êtes le seul propriétaire des organisations ci-dessous. Une organisation ne peut pas rester sans propriétaire : nommez un autre membre propriétaire de chacune, ou supprimez l'organisation, puis revenez.",
+    "lastSuperAdminTitle": "Vous êtes le dernier super-administrateur",
+    "lastSuperAdmin": "La plateforme ne peut pas rester sans super-administrateur : nommez-en un autre depuis l'écran d'administration, puis revenez.",
     "manageMembers": "Gérer les membres de {{name}}",
     "deleteOrg": "Supprimer",
     "deleteOrgLabel": "Supprimer {{name}}"

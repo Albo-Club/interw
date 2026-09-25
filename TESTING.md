@@ -237,6 +237,7 @@ Server rules are covered by `convex/invitations.test.ts`; these rows check the s
 | L11 | Session older than an hour → `/app/me?tab=sessions`    | Opens on the Sessions tab; shows "sign in again" instead of an endless skeleton. After signing in again it returns to the tab with the list |
 | L12 | Staging, with media. Acme has a role with recorded questions, a candidate who answered on video with a CV, a shared report, and an assistant thread. As its owner → Settings → General → "Delete organization…" | Card only for owners (admins don't see it), counts match. "Delete permanently" stays disabled until the exact name is typed. After it: every member is emailed "Acme was deleted" in their language, `/app` no longer lists Acme, the candidate's `/s/<token>` reads closed and the report's `/r/<token>` link is not found. ~15 min later (upload URLs must expire first), Convex logs show `[org-erasure]` passes ending in `done`; the bucket prefix `orgs/<orgId>/` is empty; `purgeLog` holds one `org_delete` row per candidate |
 | L13 | Former sole owner of the deleted Acme → Security tab   | No blocker listed any more; account deletion (L5–L7) goes through |
+| L14 | The only super admin → Security tab                    | "You're the last super admin" notice, delete button disabled. Make another user super admin (SA3) → notice gone, deletion goes through. `cascadeDelete` itself refuses with `last_super_admin` (`convex/users.test.ts`) |
 
 ## Level 4 — Super-admin (5 min)
 
@@ -388,6 +389,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID6c | Unresolved tokens never reach the limiter | Call `shares:recordView` with 40 random tokens | Each returns `null`; the share's `viewCount` is unchanged and no rate-limiter row is written for them — the bucket is keyed on the resolved share |
 | ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
 | ID8 | **Removal ends access** | Share a restricted role with member B, have B create another role, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed, and after re-invite does **not** see the restricted role (its share row went with the membership) |
+| ID8b | **Removal keeps the credit** | Have admin B set a decision on a candidate and send an invitation, then remove B | The decision line and the pending invitation still name B, greyed and italic with "(removed)" / "(retiré)". Delete B's account: both read "Former member" / "Ancien membre". No address appears that was not shown before |
 | ID9 | Restore is admin-tier | As a plain member who did not create it, restore an archived role | Refused (`insufficient_role`), stays archived. Owner, admin and the role's creator succeed — same tier as Archive |
 | ID10 | Deliverability respects restricted roles | As a member not named on a restricted role, call `emailEvents:recent {orgId}` | No row for a candidate of that role |
 

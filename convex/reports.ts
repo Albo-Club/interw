@@ -16,6 +16,7 @@ import { internal } from './_generated/api'
 import { recruiterDecisionValidator } from './schema'
 import { requireOrgMember } from './lib/auth'
 import { requireProjectAccess } from './lib/projectAccess'
+import { memberName } from './lib/memberName'
 import { normalizeWeights } from './lib/weights'
 import { presignGet } from './lib/objectStore'
 import type { Doc, Id } from './_generated/dataModel'
@@ -63,7 +64,7 @@ export const forSession = query({
     )
     const questionById = new Map(questions.map((q) => [q._id, q]))
     const decidedBy = session.recruiterDecisionBy
-      ? await ctx.db.get('users', session.recruiterDecisionBy)
+      ? await memberName(ctx, session.orgId, session.recruiterDecisionBy)
       : null
 
     return {
@@ -82,9 +83,7 @@ export const forSession = query({
         durationSeconds: session.durationSeconds ?? null,
         recruiterDecision: session.recruiterDecision ?? null,
         recruiterDecisionAt: session.recruiterDecisionAt ?? null,
-        recruiterDecisionBy: decidedBy
-          ? { name: decidedBy.name ?? null, email: decidedBy.email }
-          : null,
+        recruiterDecisionBy: decidedBy,
         recruiterNote: session.recruiterNote ?? null,
         mediaPurgedAt: session.mediaPurgedAt ?? null,
       },

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "removed-members-credit": {
+      "title": "Removed teammates keep their credit",
+      "body": "When you remove someone from your organization, the decisions they made and the invitations they sent still show their name, greyed out and marked \"(removed)\", instead of disappearing. A teammate whose account was deleted shows as \"Former member\". The platform's last super admin can no longer delete their account by mistake."
+    },
     "delete-organization": {
       "title": "Delete an organization",
       "body": "An organization's owner can now delete it from its settings, after typing its name to confirm. Every role, candidate recording, CV, transcript, report and assistant conversation in it is erased for good, and its members are told by email. Being the only owner of an organization no longer stands between you and deleting your account: delete the organization first, and your account is free to go."

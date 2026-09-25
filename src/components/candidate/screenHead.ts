@@ -2,6 +2,7 @@ import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 
 export type CandidateScreen =
+  | 'apply'
   | 'welcome'
   | 'check'
   | 'interview'

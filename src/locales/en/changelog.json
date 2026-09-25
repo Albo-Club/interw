@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "public-candidate-link": {
+      "title": "One link for every candidate",
+      "body": "A live role can now have a public candidate link. Create it from the role page, then paste it into your ATS email template or your job ad: whoever opens it enters their name and email and starts the interview straight away, and shows up in the role's candidate list like anyone you invited. Archiving the role or letting its deadline pass closes the link."
+    },
     "invitations-hardening": {
       "title": "Team invitations tightened",
       "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."

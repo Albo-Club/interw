@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { Mic, Pencil, Send, Trash2, UserPlus, Users, Video } from 'lucide-react'
+import {
+  Link2,
+  Mic,
+  Pencil,
+  Send,
+  Trash2,
+  UserPlus,
+  Users,
+  Video,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
@@ -61,6 +70,7 @@ function ProjectDetailPage() {
   const archive = useConvexMutation(api.projects.archive)
   const restore = useConvexMutation(api.projects.restore)
   const remove = useConvexMutation(api.projects.remove)
+  const enableApplyLink = useConvexMutation(api.projects.enableApplyLink)
 
   const run = async (action: Promise<unknown>) => {
     try {
@@ -102,6 +112,26 @@ function ProjectDetailPage() {
   // up front instead of offering a button that can only fail.
   const deletable = project.sessionCount === 0
 
+  // Two clicks the first time, on purpose: the URL is only in memory once the
+  // mutation is back, and Safari drops the clipboard permission across an
+  // await (see CandidatesTable for the workaround this avoids).
+  const applyLink = () => {
+    const url = project.applyUrl
+    if (url === null) {
+      void run(
+        enableApplyLink({ projectId: project._id }).then(() =>
+          toast.success(t('projects:detail.applyLinkCreated')),
+        ),
+      )
+      return
+    }
+    void run(
+      navigator.clipboard
+        .writeText(url)
+        .then(() => toast.success(t('projects:detail.applyLinkCopied'))),
+    )
+  }
+
   const deleteRole = async () => {
     // Leave first: the page's own query turns into `not_found` the moment the
     // row is gone, and the recruiter should land on the list, not on that.
@@ -133,6 +163,14 @@ function ProjectDetailPage() {
             <Button onClick={() => setInviting(true)}>
               <UserPlus className="size-4" />
               {t('projects:detail.invite')}
+            </Button>
+          )}
+          {canInvite && (
+            <Button variant="outline" onClick={applyLink}>
+              <Link2 className="size-4" />
+              {project.applyUrl === null
+                ? t('projects:detail.createApplyLink')
+                : t('projects:detail.copyApplyLink')}
             </Button>
           )}
           {canManage && (

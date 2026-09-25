@@ -2773,6 +2773,37 @@ The pass is bounded (25 roles, 200 session writes) and reschedules itself
 with the same cursor until the range is drained. It rescans every
 past-deadline role each hour: two indexed reads per role, empty once drained.
 
+## The public apply link: an open door, bounded
+
+A role can carry a public link, `/apply/<projects.applyToken>`, meant to be
+pasted into an ATS email template or a job ad. Whoever opens it types a name
+and an address, and `apply.start` inserts the same `pending` session an
+invitation would (`insertSession` in `convex/sessions.ts`, `invitedBy`
+absent). From there the candidate is on `/s/<token>`: nothing downstream knows
+or cares how the session was made. What an anonymous door costs, and the
+choices that keep it cheap:
+
+- **The address is declared, not proven.** The candidate starts at once — no
+  round-trip through their inbox. A typo makes them unreachable; anyone can
+  type someone else's address. The recording shows who actually sat it.
+- **Every submission is a new session, even for a known address.** Handing
+  back the open session for an address would hand anyone who knows that
+  address its owner's interview, name, CV and `deleteMyData`. Duplicates in
+  the table are the price; never "fix" them by reusing a session here.
+- **No email on submission.** Sending the invitation to the typed address
+  would make the form a relay for mail to arbitrary people from our domain.
+  The completion email still goes out — only after a whole interview.
+- **Bounded per role, not per caller.** `candidateApply` (300/h, burst 100)
+  caps a flood on one role; there is no IP to key on (see "Brute force: the
+  IP is a claim"). It is sized so an ATS mailing a shortlist never hits it.
+- **Minted on request, never by default.** `projects.enableApplyLink` sets the
+  token the first time a recruiter asks, so no role is reachable from outside
+  until someone chose that. The role's own state closes the link: draft,
+  archived, past its deadline, or an organisation being deleted read as a
+  notice, and `start` refuses with the candidate page's own `closed` /
+  `expired` codes. There is no rotate yet — a leaked link is closed by
+  archiving the role.
+
 ## A dashboard figure is a bounded scan, and says when it saturated
 
 There is no count operator. `dashboard.overview` reads, per figure, the index

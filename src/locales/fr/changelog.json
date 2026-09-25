@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "public-candidate-link": {
+      "title": "Un seul lien pour tous les candidats",
+      "body": "Un poste publié peut désormais avoir un lien candidat public. Créez-le depuis la page du poste, puis collez-le dans votre modèle d’e-mail d’ATS ou dans votre annonce : la personne qui l’ouvre saisit son nom et son e-mail, démarre l’entretien tout de suite, et apparaît dans la liste des candidats du poste comme si vous l’aviez invitée. Archiver le poste ou dépasser sa date limite ferme le lien."
+    },
     "invitations-hardening": {
       "title": "Invitations d’équipe resserrées",
       "body": "Une invitation ne reste valable que tant que la personne qui l’a envoyée peut encore inviter : si elle quitte l’organisation ou n’est plus admin, l’invitation cesse de fonctionner et s’affiche « Plus valable », et vous pouvez inviter l’adresse de nouveau. S’inscrire depuis une invitation conserve l’adresse invitée, et nous avons renforcé l’affichage des noms dans l’application et dans les e-mails."

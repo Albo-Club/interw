@@ -19,7 +19,7 @@ export default defineConfig([
     '.claude/skills',
     '.claude/worktrees',
   ]),
-  // The candidate surface (/s/$token/...) is a separate bundle on purpose:
+  // The candidate surface (/s/$token/..., /apply/$applyToken) is a separate bundle on purpose:
   // it must stay small and predictable because it runs on a stranger's phone,
   // once, with no second chance. The previous Interw shipped 2.96 MB of JS to
   // candidates because everything sat in one import graph — this rule is what
@@ -28,7 +28,11 @@ export default defineConfig([
   // Allowed: `~/components/ui/*` primitives, `~/lib/*`, `~/components/candidate/*`.
   // Everything recruiter-facing (and the heavy libraries it pulls) is banned.
   {
-    files: ['src/routes/s/**', 'src/components/candidate/**'],
+    files: [
+      'src/routes/s/**',
+      'src/routes/apply.*',
+      'src/components/candidate/**',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',

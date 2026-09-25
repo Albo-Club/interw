@@ -34,6 +34,14 @@ describe('scrubAccessTokens', () => {
     expect(scrubbed.request.url).toBe('https://interw.com/r/[token]')
   })
 
+  // A role's public link opens a new session on the role to whoever holds it.
+  it('masks a public apply token the same way', () => {
+    const event = { request: { url: `https://interw.com/apply/${token}` } }
+    expect(scrubAccessTokens(event).request.url).toBe(
+      'https://interw.com/apply/[token]',
+    )
+  })
+
   it('masks a sign-in code carried in a /login/code fragment', () => {
     const event = {
       breadcrumbs: [

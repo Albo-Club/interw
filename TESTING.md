@@ -44,15 +44,13 @@ undone later.
 | B3 | Build         | `pnpm build`             | Bundle written to `.output/`  |
 | B4 | Smoke E2E     | `pnpm test:smoke`        | All scenarios pass. Covers the headers the product depends on (`camera=(self)`, `microphone=(self)`, a `media-src` carrying `blob:`) and the two token surfaces: `/s/<invalid>` and `/r/<invalid>` answer identically for an unknown and a malformed token, and both carry `noindex, nofollow` |
 | B5 | Prod cookies  | `pnpm test:cookies`      | `interw.session_token` has Secure+HttpOnly+SameSite=Lax+Max-Age≈604800 |
-| B6 | Skills intact | `pnpm sync:skills:verify` | `Vendored skills match skills-lock.json.` (exit 0) — offline, covers the `SKILL.md` files **and** their `references`, plus `.claude/skills/` symlinks with no lock entry (`~ <name>: .claude/skills link with no lock entry`, exit 2 — repair with `pnpm sync:skills`) |
-| B6b | Skills up-to-date | `pnpm sync:skills:check` | `Skills up to date with upstream.` (exit 0) — network. Two distinct failures, both exit 2: `~ N skills drifted` (upstream changed) and `✗ … N skills could not be checked` (404 or network — the skill is tracked by nothing) |
 | B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder, para-verbal metrics, locale parity, cross-organisation isolation under `convex-test`, and that the chat agent still resolves to the pipeline's provider and model |
 | B8 | Convex codegen committed | `pnpm codegen:api:check` | `convex/_generated/api.d.ts is up to date.` Fails when a Convex module was added without committing its codegen — CI has no deployment, so `npx convex dev` cannot do it there |
 | B9 | Access audit | `pnpm audit:access:check` | Exit 0. Fails on any **public** Convex function with no access check. Run `pnpm audit:access` to print the full matrix; deliberate exceptions are declared with a `// access: <reason>` comment above the export and are listed in the output |
 | B10 | Candidate interview, real browsers | `DEPLOY_CONVEX=true pnpm build && pnpm test:e2e` | Chromium and WebKit, fake camera and microphone: consent, device check, two answers recorded, the bucket cut during the second upload and the failure shown, "Try again" saves it, a reload lands back on the saved review, finish; then `completed` with two `uploaded` segments read back from the database, and the test candidate erased. Needs `CONVEX_DEPLOY_KEY`, `VITE_CONVEX_SITE_URL` and `MEDIA_ORIGIN` for a deployment whose bucket CORS allows `http://localhost:3000` — the build deploys this branch's functions to it. The HTML report (`playwright-report/`) carries captures of the recording screen |
 
-B2–B3, B6, B6b, B7, B8 and B9 also run in CI on every PR (`.github/workflows/ci.yml`,
-B6 via the `skills-verify` job, B6b via `skills-drift`). B10 runs in the `e2e`
+B2–B3, B7, B8 and B9 also run in CI on every PR (`.github/workflows/ci.yml`), and so
+does the `skills-drift` job (upstream skills moved — see `CLAUDE.md` § Skills). B10 runs in the `e2e`
 job, on repository secrets — after each merge to `main` and on demand, not on
 PRs (why: comment above the job). CI covers B0
 implicitly: `pnpm/action-setup@v4` is given no `version:`, so it installs the
@@ -330,7 +328,8 @@ is cheaper to get wrong.
 ## Interw B — Candidate journey (20 min, repeat per browser)
 
 Run the whole level on **Chrome, Safari and Firefox**, desktop and mobile.
-Safari is the one that matters: it takes the MP4 branch of the recorder.
+Firefox is the odd one out: it is the only browser left on the WebM branch of
+the recorder — Chrome, Edge and Safari record MP4.
 
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
@@ -344,13 +343,20 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IB7 | Device check | Deny camera permission | Explains how to allow it in the address bar — never a blank screen |
 | IB7b | Camera busy or missing | Hold the camera in another app (a Teams or Meet call), or unplug the webcam, then open the check screen | The preview says **Audio only**; the interview records the voice alone with the same notice, and each answer saves with an audio object and no video. "Allow it in the address bar" is the wrong advice here and must not appear |
 | IB7c | Chosen devices are used | On the check screen pick a second microphone, then continue | The interview URL carries `?mic=…`, and the recording is from the microphone picked — not the system default |
+| IB7d | Device gone since the check | Pick a USB headset on the check screen, unplug it, then start the interview | The interview opens the default microphone **and the camera** — never audio only because the chosen device vanished |
 | IB8 | In-app browser | Open the link from the LinkedIn or Gmail mobile app | Warns that recording often fails there and suggests opening in Safari/Chrome |
 | IB9 | Mic meter | Speak, then stay silent | Meter moves and reads "picking you up"; silence reads "can't hear anything" — and the **Start anyway** button is still available |
-| IB10 | Record an answer | Start my answer → speak → I've finished my answer | The preview shows the candidate **throughout** the recording, never a black box — portrait on a phone held upright. Saving shows a percentage. Both an audio and a video object appear under `orgs/{orgId}/sessions/{sessionId}/q0.*` |
+| IB9b | Camera shows black | Close the webcam's privacy shutter (or cover the lens) on the check screen | After ~3 s a notice says the camera only shows black; opening it makes the notice go |
+| IB9c | Practice take | Record a 10-second test, then play it back | You see and hear yourself; nothing appears in the bucket or in `segments`. "Record another test" replaces it |
+| IB10 | Record an answer | Start my answer → speak → I've finished my answer | The preview shows the candidate **throughout** the recording, never a black box — portrait on a phone held upright. Saving shows a percentage. Both an audio and a video object appear under `orgs/{orgId}/sessions/{sessionId}/q0.*` — the video is `q0.mp4` on Chrome, Edge and Safari, `q0.webm` on Firefox |
 | IB11 | Time limit | Set a question to 30 s, then say nothing and wait | Countdown appears at 30 s remaining; recording stops on its own; the answer is saved |
 | IB12 | **Network cut mid-answer** | Start an answer, disable the network, finish the answer | Shows "your last answer didn't save" with **Try again** and **Skip**. Re-enable the network → Try again → it uploads |
-| IB12b | Video lost, answer kept | Throttle the network so the video upload fails after the audio one succeeded | The answer is saved and the next question shows "its video didn't get through — only the sound did". `sessionEvents` has an `upload_failed` row whose detail starts with `video:` |
+| IB12b | Video lost, answer kept | Throttle the network so the video upload fails after the audio one succeeded | The answer is saved and the next question shows "its video didn't get through — only the sound did". `sessionEvents` has an `upload_failed` row whose detail starts with `video:`. The segment keeps `videoUploaded: false`, and the recruiter's report plays that answer's **audio** — never a 404 |
 | IB12c | Leaving mid-answer | Start an answer, switch to another app or tab (or unplug the headset), come back | Recording stopped when the page was hidden; what was said is saved, and the screen says so |
+| IB12d | **Phone left untouched** | On a phone with auto-lock at 30 s, start a 2-minute answer and speak without touching the screen | The screen stays on until the answer ends; the answer is not cut as "interrupted" (Screen Wake Lock) |
+| IB12f | Microphone goes silent | Mid-answer, mute the microphone in a way the browser does not report (e.g. turn a headset's volume wheel to zero) and wait 8 s | A live meter runs under the preview while recording; after 8 s of silence "We can't hear you" appears — the recording carries on |
+| IB12g | **Tab crash mid-answer** | Start an answer, speak 20 s, then kill the tab (or reload), reopen the link | The interview resumes on that question, sends the recovered answer on its own and says so; the segment is `uploaded`. DevTools → Application → IndexedDB `interw-takes` is empty afterwards |
+| IB12e | Microphone taken mid-answer | Mid-answer, take a phone call, or mute the microphone with the OS or a hardware switch | Recording stops, what was said is saved, and the screen says the answer was interrupted |
 | IB13 | Resume | Close the tab after two answers, reopen the link | Resumes at question 3; the first two show as answered |
 | IB13b | Resume after a skip | Q1 answered, Q2 fails to send → **Skip**, Q3 answered; close and reopen | The welcome screen says question **2**, the interview opens question 2, and after it moves to question 4 — question 3 is never offered again (`reserveSegment` answers `answered` for it and reserves nothing) |
 | IB14 | Expiry | Set the role's expiry to yesterday, reopen the link | "This interview has closed" — never a dead end or a raw error |

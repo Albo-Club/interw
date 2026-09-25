@@ -2897,6 +2897,6 @@ and token counts, never `total_seconds`. Nothing caught it because
   the answer. The tests in `convex/lib/ai.test.ts` use a payload copied from
   Mistral's docs — refresh it from there, not from another provider's.
 - **`language` with `timestamp_granularities`.** One Mistral doc page says the
-  two are incompatible; a newer example sends both. We send both. If a
-  transcription ever fails with HTTP 400 naming `language`, drop `language` —
-  the timestamps are what quote anchoring needs.
+  two are incompatible; production says otherwise. With both sent, Voxtral
+  answered HTTP 200 on every call in `jobLog` (September 2026).
+  Keep `language`: it helps accuracy on short answers.

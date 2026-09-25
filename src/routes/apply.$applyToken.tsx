@@ -24,9 +24,6 @@ import { candidateHead } from '~/components/candidate/screenHead'
  * A role's public link. The candidate says who they are, gets a session of
  * their own, and continues on `/s/<token>` exactly as if they had been
  * invited. Part of the candidate surface: same bundle rule, same `noindex`.
- *
- * The param is not called `token` on purpose: `CandidateError` offers a
- * restart on `/s/<token>` whenever the route has one.
  */
 export const Route = createFileRoute('/apply/$applyToken')({
   component: ApplyPage,

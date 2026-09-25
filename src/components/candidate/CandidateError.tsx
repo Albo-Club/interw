@@ -24,8 +24,10 @@ import { Sentry } from '~/lib/sentry'
  */
 export function CandidateError({ error }: ErrorComponentProps) {
   const { t } = useTranslation(['interview', 'common'])
-  const params = useParams({ strict: false })
-  const token = typeof params.token === 'string' ? params.token : null
+  // Only a session route's token is a session token: `/apply/$applyToken`
+  // uses this screen too, and its token must not become a `/s/` link.
+  const token =
+    useParams({ from: '/s/$token', shouldThrow: false })?.token ?? null
   const state = linkStateFromError(error)
   // Opening the interview before agreeing to be recorded: the consent is on
   // the welcome page, so that is where the candidate belongs.

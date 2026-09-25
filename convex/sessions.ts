@@ -22,6 +22,7 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { isPastDeadline } from './lib/sessionState'
+import { siteUrl } from './lib/siteUrl'
 import { generateToken } from './lib/tokens'
 import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
@@ -150,13 +151,6 @@ export function normalizeCandidate(input: { name: string; email: string }) {
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
   if (!EMAIL_RE.test(email)) throw new ConvexError('invalid_email')
   return { name, email }
-}
-
-/** An absolute link into the app, e.g. `siteUrl('/s/<token>')`. */
-export function siteUrl(path: string): string {
-  const base = process.env.SITE_URL
-  if (!base) throw new ConvexError('site_url_not_configured')
-  return `${base.replace(/\/+$/, '')}${path}`
 }
 
 function invitationUrl(token: string): string {

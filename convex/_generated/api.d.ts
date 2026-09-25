@@ -52,6 +52,7 @@ import type * as lib_reportSchema from "../lib/reportSchema.js";
 import type * as lib_safeUrl from "../lib/safeUrl.js";
 import type * as lib_sessionState from "../lib/sessionState.js";
 import type * as lib_sigv4 from "../lib/sigv4.js";
+import type * as lib_siteUrl from "../lib/siteUrl.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as lib_tokens from "../lib/tokens.js";
@@ -127,6 +128,7 @@ declare const fullApi: ApiFromModules<{
   "lib/safeUrl": typeof lib_safeUrl;
   "lib/sessionState": typeof lib_sessionState;
   "lib/sigv4": typeof lib_sigv4;
+  "lib/siteUrl": typeof lib_siteUrl;
   "lib/slug": typeof lib_slug;
   "lib/storage": typeof lib_storage;
   "lib/tokens": typeof lib_tokens;

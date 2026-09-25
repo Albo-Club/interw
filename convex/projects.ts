@@ -20,8 +20,8 @@ import {
   sharedProjectIds,
 } from './lib/projectAccess'
 import { publishBlockers } from './lib/publishReadiness'
+import { siteUrl } from './lib/siteUrl'
 import { generateToken } from './lib/tokens'
-import { siteUrl } from './sessions'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
 import type { MutationCtx } from './_generated/server'
@@ -341,16 +341,6 @@ export const publish = mutation({
 })
 
 /**
- * Archiving is the most destructive unprivileged action in this module, so it
- * is no longer unprivileged.
- *
- * `evaluateSessionGate` returns `closed` for any project that is not
- * `active`: archiving cuts the link of every candidate mid-interview, at once,
- * with no warning and no way for them to finish. It used to need only
- * `requireProjectAccess` — any member who could see the role — while deleting
- * an empty role needed owner or admin. The asymmetry was the wrong way round.
- */
-/**
  * Give the role its public candidate link. Idempotent: the link, once made,
  * stays the same, so it can live in an ATS template or on a job board. Any
  * member who can invite to the role can open it to the public — it is the
@@ -366,6 +356,16 @@ export const enableApplyLink = mutation({
   },
 })
 
+/**
+ * Archiving is the most destructive unprivileged action in this module, so it
+ * is no longer unprivileged.
+ *
+ * `evaluateSessionGate` returns `closed` for any project that is not
+ * `active`: archiving cuts the link of every candidate mid-interview, at once,
+ * with no warning and no way for them to finish. It used to need only
+ * `requireProjectAccess` — any member who could see the role — while deleting
+ * an empty role needed owner or admin. The asymmetry was the wrong way round.
+ */
 export const archive = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {

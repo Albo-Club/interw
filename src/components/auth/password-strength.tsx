@@ -24,9 +24,9 @@ async function configureZxcvbn() {
 const SCORE_TONE = [
   'bg-destructive',
   'bg-destructive',
-  'bg-amber-500',
-  'bg-emerald-500',
-  'bg-emerald-500',
+  'bg-warning',
+  'bg-success',
+  'bg-success',
 ] as const
 
 interface PasswordStrengthProps {

@@ -176,15 +176,22 @@ describe('the pipeline trail shown to the recruiter', () => {
 
 /**
  * Removing a colleague takes away their access, not their credit: the
- * decision they made still names them, marked as no longer a member.
+ * decision they made still names them, marked as no longer a member — on the
+ * current decision line and in the history alike.
  */
 describe('who made the decision', () => {
-  const decidedBy = async (t: ReturnType<typeof convexTest>, s: Seed) =>
-    (
-      await t
-        .withIdentity({ subject: 'ba_recruiter' })
-        .query(api.reports.forSession, { sessionId: s.sessionId })
-    ).session.recruiterDecisionBy
+  const decidedBy = async (t: ReturnType<typeof convexTest>, s: Seed) => {
+    const view = await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .query(api.reports.forSession, { sessionId: s.sessionId })
+    const credits = [
+      view.session.recruiterDecisionBy,
+      ...view.decisionHistory.map((event) => event.by),
+    ]
+    expect(credits).toHaveLength(2)
+    expect(credits[1]).toEqual(credits[0])
+    return credits[0]
+  }
 
   async function decideAsColleague(
     t: ReturnType<typeof convexTest>,
@@ -209,6 +216,13 @@ describe('who made the decision', () => {
         recruiterDecision: 'shortlisted',
         recruiterDecisionBy: colleague,
         recruiterDecisionAt: 1,
+      })
+      await ctx.db.insert('decisionEvents', {
+        orgId: session!.orgId,
+        sessionId: s.sessionId,
+        decision: 'shortlisted',
+        actorId: colleague,
+        at: 1,
       })
       return { colleague, membership }
     })
@@ -244,5 +258,44 @@ describe('who made the decision', () => {
       await ctx.db.delete('users', colleague)
     })
     expect(await decidedBy(t, s)).toEqual({ name: null, removed: true })
+  })
+})
+
+/**
+ * Audit 2026-09-15, Pipe M9, and product decision n° 2 of 2026-09-24. A
+ * report written before the removal still holds its para-verbal figures; the
+ * recruiter's page must not show them.
+ */
+describe('para-verbal figures on an older report', () => {
+  it('are not served to the recruiter', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.sessionId))!
+      await ctx.db.insert('reports', {
+        orgId: session.orgId,
+        sessionId: s.sessionId,
+        overallScore: 72,
+        recommendation: 'yes',
+        executiveSummary: 'Strong.',
+        criteriaScores: [],
+        strengths: [],
+        concerns: [],
+        paraverbal: {
+          dimensions: [{ key: 'pace', score: 8, measure: 140 }],
+          wordsPerMinute: 140,
+          totalSpeakingSeconds: 9,
+        },
+        model: 'test',
+        generatedAt: 1,
+      })
+    })
+
+    const view = await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .query(api.reports.forSession, { sessionId: s.sessionId })
+
+    expect(view.report?.overallScore).toBe(72)
+    expect(view.report).not.toHaveProperty('paraverbal')
   })
 })

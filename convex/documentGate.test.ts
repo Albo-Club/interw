@@ -2,9 +2,9 @@
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { ConvexError } from 'convex/values'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { internal } from './_generated/api'
+import { api, internal } from './_generated/api'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -17,6 +17,8 @@ function newTest() {
 }
 
 const TOKEN = 'c'.repeat(43)
+const DOCX =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 type Seed = {
   orgId: Id<'organizations'>
@@ -102,7 +104,7 @@ describe('swapping a document key', () => {
     const result = await t.mutation(internal.candidate.swapDocumentKey, {
       token: TOKEN,
       kind: 'cv',
-      key: keyFor(s, 'cv.docx'),
+      mimeType: DOCX,
     })
     expect(result.previous).toBe(keyFor(s, 'cv.pdf'))
   })
@@ -115,7 +117,7 @@ describe('swapping a document key', () => {
       t.mutation(internal.candidate.swapDocumentKey, {
         token: TOKEN,
         kind: 'cv',
-        key: keyFor(s, 'cv.docx'),
+        mimeType: DOCX,
       }),
     ).rejects.toThrow(ConvexError)
 
@@ -133,7 +135,7 @@ describe('swapping a document key', () => {
       t.mutation(internal.candidate.swapDocumentKey, {
         token: TOKEN,
         kind: 'cv',
-        key: keyFor(s, 'cv.docx'),
+        mimeType: DOCX,
       }),
     ).rejects.toThrow(ConvexError)
   })
@@ -143,18 +145,71 @@ describe('swapping a document key', () => {
       t.mutation(internal.candidate.swapDocumentKey, {
         token: TOKEN,
         kind: 'cover',
-        key: keyFor(s, 'cover.pdf'),
+        mimeType: 'application/pdf',
       }),
     ).rejects.toThrow(ConvexError)
   })
 
-  it('still refuses a key belonging to another session', async () => {
-    await expect(
-      t.mutation(internal.candidate.swapDocumentKey, {
-        token: TOKEN,
-        kind: 'cv',
-        key: `orgs/${s.orgId}/sessions/somebody-else/cv.pdf`,
-      }),
-    ).rejects.toThrow(ConvexError)
+  /**
+   * h01/h04/h09. The client used to hand back the key it was issued, and the
+   * check was `startsWith(prefix)`: `cv.zzz` or `cv.pdf/../x` passed, the row
+   * pointed at an object that does not exist, and the CV it replaced was
+   * deleted. The key is now derived from the type, so only the three names an
+   * upload slot can issue are reachable at all.
+   */
+  it('derives the key from the document type, and only an accepted one', async () => {
+    const result = await t.mutation(internal.candidate.swapDocumentKey, {
+      token: TOKEN,
+      kind: 'cv',
+      mimeType: `${DOCX}; charset=binary`,
+    })
+    expect(result.previous).toBe(keyFor(s, 'cv.pdf'))
+    const session = await t.run(async (ctx) =>
+      ctx.db.get('sessions', s.sessionId),
+    )
+    expect(session?.cvKey).toBe(keyFor(s, 'cv.docx'))
+
+    for (const mimeType of ['text/html', 'application/zip', '']) {
+      await expect(
+        t.mutation(internal.candidate.swapDocumentKey, {
+          token: TOKEN,
+          kind: 'cv',
+          mimeType,
+        }),
+      ).rejects.toThrow('unsupported_document_type')
+    }
+  })
+})
+
+/**
+ * h01. The slot came back with the object key, which embeds the organisation
+ * and session ids a candidate has no use for — contradicting "never returned:
+ * orgId" in lib/candidateView.ts. The key stays on the server now; attaching
+ * derives it again from the kind and the type.
+ */
+describe('requesting a document slot', () => {
+  beforeEach(() => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('returns an upload URL and a type, never the object key', async () => {
+    const t = newTest()
+    await seed(t)
+    const slot = await t.action(api.candidate.requestDocumentUpload, {
+      token: TOKEN,
+      kind: 'cv',
+      mimeType: 'application/pdf',
+      contentLength: 1_000,
+    })
+    expect(Object.keys(slot).sort()).toEqual(['contentType', 'uploadUrl'])
+    expect(slot.contentType).toBe('application/pdf')
   })
 })

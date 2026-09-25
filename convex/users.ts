@@ -13,6 +13,7 @@ import { countOwners } from './organizations'
 import { provisionAppUser, requireAppUser, safeAppUser } from './lib/auth'
 import { setPasswordWithFreshSession } from './lib/accountLifecycle'
 import { getLastOrgSlug, setEmailChange } from './lib/userPrefs'
+import { revokeMemberGrants } from './lib/projectAccess'
 import { release, resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 import type { EmailChange } from './lib/userPrefs'
 import type { GenericQueryCtx } from 'convex/server'
@@ -242,6 +243,15 @@ export const soleOwnedOrgNames = internalQuery({
   },
 })
 
+/** Internal — the same check, for Better Auth's delete endpoints. */
+export const lastSuperAdmin = internalQuery({
+  args: { betterAuthId: v.string() },
+  handler: async (ctx, { betterAuthId }): Promise<boolean> => {
+    const appUser = await userByBetterAuthId(ctx, betterAuthId)
+    return appUser ? await isLastSuperAdmin(ctx, appUser) : false
+  },
+})
+
 /** Where the caller's last email change stands, for the profile page. */
 export const emailChangeStatus = query({
   args: {},
@@ -357,6 +367,8 @@ export const cascadeDelete = internalMutation({
     for (const m of memberships) {
       await ctx.db.delete("organizationMembers", m._id)
     }
+    // Team places and report links, in every org at once (Back F9, h05).
+    await revokeMemberGrants(ctx, appUser._id)
 
     const prefs = await ctx.db
       .query('userPrefs')
@@ -364,10 +376,20 @@ export const cascadeDelete = internalMutation({
       .unique()
     if (prefs) await ctx.db.delete('userPrefs', prefs._id)
 
-    try {
-      await release(ctx, appUser.avatarStorageId, appUser._id)
-    } catch {
-      // ignore — storage may already be gone
+    // Objects before rows: a failed delete aborts the whole mutation, so the
+    // row survives to name the blob and the next attempt retries it. A blob
+    // that is already gone has nothing left to delete and is skipped.
+    const avatarId = appUser.avatarStorageId
+    if (avatarId && (await ctx.db.system.get('_storage', avatarId))) {
+      try {
+        await release(ctx, avatarId, appUser._id)
+      } catch (error) {
+        console.error('[cascade-delete] avatar_release_failed', {
+          userId: appUser._id,
+          error: String(error),
+        })
+        throw error
+      }
     }
 
     await ctx.db.delete("users", appUser._id)

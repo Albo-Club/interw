@@ -30,11 +30,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 type Role = 'owner' | 'admin' | 'member'
 
 export const Route = createFileRoute('/app/$orgSlug/settings/members')({
   component: MembersSettings,
+  errorComponent: AppRouteError,
 })
 
 function MembersSettings() {

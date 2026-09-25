@@ -329,7 +329,6 @@ async function namedKeys(t: T): Promise<Set<string>> {
       for (const key of [
         s.videoKey,
         s.audioKey,
-        s.thumbnailKey,
         ...(s.supersededKeys ?? []),
       ]) {
         if (key) keys.push(key)

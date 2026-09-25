@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../convex/_generated/api'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { fireAndForget } from '~/lib/fire-and-forget'
+import { openTakeStore } from '~/lib/media/takeStore'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription } from '~/components/ui/alert'
@@ -24,15 +26,16 @@ import {
   candidateTouchTargets,
 } from '~/components/candidate/CandidateShell'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/privacy')({
   component: CandidatePrivacy,
+  head: () => candidateHead('privacy'),
 })
 
 function CandidatePrivacy() {
   const { t } = useTranslation(['interview', 'common'])
   const { token } = Route.useParams()
-  const [now] = useState(() => Date.now())
   const [erasure, setErasure] = useState<'idle' | 'deleting' | 'deleted'>(
     'idle',
   )
@@ -42,7 +45,7 @@ function CandidatePrivacy() {
   // instead of the confirmation of their erasure.
   const summary = useConvexQuery(
     api.candidate.privacySummary,
-    erasure === 'idle' ? { token, now } : 'skip',
+    erasure === 'idle' ? { token } : 'skip',
   )
   const deleteMyData = useConvexAction(api.candidate.deleteMyData)
   const languageReady = useCandidateLanguage(summary?.language)
@@ -79,6 +82,8 @@ function CandidatePrivacy() {
     setErasure('deleting')
     try {
       await deleteMyData({ token })
+      // An answer copied to this device while it recorded goes too.
+      fireAndForget(openTakeStore(token).prune(), 'drop takes')
       setErasure('deleted')
     } catch (cause) {
       setErasure('idle')

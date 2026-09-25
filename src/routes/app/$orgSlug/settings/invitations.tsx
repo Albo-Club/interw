@@ -47,6 +47,7 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 const KNOWN_INVITE_ERRORS = [
   'already_invited',
@@ -81,6 +82,7 @@ function parseEmails(raw: string): Array<string> {
 
 export const Route = createFileRoute('/app/$orgSlug/settings/invitations')({
   component: InvitationsSettings,
+  errorComponent: AppRouteError,
 })
 
 function InvitationsSettings() {

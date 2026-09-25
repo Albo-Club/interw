@@ -51,16 +51,17 @@ function newTest() {
 /**
  * Two organisations, and inside the first one every role that matters:
  *
- *   acmeOwner    owner of Acme
- *   acmeMember   plain member of Acme, not named on the restricted role
- *   acmeShared   plain member of Acme, named on the restricted role
+ *   acmeOwner    owner of Acme, creator of both roles
+ *   acmeAdmin    admin of Acme, on neither team
+ *   acmeMember   plain member of Acme, on the Backend team only
+ *   acmeShared   plain member of Acme, on the Chief of Staff team only
  *   rivalOwner   owner of a different organisation entirely
  *   superAdmin   deployment-wide
  */
 type World = {
   acmeOrgId: Id<'organizations'>
-  openProjectId: Id<'projects'>
-  restrictedProjectId: Id<'projects'>
+  backendProjectId: Id<'projects'>
+  chiefProjectId: Id<'projects'>
   sessionId: Id<'sessions'>
 }
 
@@ -69,6 +70,7 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
     const users: Record<string, Id<'users'>> = {}
     for (const [key, superAdmin] of [
       ['acmeOwner', false],
+      ['acmeAdmin', false],
       ['acmeMember', false],
       ['acmeShared', false],
       ['rivalOwner', false],
@@ -96,10 +98,13 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
     })
     for (const [userId, orgId, role] of [
       [users.acmeOwner, acmeOrgId, 'owner'],
+      [users.acmeAdmin, acmeOrgId, 'admin'],
       [users.acmeMember, acmeOrgId, 'member'],
       [users.acmeShared, acmeOrgId, 'member'],
       [users.rivalOwner, rivalOrgId, 'owner'],
-    ] as Array<[Id<'users'>, Id<'organizations'>, 'owner' | 'member']>) {
+    ] as Array<
+      [Id<'users'>, Id<'organizations'>, 'owner' | 'admin' | 'member']
+    >) {
       await ctx.db.insert('organizationMembers', {
         orgId,
         userId,
@@ -124,32 +129,35 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
       createdAt: 0,
       completedSessionCount: 1,
     }
-    const openProjectId = await ctx.db.insert('projects', {
+    const backendProjectId = await ctx.db.insert('projects', {
       ...baseProject,
       slug: 'backend',
       title: 'Backend',
-      restricted: false,
       sessionCount: 1,
     })
-    const restrictedProjectId = await ctx.db.insert('projects', {
+    const chiefProjectId = await ctx.db.insert('projects', {
       ...baseProject,
       slug: 'chief-of-staff',
       title: 'Chief of Staff',
-      restricted: true,
       sessionCount: 0,
       completedSessionCount: 0,
     })
-    await ctx.db.insert('projectShares', {
-      orgId: acmeOrgId,
-      projectId: restrictedProjectId,
-      userId: users.acmeShared,
-      grantedBy: users.acmeOwner,
-      grantedAt: 0,
-    })
+    for (const [projectId, userId] of [
+      [backendProjectId, users.acmeMember],
+      [chiefProjectId, users.acmeShared],
+    ] as const) {
+      await ctx.db.insert('projectShares', {
+        orgId: acmeOrgId,
+        projectId,
+        userId,
+        grantedBy: users.acmeOwner,
+        grantedAt: 0,
+      })
+    }
 
     const sessionId = await ctx.db.insert('sessions', {
       orgId: acmeOrgId,
-      projectId: openProjectId,
+      projectId: backendProjectId,
       accessToken: 'g'.repeat(43),
       candidateName: 'Alex Martin',
       candidateEmail: 'alex@example.test',
@@ -172,7 +180,7 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
       generatedAt: 0,
     })
 
-    return { acmeOrgId, openProjectId, restrictedProjectId, sessionId }
+    return { acmeOrgId, backendProjectId, chiefProjectId, sessionId }
   })
 }
 
@@ -207,7 +215,7 @@ describe('the organisation boundary', () => {
   it('refuses a stranger the right to invite onto it', async () => {
     await expect(
       as(t, 'rivalOwner').mutation(api.sessions.invite, {
-        projectId: w.openProjectId,
+        projectId: w.backendProjectId,
         candidates: [{ name: 'Someone', email: 'someone@example.test' }],
       }),
     ).rejects.toThrow()
@@ -262,8 +270,9 @@ describe('the organisation boundary', () => {
 })
 
 /**
- * A restricted role is invisible, not forbidden: a recruiter should not learn
- * that a confidential search exists, so the refusal is `not_found`.
+ * A role is invisible, not forbidden, to anyone off its team: a recruiter
+ * should not learn that a confidential search exists, so the refusal is
+ * `not_found`.
  */
 describe('project visibility inside an organisation', () => {
   let t: ReturnType<typeof newTest>
@@ -274,7 +283,7 @@ describe('project visibility inside an organisation', () => {
     w = await seed(t)
   })
 
-  it('hides a restricted role from a member who is not named on it', async () => {
+  it('hides a role from a member who is not on its team', async () => {
     await expect(
       as(t, 'acmeMember').query(api.projects.getBySlug, {
         orgId: w.acmeOrgId,
@@ -288,7 +297,7 @@ describe('project visibility inside an organisation', () => {
     expect(list.map((p) => p.slug)).toEqual(['backend'])
   })
 
-  it('shows it to the member who is named on it', async () => {
+  it('shows it to a member of its team', async () => {
     const detail = await as(t, 'acmeShared').query(api.projects.getBySlug, {
       orgId: w.acmeOrgId,
       slug: 'chief-of-staff',
@@ -301,17 +310,17 @@ describe('project visibility inside an organisation', () => {
    * The deliverability list is derived from the invitations, so it inherits
    * the visibility of the role each one was sent for.
    */
-  it('does not leak a restricted role’s candidates through the deliverability list', async () => {
+  it('does not leak the candidates of a role through the deliverability list', async () => {
     await t.run(async (ctx) => {
       const hidden = await ctx.db.insert('sessions', {
         orgId: w.acmeOrgId,
-        projectId: w.restrictedProjectId,
+        projectId: w.chiefProjectId,
         accessToken: 'h'.repeat(43),
         candidateName: 'Sam Hidden',
         candidateEmail: 'hidden@candidate.test',
         status: 'pending',
         lastQuestionIndex: 0,
-        invitedBy: (await ctx.db.get('projects', w.restrictedProjectId))!
+        invitedBy: (await ctx.db.get('projects', w.chiefProjectId))!
           .createdBy,
         invitedAt: 0,
       })
@@ -351,7 +360,72 @@ describe('project visibility inside an organisation', () => {
       ),
     ).rejects.toThrow()
   })
+
+  /**
+   * Audit 2026-09-15, backend F3. The search box re-implemented the
+   * visibility rule instead of asking `canSeeProject`; it now asks, and this
+   * pins the outcome so a copy cannot creep back in and drift.
+   */
+  it('keeps a role off the search results of a member outside its team', async () => {
+    const search = (who: string) =>
+      as(t, who).query(api.reports.searchCandidates, {
+        orgId: w.acmeOrgId,
+        text: 'Alex',
+      })
+    expect(await search('acmeShared')).toEqual([])
+    expect((await search('acmeMember')).map((r) => r.projectSlug)).toEqual([
+      'backend',
+    ])
+    expect((await search('acmeAdmin')).map((r) => r.projectSlug)).toEqual([
+      'backend',
+    ])
+  })
 })
+
+/** A finished interview with a report on `projectId`; returns who was mailed. */
+async function completeInterviewOn(
+  t: ReturnType<typeof newTest>,
+  w: World,
+  projectId: Id<'projects'>,
+) {
+  const sessionId = await t.run(async (ctx) => {
+    const project = (await ctx.db.get('projects', projectId))!
+    const id = await ctx.db.insert('sessions', {
+      orgId: w.acmeOrgId,
+      projectId,
+      accessToken: 'r'.repeat(43),
+      candidateName: 'Dana Fictional',
+      candidateEmail: 'dana@candidate.test',
+      status: 'completed',
+      lastQuestionIndex: 1,
+      invitedBy: project.createdBy,
+      invitedAt: 0,
+      completedAt: 1,
+    })
+    await ctx.db.insert('reports', {
+      orgId: w.acmeOrgId,
+      sessionId: id,
+      overallScore: 87,
+      recommendation: 'strong_yes',
+      executiveSummary: 'Strong.',
+      criteriaScores: [],
+      strengths: ['Something'],
+      concerns: [],
+      model: 'test',
+      generatedAt: 0,
+    })
+    return id
+  })
+  await t.mutation(internal.notifications.sendReportReady, { sessionId })
+  return await t.run(async (ctx) =>
+    (
+      await ctx.db
+        .query('emailLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+        .collect()
+    ).map((row) => row.recipient),
+  )
+}
 
 /**
  * Audit 2026-09-22, `convex/organizations.ts:removeMember:projectShares-not-revoked`.
@@ -387,64 +461,38 @@ describe('removing a member revokes what was granted through them', () => {
     return membership.userId
   }
 
-  async function completeInterviewOn(projectId: Id<'projects'>) {
-    const sessionId = await t.run(async (ctx) => {
-      const project = (await ctx.db.get('projects', projectId))!
-      const id = await ctx.db.insert('sessions', {
-        orgId: w.acmeOrgId,
-        projectId,
-        accessToken: 'r'.repeat(43),
-        candidateName: 'Dana Fictional',
-        candidateEmail: 'dana@candidate.test',
-        status: 'completed',
-        lastQuestionIndex: 1,
-        invitedBy: project.createdBy,
-        invitedAt: 0,
-        completedAt: 1,
-      })
-      await ctx.db.insert('reports', {
-        orgId: w.acmeOrgId,
-        sessionId: id,
-        overallScore: 87,
-        recommendation: 'strong_yes',
-        executiveSummary: 'Strong.',
-        criteriaScores: [],
-        strengths: ['Something'],
-        concerns: [],
-        model: 'test',
-        generatedAt: 0,
-      })
-      return id
-    })
-    await t.mutation(internal.notifications.sendReportReady, { sessionId })
-    return await t.run(async (ctx) =>
-      (
-        await ctx.db
-          .query('emailLog')
-          .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-          .collect()
-      ).map((row) => row.recipient),
-    )
-  }
-
   it('stops mailing reports of a role they were named on', async () => {
     await removeShared()
-    const recipients = await completeInterviewOn(w.restrictedProjectId)
+    const recipients = await completeInterviewOn(t, w, w.chiefProjectId)
     expect(recipients).not.toContain('acmeShared@example.test')
     expect(recipients).toContain('acmeOwner@example.test')
+  })
+
+  it('still credits them as the creator of their roles', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) =>
+      ctx.db.patch('projects', w.backendProjectId, { createdBy: userId }),
+    )
+    const team = await as(t, 'acmeOwner').query(api.projects.team, {
+      projectId: w.backendProjectId,
+    })
+    expect(team.creator).toEqual({
+      name: 'acmeShared@example.test',
+      removed: true,
+    })
   })
 
   it('stops mailing reports of a role they created', async () => {
     const userId = await removeShared()
     await t.run(async (ctx) =>
-      ctx.db.patch('projects', w.openProjectId, { createdBy: userId }),
+      ctx.db.patch('projects', w.backendProjectId, { createdBy: userId }),
     )
-    const recipients = await completeInterviewOn(w.openProjectId)
+    const recipients = await completeInterviewOn(t, w, w.backendProjectId)
     expect(recipients).not.toContain('acmeShared@example.test')
     expect(recipients).toContain('acmeMember@example.test')
   })
 
-  it('does not restore a restricted role on re-invitation', async () => {
+  it('does not put them back on the team on re-invitation', async () => {
     const userId = await removeShared()
     await t.run(async (ctx) =>
       ctx.db.insert('organizationMembers', {
@@ -460,6 +508,261 @@ describe('removing a member revokes what was granted through them', () => {
         slug: 'chief-of-staff',
       }),
     ).rejects.toThrow('not_found')
+  })
+})
+
+const userId = (t: ReturnType<typeof newTest>, who: string) =>
+  t.run(async (ctx) =>
+    (await ctx.db
+      .query('users')
+      .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', `ba_${who}`))
+      .unique())!._id,
+  )
+
+const teamRowsOf = (t: ReturnType<typeof newTest>, projectId: Id<'projects'>) =>
+  t.run(async (ctx) =>
+    (
+      await ctx.db
+        .query('projectShares')
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect()
+    ).map((row) => row.userId),
+  )
+
+/**
+ * Audit T04, decision 3 of 2026-09-24: a role's team — its creator plus the
+ * colleagues they chose — decides both who sees it (with admins and owners)
+ * and who is mailed when one of its reports is ready. It replaces the
+ * open/restricted switch and the org-wide mailing (Pipe M6).
+ */
+describe("the role's team", () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+
+  beforeEach(async () => {
+    t = newTest()
+    w = await seed(t)
+  })
+
+  /** B8: the dialog used to open empty, and saving it wiped the team. */
+  it('opening the team and saving it unchanged leaves it intact', async () => {
+    const team = await as(t, 'acmeOwner').query(api.projects.team, {
+      projectId: w.chiefProjectId,
+    })
+    expect(team.members).toEqual([await userId(t, 'acmeShared')])
+    expect(team.creator).toEqual({
+      name: 'acmeOwner@example.test',
+      removed: false,
+    })
+
+    await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+      projectId: w.chiefProjectId,
+      userIds: team.members,
+    })
+    expect(await teamRowsOf(t, w.chiefProjectId)).toEqual(team.members)
+    const detail = await as(t, 'acmeShared').query(api.projects.getBySlug, {
+      orgId: w.acmeOrgId,
+      slug: 'chief-of-staff',
+    })
+    expect(detail.project.slug).toBe('chief-of-staff')
+  })
+
+  it('a member off the team neither sees the role nor is mailed about it', async () => {
+    await expect(
+      as(t, 'acmeMember').query(api.projects.getBySlug, {
+        orgId: w.acmeOrgId,
+        slug: 'chief-of-staff',
+      }),
+    ).rejects.toThrow('not_found')
+    const recipients = await completeInterviewOn(t, w, w.chiefProjectId)
+    expect(recipients.sort()).toEqual([
+      'acmeOwner@example.test',
+      'acmeShared@example.test',
+    ])
+  })
+
+  it('an admin sees every role but is mailed only about the ones they follow', async () => {
+    const detail = await as(t, 'acmeAdmin').query(api.projects.getBySlug, {
+      orgId: w.acmeOrgId,
+      slug: 'chief-of-staff',
+    })
+    expect(detail.project.slug).toBe('chief-of-staff')
+    expect(await completeInterviewOn(t, w, w.chiefProjectId)).not.toContain(
+      'acmeAdmin@example.test',
+    )
+
+    await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+      projectId: w.backendProjectId,
+      userIds: [await userId(t, 'acmeAdmin')],
+    })
+    expect(await completeInterviewOn(t, w, w.backendProjectId)).toContain(
+      'acmeAdmin@example.test',
+    )
+  })
+
+  /** A role created before the team existed and left "open to everyone" is
+   *  read as its creator's alone, with no migration: the flag is ignored. */
+  it('reads a formerly open role as visible to its team only', async () => {
+    await t.run(async (ctx) =>
+      ctx.db.patch('projects', w.chiefProjectId, { restricted: false }),
+    )
+    await expect(
+      as(t, 'acmeMember').query(api.projects.getBySlug, {
+        orgId: w.acmeOrgId,
+        slug: 'chief-of-staff',
+      }),
+    ).rejects.toThrow('not_found')
+    const list = await as(t, 'acmeMember').query(api.projects.list, {
+      orgId: w.acmeOrgId,
+    })
+    expect(list.map((p) => p.slug)).toEqual(['backend'])
+  })
+
+  /** Back F7: the list a caller hands in is bounded. */
+  it('refuses a team of more than 100', async () => {
+    const someone = await userId(t, 'acmeMember')
+    await expect(
+      as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+        projectId: w.backendProjectId,
+        userIds: Array.from({ length: 101 }, () => someone),
+      }),
+    ).rejects.toThrow('team_too_large')
+  })
+
+  it('refuses someone from another organisation', async () => {
+    await expect(
+      as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+        projectId: w.backendProjectId,
+        userIds: [await userId(t, 'rivalOwner')],
+      }),
+    ).rejects.toThrow('not_a_member')
+  })
+
+  it('lets only the creator, an admin or an owner change or read the team', async () => {
+    await expect(
+      as(t, 'acmeMember').mutation(api.projects.setTeam, {
+        projectId: w.backendProjectId,
+        userIds: [],
+      }),
+    ).rejects.toThrow('insufficient_role')
+    await expect(
+      as(t, 'acmeMember').query(api.projects.team, {
+        projectId: w.backendProjectId,
+      }),
+    ).rejects.toThrow('insufficient_role')
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeMember'),
+    ])
+  })
+
+  it('keeps the creator on the team without storing them', async () => {
+    await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+      projectId: w.backendProjectId,
+      userIds: [await userId(t, 'acmeOwner')],
+    })
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await completeInterviewOn(t, w, w.backendProjectId)).toEqual([
+      'acmeOwner@example.test',
+    ])
+  })
+
+  it('sets the team when the role is created', async () => {
+    const shared = await userId(t, 'acmeShared')
+    await expect(
+      as(t, 'acmeMember').mutation(api.projects.create, {
+        orgId: w.acmeOrgId,
+        title: 'Designer',
+        language: 'en',
+        team: [shared, await userId(t, 'rivalOwner')],
+      }),
+    ).rejects.toThrow('not_a_member')
+
+    const { projectId, slug } = await as(t, 'acmeMember').mutation(
+      api.projects.create,
+      { orgId: w.acmeOrgId, title: 'Designer', language: 'en', team: [shared] },
+    )
+    expect(await teamRowsOf(t, projectId)).toEqual([shared])
+    const detail = await as(t, 'acmeShared').query(api.projects.getBySlug, {
+      orgId: w.acmeOrgId,
+      slug,
+    })
+    expect(detail.project.title).toBe('Designer')
+  })
+})
+
+/**
+ * h03 and Back F9 / h05: a report link acts for whoever created it, and a
+ * place on a team is an attribution inside the org. Neither may outlive the
+ * membership, or the account.
+ */
+describe('leaving revokes team places and report links', () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+
+  beforeEach(async () => {
+    t = newTest()
+    w = await seed(t)
+  })
+
+  const linkStates = () =>
+    t.run(async (ctx) =>
+      Object.fromEntries(
+        (await ctx.db.query('reportShares').collect()).map((link) => [
+          link.createdBy,
+          link.revokedAt !== undefined,
+        ]),
+      ),
+    )
+
+  async function shareAs(who: string) {
+    const createdBy = await userId(t, who)
+    await t.run(async (ctx) => {
+      const report = (await ctx.db
+        .query('reports')
+        .withIndex('by_session', (q) => q.eq('sessionId', w.sessionId))
+        .unique())!
+      await ctx.db.insert('reportShares', {
+        orgId: w.acmeOrgId,
+        reportId: report._id,
+        token: `${who}-link`,
+        createdBy,
+        viewCount: 0,
+        createdAt: 0,
+      })
+    })
+  }
+
+  it('revokes the report links a removed member created, and only theirs', async () => {
+    await shareAs('acmeMember')
+    await shareAs('acmeOwner')
+    const member = await userId(t, 'acmeMember')
+    const membership = await t.run(async (ctx) =>
+      ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', w.acmeOrgId).eq('userId', member),
+        )
+        .unique(),
+    )
+    await as(t, 'acmeOwner').mutation(api.organizations.removeMember, {
+      orgId: w.acmeOrgId,
+      memberId: membership!._id,
+    })
+    expect(await linkStates()).toEqual({
+      [member]: true,
+      [await userId(t, 'acmeOwner')]: false,
+    })
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+  })
+
+  it('clears team places and revokes links when the account is deleted', async () => {
+    await shareAs('acmeMember')
+    const member = await userId(t, 'acmeMember')
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    expect(await linkStates()).toEqual({ [member]: true })
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
   })
 })
 
@@ -482,12 +785,12 @@ describe('destructive actions need owner or admin', () => {
   it('refuses a plain member the right to archive a live role', async () => {
     await expect(
       as(t, 'acmeMember').mutation(api.projects.archive, {
-        projectId: w.openProjectId,
+        projectId: w.backendProjectId,
       }),
     ).rejects.toThrow()
 
     const project = await t.run(async (ctx) =>
-      ctx.db.get('projects', w.openProjectId),
+      ctx.db.get('projects', w.backendProjectId),
     )
     expect(project?.status).toBe('active')
   })
@@ -499,16 +802,16 @@ describe('destructive actions need owner or admin', () => {
    */
   it('refuses a plain member the right to restore an archived role', async () => {
     await as(t, 'acmeOwner').mutation(api.projects.archive, {
-      projectId: w.openProjectId,
+      projectId: w.backendProjectId,
     })
     await expect(
       as(t, 'acmeMember').mutation(api.projects.restore, {
-        projectId: w.openProjectId,
+        projectId: w.backendProjectId,
       }),
     ).rejects.toThrow('insufficient_role')
 
     const project = await t.run(async (ctx) =>
-      ctx.db.get('projects', w.openProjectId),
+      ctx.db.get('projects', w.backendProjectId),
     )
     expect(project?.status).toBe('archived')
   })
@@ -535,10 +838,10 @@ describe('destructive actions need owner or admin', () => {
 
   it('lets the owner archive', async () => {
     await as(t, 'acmeOwner').mutation(api.projects.archive, {
-      projectId: w.openProjectId,
+      projectId: w.backendProjectId,
     })
     const project = await t.run(async (ctx) =>
-      ctx.db.get('projects', w.openProjectId),
+      ctx.db.get('projects', w.backendProjectId),
     )
     expect(project?.status).toBe('archived')
   })
@@ -560,7 +863,7 @@ describe('the super-admin boundary', () => {
 
   it('lets the super-admin have it', async () => {
     const overview = await as(t, 'superAdmin').query(api.admin.overview, {})
-    expect(overview.orgCount).toBe(2)
+    expect(overview.orgs).toEqual({ count: 2, capped: false })
   })
 
   /**
@@ -667,6 +970,26 @@ describe('storage handles', () => {
       betterAuthId: 'ba_acmeMember',
     })
     expect(await blobExists(avatarId)).toBe(false)
+  })
+
+  it('still deletes the account when its avatar blob is already gone', async () => {
+    const avatarId = await t.run(async (ctx) =>
+      ctx.storage.store(new Blob(['avatar'])),
+    )
+    await as(t, 'acmeMember').mutation(api.files.setMyAvatar, {
+      storageId: avatarId,
+    })
+    await t.run((ctx) => ctx.storage.delete(avatarId))
+    await t.mutation(internal.users.cascadeDelete, {
+      betterAuthId: 'ba_acmeMember',
+    })
+    const row = await t.run((ctx) =>
+      ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_acmeMember'))
+        .unique(),
+    )
+    expect(row).toBeNull()
   })
 
   it('keeps the blob when an avatar is re-attached', async () => {

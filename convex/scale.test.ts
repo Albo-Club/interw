@@ -286,7 +286,6 @@ describe('the dashboard', () => {
         strengths: ['Something'],
         concerns: [],
       },
-      paraverbal: null,
       partial: false,
       model: 'test',
     })

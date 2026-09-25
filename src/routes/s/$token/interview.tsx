@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useBlocker, useNavigate } from '@tanstack/react-router'
 import {
   useConvexAction,
   useConvexMutation,
@@ -25,10 +25,13 @@ import type { InterviewState, StopReason } from '~/lib/interview-machine'
 import { fireAndForget } from '~/lib/fire-and-forget'
 import { openInterviewStream } from '~/lib/media/devices'
 import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
+import { openTakeStore } from '~/lib/media/takeStore'
 import { uploadToSignedUrl } from '~/lib/media/upload'
 import {
+  answerAtRisk,
   initialInterviewState,
   interviewReducer,
+  opensOnIntro,
 } from '~/lib/interview-machine'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
@@ -36,8 +39,11 @@ import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { PromptMedia } from '~/components/candidate/PromptMedia'
+import { RecordingMic } from '~/components/candidate/RecordingMic'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 type DeviceChoice = { camera?: string; mic?: string }
 type EventKind = FunctionArgs<typeof api.interview.logEvent>['kind']
@@ -49,6 +55,7 @@ export const Route = createFileRoute('/s/$token/interview')({
     mic: typeof search.mic === 'string' ? search.mic : undefined,
   }),
   component: InterviewRunner,
+  head: () => candidateHead('interview'),
 })
 
 /** The countdown appears for the last 30 seconds, never before. */
@@ -69,6 +76,7 @@ function InterviewRunner() {
   const start = useConvexMutation(api.interview.start)
   const requestUpload = useConvexAction(api.interview.requestSegmentUpload)
   const markUploaded = useConvexMutation(api.interview.markSegmentUploaded)
+  const markVideoUploaded = useConvexMutation(api.interview.markVideoUploaded)
   const markFailed = useConvexMutation(api.interview.markSegmentFailed)
   const logEvent = useConvexMutation(api.interview.logEvent)
   const finish = useConvexMutation(api.interview.finish)
@@ -96,6 +104,9 @@ function InterviewRunner() {
   const recordingRef = useRef<Recording | null>(null)
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bootedRef = useRef(false)
+  // Each answer is also copied to this device as it is recorded, so a reload
+  // or a crash does not cost it. Null without IndexedDB; see takeStore.ts.
+  const [takes] = useState(() => openTakeStore(token))
 
   const questions = useMemo(() => data?.questions ?? [], [data])
   const answered = useMemo(
@@ -131,13 +142,43 @@ function InterviewRunner() {
     }
   }, [log])
 
-  /* ── Closing the tab mid-upload loses the answer, so say so. ───────────── */
+  /* ── Leaving while an answer is on this page and not on the server loses
+        it: closing the tab, reloading, or the Back button. The router's
+        blocker covers both kinds of exit, and sets `returnValue` on unload,
+        which Safari still needs before it will ask. ───────────────────────── */
+  const atRisk = answerAtRisk(state.phase)
+  useBlocker({
+    shouldBlockFn: () => !window.confirm(t('interview:run.leaveConfirm')),
+    enableBeforeUnload: atRisk,
+    disabled: !atRisk,
+  })
+
+  /* ── A phone left untouched locks its screen within a minute — mid-answer,
+        and a locked screen reads as leaving the page, which ends the take.
+        The browser drops the lock whenever the page is hidden, so it is
+        taken again on return. ───────────────────────────────────────────── */
   useEffect(() => {
-    if (state.phase !== 'saving' && state.phase !== 'recording') return
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [state.phase])
+    if (!('wakeLock' in navigator)) return
+    let lock: WakeLockSentinel | null = null
+    let released = false
+    const acquire = () => {
+      if (document.visibilityState !== 'visible') return
+      fireAndForget(
+        navigator.wakeLock.request('screen').then((sentinel) => {
+          if (released) return sentinel.release()
+          lock = sentinel
+        }),
+        'screen wake lock',
+      )
+    }
+    acquire()
+    document.addEventListener('visibilitychange', acquire)
+    return () => {
+      released = true
+      document.removeEventListener('visibilitychange', acquire)
+      if (lock) fireAndForget(lock.release(), 'screen wake lock release')
+    }
+  }, [])
 
   /* ── One camera acquisition for the interview, reopened only if a track
         died: re-requesting between questions makes the preview flicker and,
@@ -169,6 +210,16 @@ function InterviewRunner() {
     fireAndForget(preview.play(), 'camera preview autoplay')
   }, [preview, stream])
 
+  // Left anyway: the answer is gone, but the journal says it existed, so a
+  // missing answer does not read as a skipped one.
+  useEffect(
+    () => () => {
+      if (recorderRef.current) log('recording_abandoned', 'recording')
+      else if (recordingRef.current) log('recording_abandoned', 'unsent')
+    },
+    [log],
+  )
+
   useEffect(() => {
     return () => {
       if (autoStopRef.current) clearTimeout(autoStopRef.current)
@@ -184,19 +235,22 @@ function InterviewRunner() {
     if (!data || bootedRef.current) return
     bootedRef.current = true
     const needsMedia =
-      data.hasIntroMedia || data.questions.some((question) => question.hasMedia)
+      (data.introMode === 'video' && data.hasIntroMedia) ||
+      data.questions.some((question) => question.hasMedia)
     // Reported once booted, into a phase that shows it.
     const deviceFailure = openStream().then(
       () => null,
       (cause: unknown) => cause,
     )
     void (async () => {
+      let introUrl: string | null = null
       try {
         const [, urls] = await Promise.all([
           start({ token }),
           needsMedia ? promptMedia({ token }) : null,
         ])
         if (urls) {
+          introUrl = urls.intro
           setMedia({
             intro: urls.intro,
             questions: Object.fromEntries(
@@ -212,8 +266,10 @@ function InterviewRunner() {
         type: 'booted',
         resumeAt: data.nextQuestionIndex,
         total: data.questions.length,
-        showIntro:
-          data.introMode !== 'none' && data.questions.every((q) => !q.answered),
+        showIntro: opensOnIntro(
+          { mode: data.introMode, url: introUrl },
+          data.questions.map((q) => q.answered),
+        ),
       })
       const failure = await deviceFailure
       if (failure) {
@@ -228,6 +284,11 @@ function InterviewRunner() {
       const recording = recordingRef.current
       if (!recording) return
       let segmentId: Id<'segments'> | null = null
+      const saved = (videoLost: boolean) => {
+        recordingRef.current = null
+        fireAndForget(takes.remove(question.orderIndex), 'drop saved take')
+        dispatch({ type: 'saved', answered, videoLost })
+      }
       try {
         const slot = await requestUpload({
           token,
@@ -246,8 +307,7 @@ function InterviewRunner() {
         })
         // An earlier attempt landed and only its response was lost.
         if (slot.status === 'answered') {
-          recordingRef.current = null
-          dispatch({ type: 'saved', answered, videoLost: false })
+          saved(false)
           return
         }
         segmentId = slot.segmentId
@@ -288,13 +348,13 @@ function InterviewRunner() {
               contentType: slot.video.contentType,
               onProgress: progressFrom(recording.audio.size),
             })
+            await markVideoUploaded({ token, segmentId: slot.segmentId })
           } catch (cause) {
             videoLost = true
             log('upload_failed', `video: ${detail(cause)}`)
           }
         }
-        recordingRef.current = null
-        dispatch({ type: 'saved', answered, videoLost })
+        saved(videoLost)
       } catch (cause) {
         dispatch({ type: 'saveFailed', error: candidateErrorKey(cause) })
         // Recorded against the reserved segment as well as the event log, so
@@ -309,8 +369,50 @@ function InterviewRunner() {
         log('upload_failed', detail(cause))
       }
     },
-    [requestUpload, markUploaded, markFailed, log, answered, token],
+    [
+      requestUpload,
+      markUploaded,
+      markVideoUploaded,
+      markFailed,
+      log,
+      answered,
+      token,
+      takes,
+    ],
   )
+
+  /**
+   * An answer to `question` recorded before a reload or a crash, still on
+   * this device: the same attempt, so it is sent rather than recorded again.
+   * Takes for answers the server already holds are dropped on the way.
+   */
+  const recover = useCallback(
+    async (question: (typeof questions)[number]) => {
+      try {
+        await takes.prune(
+          (index) => !questions.some((q) => q.orderIndex === index && q.answered),
+        )
+        const take = await takes.load(question.orderIndex)
+        if (!take) return
+        recordingRef.current = take
+        dispatch({ type: 'recovered' })
+        log('recording_recovered')
+        await send(question)
+      } catch (cause) {
+        // Recovery is a bonus: without it the question is simply asked again.
+        log('recording_recovered', `failed: ${detail(cause)}`)
+      }
+    },
+    [takes, questions, send, log],
+  )
+
+  // Once, on the question the interview resumed at.
+  const recoveredRef = useRef(false)
+  useEffect(() => {
+    if (state.phase === 'loading' || !current || recoveredRef.current) return
+    recoveredRef.current = true
+    void recover(current)
+  }, [state.phase, current, recover])
 
   const stopAndSave = useCallback(
     async (reason: StopReason) => {
@@ -332,7 +434,8 @@ function InterviewRunner() {
     [current, send, log],
   )
 
-  /* ── A phone that goes to the background, or a headset unplugged, keeps
+  /* ── A phone that goes to the background, a headset unplugged, or a
+        microphone taken by a phone call or muted by the system keeps
         "recording" an empty track that nobody sees. Stop there, keep what was
         said, and tell the candidate. ─────────────────────────────────────── */
   useEffect(() => {
@@ -342,11 +445,18 @@ function InterviewRunner() {
       if (document.visibilityState === 'hidden') interrupt()
     }
     const tracks = streamRef.current?.getTracks() ?? []
+    // `mute` on the microphone only: that is the take going silent.
+    const events = (track: MediaStreamTrack) =>
+      track.kind === 'audio' ? ['ended', 'mute'] : ['ended']
     document.addEventListener('visibilitychange', onVisibility)
-    tracks.forEach((track) => track.addEventListener('ended', interrupt))
+    tracks.forEach((track) =>
+      events(track).forEach((e) => track.addEventListener(e, interrupt)),
+    )
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
-      tracks.forEach((track) => track.removeEventListener('ended', interrupt))
+      tracks.forEach((track) =>
+        events(track).forEach((e) => track.removeEventListener(e, interrupt)),
+      )
     }
   }, [state.phase, stopAndSave])
 
@@ -354,11 +464,16 @@ function InterviewRunner() {
     if (!current) return
     try {
       const live = await openStream()
-      const recorder = new SegmentRecorder(
-        live,
-        detectRecorderSupport(),
-        ({ elapsedSeconds }) => setElapsed(elapsedSeconds),
-      )
+      const support = detectRecorderSupport()
+      const question = current.orderIndex
+      const recorder = new SegmentRecorder(live, support, {
+        onTick: ({ elapsedSeconds }) => setElapsed(elapsedSeconds),
+        onFailure: () => void stopAndSave('interrupted'),
+        onStart: (mimeTypes) =>
+          fireAndForget(takes.begin(question, mimeTypes), 'keep take'),
+        onChunk: (track, chunk) =>
+          fireAndForget(takes.append(question, track, chunk), 'keep take chunk'),
+      })
       recorder.start()
       recorderRef.current = recorder
       setElapsed(0)
@@ -384,6 +499,7 @@ function InterviewRunner() {
 
   const skip = () => {
     recordingRef.current = null
+    if (current) fireAndForget(takes.remove(current.orderIndex), 'drop skipped take')
     dispatch({ type: 'skip', answered })
   }
 
@@ -391,6 +507,7 @@ function InterviewRunner() {
     dispatch({ type: 'finishRequested' })
     try {
       await finish({ token })
+      fireAndForget(takes.prune(), 'drop takes')
       streamRef.current?.getTracks().forEach((track) => track.stop())
       await navigate({ to: '/s/$token/done', params: { token } })
     } catch (cause) {
@@ -419,15 +536,13 @@ function InterviewRunner() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {t('interview:run.intro.title')}
           </h1>
-          {media.intro ? (
-            <video
+          {media.intro && (
+            <PromptMedia
               src={media.intro}
-              controls
-              playsInline
-              className="bg-muted aspect-video w-full rounded-lg"
+              kind="video"
+              label={t('interview:run.intro.title')}
+              className="rounded-lg"
             />
-          ) : (
-            <p className="max-w-prose leading-relaxed">{data.introText}</p>
           )}
           <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
             {t('interview:run.intro.continue')}
@@ -485,12 +600,14 @@ function InterviewRunner() {
 
               <section className="space-y-4 rounded-lg border p-5">
                 {current.hasMedia && media.questions[current.questionId] ? (
-                  <video
+                  <PromptMedia
                     key={current.questionId}
                     src={media.questions[current.questionId]}
-                    controls
-                    playsInline
-                    className="bg-muted aspect-video w-full rounded-md"
+                    kind={current.mediaKind ?? 'video'}
+                    label={t('interview:run.progress', {
+                      index: state.index + 1,
+                      total: state.total,
+                    })}
                   />
                 ) : null}
                 <div className="space-y-2">
@@ -511,6 +628,8 @@ function InterviewRunner() {
                 recording={state.phase === 'recording'}
                 countdown={countdown}
               />
+
+              {state.phase === 'recording' && <RecordingMic stream={stream} />}
 
               {state.error && state.phase === 'prompt' && (
                 <Alert variant="destructive">
@@ -589,17 +708,20 @@ function LiveStatus({ state }: { state: InterviewState }) {
 }
 
 /** Why the last answer ended, when the candidate did not end it themselves. */
+const STOP_NOTICES: Partial<Record<StopReason, string>> = {
+  timeUp: 'run.timeUp',
+  interrupted: 'run.interrupted',
+  recovered: 'run.recovered',
+}
+
 function LastAnswerNotice({ state }: { state: InterviewState }) {
   const { t } = useTranslation('interview')
   if (state.phase !== 'prompt' && state.phase !== 'review') return null
-  const message = state.videoLost
-    ? t('run.videoLost')
-    : state.stopReason === 'timeUp'
-      ? t('run.timeUp')
-      : state.stopReason === 'interrupted'
-        ? t('run.interrupted')
-        : null
-  if (!message) return null
+  const key = state.videoLost
+    ? 'run.videoLost'
+    : state.stopReason && STOP_NOTICES[state.stopReason]
+  if (!key) return null
+  const message = t(key)
   return (
     <Alert>
       <CircleAlert className="size-4" />

@@ -24,19 +24,26 @@ describe('slugify', () => {
   })
 })
 
+const takenIn = (slugs: Array<string>) => {
+  const taken = new Set(slugs)
+  return (slug: string) => Promise.resolve(taken.has(slug))
+}
+
 describe('uniqueSlug', () => {
-  it('returns the plain slug when it is free', () => {
-    expect(uniqueSlug('Product Manager', new Set())).toBe('product-manager')
+  it('returns the plain slug when it is free', async () => {
+    expect(await uniqueSlug('Product Manager', takenIn([]))).toBe(
+      'product-manager',
+    )
   })
 
-  it('suffixes until it finds a free one', () => {
-    const taken = new Set(['product-manager', 'product-manager-2'])
-    expect(uniqueSlug('Product Manager', taken)).toBe('product-manager-3')
+  it('suffixes until it finds a free one', async () => {
+    const taken = takenIn(['product-manager', 'product-manager-2'])
+    expect(await uniqueSlug('Product Manager', taken)).toBe('product-manager-3')
   })
 
   // An empty slug would produce a double slash in every link a recruiter pastes.
-  it('falls back for a title with no usable characters', () => {
-    expect(uniqueSlug('日本語', new Set())).toBe('project')
-    expect(uniqueSlug('日本語', new Set(['project']))).toBe('project-2')
+  it('falls back for a title with no usable characters', async () => {
+    expect(await uniqueSlug('日本語', takenIn([]))).toBe('project')
+    expect(await uniqueSlug('日本語', takenIn(['project']))).toBe('project-2')
   })
 })

@@ -152,7 +152,7 @@
     },
     "blocked": {
       "title": "Votre compte n'a pas été supprimé",
-      "body": "Vous êtes le seul propriétaire d'au moins une organisation. Nommez un autre membre propriétaire, puis refaites la demande de suppression."
+      "body": "Vous êtes le seul propriétaire d'une organisation, ou le dernier super-administrateur de la plateforme. Votre profil indique ce qu'il faut transmettre d'abord ; refaites ensuite la demande de suppression."
     }
   }
 }

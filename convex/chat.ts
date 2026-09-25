@@ -16,6 +16,7 @@ import { internalAction, mutation, query } from './_generated/server'
 import { requireOrgMember } from './lib/auth'
 import { chatAgent } from './agent'
 import { buildInstructions } from './lib/instructions'
+import { PROMPT_MAX } from './lib/chatLimits'
 import { consumeLimit } from './rateLimiters'
 import type { StreamArgs, SyncStreamsReturnValue } from '@convex-dev/agent'
 import type { DataModel, Id } from './_generated/dataModel'
@@ -176,6 +177,7 @@ export const sendMessage = mutation({
   },
   handler: async (ctx, { orgId, threadId, prompt, context }) => {
     const { user } = await requireOrgMember(ctx, orgId)
+    if (prompt.length > PROMPT_MAX) throw new ConvexError('prompt_too_long')
     await consumeLimit(ctx, 'chatSend', user._id)
     const scope = scopeKey(orgId, user._id)
     const meta = await getThreadMetadata(ctx, components.agent, { threadId })

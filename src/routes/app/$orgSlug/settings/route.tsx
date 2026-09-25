@@ -9,9 +9,12 @@ import { useConvexQuery } from '@convex-dev/react-query'
 
 import { api } from '../../../../../convex/_generated/api'
 import { cn } from '~/lib/utils'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/settings')({
   component: SettingsLayout,
+  errorComponent: AppRouteError,
+  notFoundComponent: AppNotFound,
 })
 
 function SettingsLayout() {

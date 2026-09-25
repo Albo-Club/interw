@@ -135,6 +135,9 @@ describe('account deletion and the last super admin', () => {
         .withIdentity({ subject: 'ba_bob' })
         .query(api.users.accountDeletionBlockers, {}),
     ).toEqual({ soleOwnedOrgs: [], lastSuperAdmin: true })
+    expect(
+      await t.query(internal.users.lastSuperAdmin, { betterAuthId: 'ba_bob' }),
+    ).toBe(true)
     await expect(
       t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_bob' }),
     ).rejects.toThrow('last_super_admin')
@@ -153,6 +156,9 @@ describe('account deletion and the last super admin', () => {
         .withIdentity({ subject: 'ba_bob' })
         .query(api.users.accountDeletionBlockers, {}),
     ).toEqual({ soleOwnedOrgs: [], lastSuperAdmin: false })
+    expect(
+      await t.query(internal.users.lastSuperAdmin, { betterAuthId: 'ba_bob' }),
+    ).toBe(false)
     await t.mutation(internal.users.cascadeDelete, { betterAuthId: 'ba_bob' })
     await t.run(async (ctx) => {
       expect(await ctx.db.get('users', bob)).toBeNull()

@@ -152,7 +152,7 @@
     },
     "blocked": {
       "title": "Your account wasn't deleted",
-      "body": "You're the only owner of at least one organization. Make another member an owner, then request the deletion again."
+      "body": "You're the only owner of an organization, or the platform's last super admin. Your profile says what to hand over first; then request the deletion again."
     }
   }
 }

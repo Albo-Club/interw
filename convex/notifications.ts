@@ -54,12 +54,12 @@ export const passwordChanged = internalMutation({
 })
 
 /**
- * Tell the people who can act on it that a report exists.
+ * Tell the role's team that a report exists.
  *
- * Internal, and the recipient list is derived server-side from org membership
- * and project sharing — never from an argument. Returns whether anything was
- * sent, so the pipeline can log "skipped" rather than "succeeded" when a role
- * has no audience.
+ * Internal, and the recipient list is derived server-side from the role's
+ * team and org membership — never from an argument. Returns whether anything
+ * was sent, so the pipeline can log "skipped" rather than "succeeded" when a
+ * role has no audience.
  */
 export const sendReportReady = internalMutation({
   args: { sessionId: v.id('sessions') },
@@ -90,27 +90,20 @@ export const sendReportReady = internalMutation({
     if (!project || !report) return false
     const org = await ctx.db.get('organizations', session.orgId)
 
-    // Who sees the role is who hears about it: a restricted role notifies only
-    // the people named on it, plus its creator.
+    // The role's team and nobody else: its creator plus the colleagues they
+    // chose. Admins and owners see every role but are only mailed about the
+    // ones they follow — an org of 40 used to get 40 emails per candidate.
     const recipients = new Set<Id<'users'>>([project.createdBy])
-    if (project.restricted) {
-      const shares = await ctx.db
-        .query('projectShares')
-        .withIndex('by_project', (q) => q.eq('projectId', project._id))
-        .collect()
-      for (const share of shares) recipients.add(share.userId)
-    } else {
-      const members = await ctx.db
-        .query('organizationMembers')
-        .withIndex('by_org', (q) => q.eq('orgId', session.orgId))
-        .take(200)
-      for (const member of members) recipients.add(member.userId)
-    }
+    const team = await ctx.db
+      .query('projectShares')
+      .withIndex('by_project', (q) => q.eq('projectId', project._id))
+      .collect()
+    for (const row of team) recipients.add(row.userId)
 
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
     for (const userId of recipients) {
-      // Membership is re-checked at send time: `createdBy` and a share row are
+      // Membership is re-checked at send time: `createdBy` and a team row are
       // attributions inside the org, never a grant that outlives removal.
       const membership = await ctx.db
         .query('organizationMembers')

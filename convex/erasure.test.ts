@@ -180,6 +180,33 @@ describe('erasure', () => {
   })
 
   /**
+   * Product §3.6. The decision history names the candidate's session and who
+   * decided what about them; it goes with the session, like every other row.
+   */
+  it('takes the decision history too', async () => {
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const [user] = await ctx.db.query('users').take(1)
+      await ctx.db.insert('decisionEvents', {
+        orgId: s.orgId,
+        sessionId: s.sessionId,
+        decision: 'rejected',
+        actorId: user._id,
+        at: 1,
+      })
+    })
+    await erase(t, s.sessionId)
+
+    const remaining = await t.run(async (ctx) =>
+      ctx.db
+        .query('decisionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(remaining).toEqual([])
+  })
+
+  /**
    * `sessionEvents` is written by the candidate's own browser, so the number
    * of rows to delete was theirs to choose. One transaction over the limit and
    * erasure failed — after the recordings were already deleted, leaving a
@@ -351,7 +378,7 @@ describe('erasure', () => {
         video: video ? { mimeType: video, contentLength: 4096 } : undefined,
       })
     await reserve('audio/webm;codecs=opus', 'video/webm')
-    await reserve('audio/mpeg')
+    await reserve('audio/mp4')
     // Back to the first container: named once, not twice.
     await reserve('audio/webm')
 
@@ -367,7 +394,7 @@ describe('erasure', () => {
 
     const prefix = `orgs/${s.orgId}/sessions/${s.sessionId}/`
     expect(deleted.sort()).toEqual(
-      ['q0.mp3', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
+      ['q0.m4a', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
     )
   })
 

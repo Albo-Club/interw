@@ -215,8 +215,8 @@ async function main() {
   Its production branch is main (staging) or production (prod), and its
   ignored build step skips every other branch: no preview builds.
 
-  Then test a magic link from ${domain}. The link should point at
-  ${domain}/api/auth/magic-link/verify (not localhost).
+  Then send yourself a sign-in code from ${domain}. The email's button
+  should point at ${domain}/login/code (not localhost).
 `)
 
   if (googleMirrored) {

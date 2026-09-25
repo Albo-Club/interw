@@ -48,7 +48,7 @@ import {
   deleteObjects,
   presignPut,
 } from './lib/objectStore'
-import { hashEmail } from './purge'
+import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc } from './_generated/dataModel'
@@ -72,7 +72,11 @@ const DOCUMENT_TYPES: Record<string, string> = {
 async function requireSession(
   ctx: GenericQueryCtx<DataModel>,
   token: string,
-): Promise<{ session: Doc<'sessions'>; project: Doc<'projects'> }> {
+): Promise<{
+  session: Doc<'sessions'>
+  project: Doc<'projects'>
+  org: Doc<'organizations'>
+}> {
   if (!looksLikeToken(token)) throw new ConvexError('not_found')
   const session = await ctx.db
     .query('sessions')
@@ -81,7 +85,9 @@ async function requireSession(
   if (!session) throw new ConvexError('not_found')
   const project = await ctx.db.get('projects', session.projectId)
   if (!project) throw new ConvexError('not_found')
-  return { session, project }
+  const org = await ctx.db.get('organizations', session.orgId)
+  if (!org) throw new ConvexError('not_found')
+  return { session, project, org }
 }
 
 /**
@@ -103,16 +109,15 @@ export const landing = query({
     gate: sessionGateReturns,
   }),
   handler: async (ctx, { token, now }) => {
-    const { session, project } = await requireSession(ctx, token)
-    const org = await ctx.db.get('organizations', session.orgId)
+    const { session, project, org } = await requireSession(ctx, token)
     const progress = await loadProgress(ctx, session)
 
     return {
-      organisationName: org?.name ?? '',
+      organisationName: org.name,
       session: toCandidateSessionView(session),
       project: toCandidateProjectView(project, progress.questions.length),
       gate: {
-        ...evaluateSessionGate({ session, project, now }),
+        ...evaluateSessionGate({ session, project, org, now }),
         // The value `interview.questions` resumes at, from the same loader,
         // so the welcome screen cannot announce one question and the
         // interview open another.
@@ -125,10 +130,15 @@ export const landing = query({
 export const acceptConsent = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
-    const { session, project } = await requireSession(ctx, token)
+    const { session, project, org } = await requireSession(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
 
-    const gate = evaluateSessionGate({ session, project, now: Date.now() })
+    const gate = evaluateSessionGate({
+      session,
+      project,
+      org,
+      now: Date.now(),
+    })
     if (gate.state !== 'ready' && gate.state !== 'resumable') {
       throw new ConvexError(gate.state)
     }
@@ -159,10 +169,15 @@ export const updateProfile = mutation({
     linkedin: v.optional(v.string()),
   },
   handler: async (ctx, { token, phone, linkedin }) => {
-    const { session, project } = await requireSession(ctx, token)
+    const { session, project, org } = await requireSession(ctx, token)
     await consumeLimit(ctx, 'candidateWrite', token)
 
-    const gate = evaluateSessionGate({ session, project, now: Date.now() })
+    const gate = evaluateSessionGate({
+      session,
+      project,
+      org,
+      now: Date.now(),
+    })
     if (gate.state !== 'ready' && gate.state !== 'resumable') {
       throw new ConvexError(gate.state)
     }
@@ -198,8 +213,13 @@ export const resolveDocumentUpload = internalQuery({
     contentLength: v.number(),
   },
   handler: async (ctx, { token, kind, mimeType, contentLength }) => {
-    const { session, project } = await requireSession(ctx, token)
-    const gate = evaluateSessionGate({ session, project, now: Date.now() })
+    const { session, project, org } = await requireSession(ctx, token)
+    const gate = evaluateSessionGate({
+      session,
+      project,
+      org,
+      now: Date.now(),
+    })
     if (gate.state !== 'ready' && gate.state !== 'resumable') {
       throw new ConvexError(gate.state)
     }
@@ -279,14 +299,19 @@ export const swapDocumentKey = internalMutation({
     key: v.string(),
   },
   handler: async (ctx, { token, kind, key }) => {
-    const { session, project } = await requireSession(ctx, token)
+    const { session, project, org } = await requireSession(ctx, token)
     // The same two checks `resolveDocumentUpload` makes, replayed here. The
     // caller of this mutation then DELETES the object it replaced, so without
     // them anyone still holding the link — the candidate, or whoever the
     // invitation was forwarded to — could point `cvKey` at a name that does
     // not exist and destroy the CV the recruiter had already read, days after
     // the interview closed.
-    const gate = evaluateSessionGate({ session, project, now: Date.now() })
+    const gate = evaluateSessionGate({
+      session,
+      project,
+      org,
+      now: Date.now(),
+    })
     if (gate.state !== 'ready' && gate.state !== 'resumable') {
       throw new ConvexError(gate.state)
     }
@@ -341,8 +366,7 @@ export const attachDocument = action({
 export const privacySummary = query({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token }) => {
-    const { session, project } = await requireSession(ctx, token)
-    const org = await ctx.db.get('organizations', session.orgId)
+    const { session, project, org } = await requireSession(ctx, token)
     const segments = await ctx.db
       .query('segments')
       .withIndex('by_session', (q) => q.eq('sessionId', session._id))
@@ -357,7 +381,7 @@ export const privacySummary = query({
       .unique()
 
     return {
-      organisationName: org?.name ?? '',
+      organisationName: org.name,
       language: project.language,
       candidateName: session.candidateName,
       candidateEmail: session.candidateEmail,
@@ -386,20 +410,7 @@ export const deleteMyData = action({
     const sessionId = await ctx.runQuery(internal.candidate.sessionIdForToken, {
       token,
     })
-    const objects = await ctx.runQuery(internal.purge.collectSessionObjects, {
-      sessionId,
-    })
-    if (!objects) return { deleted: true }
-
-    // Objects first: a failure here is retried by the caller and finds the
-    // rows still present. The reverse order would orphan video in the bucket.
-    await deleteObjects(objects.keys)
-    await ctx.runMutation(internal.purge.deleteSessionRecords, {
-      sessionId,
-      reason: 'candidate_request',
-      candidateEmailHash: await hashEmail(objects.candidateEmail),
-      objectsDeleted: objects.keys.length,
-    })
+    await eraseSession(ctx, sessionId, 'candidate_request')
     return { deleted: true }
   },
 })

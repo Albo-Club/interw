@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   AUDIO_MIME_PREFERENCES,
+  CHUNK_INTERVAL_MS,
+  NO_DATA_TIMEOUT_SECONDS,
   STOP_TIMEOUT_MS,
   SegmentRecorder,
   VIDEO_MIME_PREFERENCES,
@@ -19,7 +21,7 @@ describe('pickSupportedMimeType', () => {
         VIDEO_MIME_PREFERENCES,
         supports('video/webm', 'video/mp4'),
       ),
-    ).toBe('video/webm')
+    ).toBe('video/mp4')
   })
 
   it('returns null when nothing is supported', () => {
@@ -28,7 +30,7 @@ describe('pickSupportedMimeType', () => {
 })
 
 describe('detectRecorderSupport', () => {
-  it('prefers VP9 WebM on Chrome-like browsers', () => {
+  it('falls back to VP9 WebM where MP4 cannot be recorded (Firefox)', () => {
     const support = detectRecorderSupport(
       supports(
         'video/webm;codecs=vp9,opus',
@@ -43,7 +45,21 @@ describe('detectRecorderSupport', () => {
     expect(support.usable).toBe(true)
   })
 
-  it('falls back to MP4 on Safari', () => {
+  it('prefers H.264/AAC MP4 wherever it can be recorded', () => {
+    const support = detectRecorderSupport(
+      supports(
+        'video/mp4;codecs=avc1,mp4a.40.2',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'audio/webm;codecs=opus',
+      ),
+    )
+    expect(support.video).toBe('video/mp4;codecs=avc1,mp4a.40.2')
+    // The audio stays WebM/Opus: the transcription path already takes it.
+    expect(support.audio).toBe('audio/webm;codecs=opus')
+  })
+
+  it('takes plain MP4 on a Safari that answers no codec query', () => {
     const support = detectRecorderSupport(supports('video/mp4', 'audio/mp4'))
     expect(support.video).toBe('video/mp4')
     expect(support.audio).toBe('audio/mp4')
@@ -80,6 +96,7 @@ class FakeRecorder {
   state: 'inactive' | 'recording' = 'inactive'
   ondataavailable: ((event: { data: Blob }) => void) | null = null
   onstop: (() => void) | null = null
+  onerror: (() => void) | null = null
 
   constructor(
     readonly stream: { kind: string },
@@ -88,7 +105,10 @@ class FakeRecorder {
     FakeRecorder.instances.push(this)
   }
 
-  start() {
+  timeslice: number | undefined
+
+  start(timeslice?: number) {
+    this.timeslice = timeslice
     this.state = 'recording'
   }
 
@@ -144,6 +164,60 @@ describe('SegmentRecorder', () => {
       videoBitsPerSecond: 1_000_000,
       audioBitsPerSecond: 64_000,
     })
+  })
+
+  it('reports an encoder that fails mid-answer', () => {
+    const onFailure = vi.fn()
+    new SegmentRecorder(fakeStream({ video: true }), bothFormats, {
+      onFailure,
+    }).start()
+    FakeRecorder.instances[1].onerror?.()
+    expect(onFailure).toHaveBeenCalledOnce()
+  })
+
+  it('hands over chunks as they are recorded', () => {
+    const onChunk = vi.fn()
+    new SegmentRecorder(fakeStream({ video: true }), bothFormats, {
+      onChunk,
+    }).start()
+    const [audio, video] = FakeRecorder.instances
+    expect(audio.timeslice).toBe(CHUNK_INTERVAL_MS)
+    audio.ondataavailable?.({ data: new Blob(['a']) })
+    video.ondataavailable?.({ data: new Blob(['v']) })
+    video.ondataavailable?.({ data: new Blob([]) })
+    expect(onChunk.mock.calls.map(([track]) => track)).toEqual([
+      'audio',
+      'video',
+    ])
+  })
+
+  it('says what it records once it starts, video only if there is some', () => {
+    const onStart = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onStart,
+    }).start()
+    expect(onStart).toHaveBeenCalledWith({ audio: 'audio/webm', video: null })
+  })
+
+  it('reports an encoder that produces no audio, seconds in', async () => {
+    vi.useFakeTimers()
+    const onFailure = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onFailure,
+    }).start()
+    await vi.advanceTimersByTimeAsync(NO_DATA_TIMEOUT_SECONDS * 1000)
+    expect(onFailure).toHaveBeenCalledOnce()
+  })
+
+  it('stays quiet about an encoder that is writing', async () => {
+    vi.useFakeTimers()
+    const onFailure = vi.fn()
+    new SegmentRecorder(fakeStream({ video: false }), bothFormats, {
+      onFailure,
+    }).start()
+    FakeRecorder.instances[0].ondataavailable?.({ data: new Blob(['a']) })
+    await vi.advanceTimersByTimeAsync(NO_DATA_TIMEOUT_SECONDS * 2000)
+    expect(onFailure).not.toHaveBeenCalled()
   })
 
   it('records audio alone from a stream with no camera', async () => {

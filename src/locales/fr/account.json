@@ -2,12 +2,12 @@
   "menu": {
     "accountMenu": "Menu du compte",
     "profile": "Votre profil",
-    "switchOrg": "Changer d'organisation",
     "superAdmin": "Super-admin",
     "signOutEverywhere": "Se déconnecter partout",
     "signOut": "Se déconnecter",
     "signOutEverywhereTitle": "Se déconnecter partout ?",
-    "signOutEverywhereDescription": "Cela vous déconnecte de tous les appareils, y compris celui-ci. Vous devrez vous reconnecter."
+    "signOutEverywhereDescription": "Cela vous déconnecte de tous les appareils, y compris celui-ci. Vous devrez vous reconnecter.",
+    "createOrg": "Créer une organisation"
   },
   "time": {
     "justNow": "à l'instant",
@@ -15,6 +15,7 @@
     "hourAgo": "il y a {{count}} h",
     "dayAgo": "il y a {{count}} j"
   },
+  "reauthAction": "Se reconnecter",
   "activeSessions": {
     "title": "Sessions actives",
     "description": "Appareils actuellement connectés à votre compte. Révoquez ceux que vous ne reconnaissez pas."
@@ -33,16 +34,21 @@
     "unknownDevice": "Appareil inconnu",
     "genericBrowser": "Navigateur",
     "unknownOs": "Système inconnu",
-    "deviceLabel": "{{browser}} sur {{os}}"
+    "deviceLabel": "{{browser}} sur {{os}}",
+    "reauth": "Pour votre sécurité, la liste des appareils demande une connexion de moins d'une heure."
   },
   "linked": {
+    "password": "Mot de passe",
+    "google": "Google",
     "connected": "Connecté",
-    "connectMore": "Connecter d'autres méthodes",
-    "comingSoon": "Bientôt disponible",
+    "notConnected": "Non connecté",
+    "notSet": "Non défini — ajoutez-en un ci-dessous",
     "connect": "Connecter",
     "disconnect": "Déconnecter",
-    "emailPassword": "E-mail et mot de passe",
-    "magicLink": "Lien magique"
+    "disconnected": "Google déconnecté",
+    "connectFailed": "Impossible de connecter Google. Utilisez le compte Google de cette adresse e-mail, puis réessayez.",
+    "onlyMethod": "Votre seule méthode de connexion — définissez un mot de passe avant de la déconnecter.",
+    "reauth": "Pour votre sécurité, reconnectez-vous avant de déconnecter — votre session date de plus d'une heure."
   },
   "page": {
     "title": "Votre profil",
@@ -70,20 +76,21 @@
     "title": "E-mail",
     "description": "Nous enverrons un lien de confirmation à votre adresse actuelle.",
     "newEmail": "Nouvel e-mail",
-    "hint": "Votre e-mail actuel reste actif jusqu'à ce que vous cliquiez sur le lien de confirmation.",
+    "hint": "Deux étapes : approuvez depuis votre boîte actuelle, puis confirmez depuis la nouvelle. Votre e-mail actuel reste actif jusque-là.",
     "send": "Envoyer l'e-mail de confirmation",
     "alreadyYours": "C'est déjà votre e-mail",
-    "confirmationSent": "Confirmation envoyée à {{email}}. Cliquez sur le lien pour appliquer le changement — il expire dans 1 heure."
-  },
-  "magic": {
-    "title": "Lien magique",
-    "description": "Recevez un lien de connexion en un clic dans votre boîte de réception.",
-    "send": "Envoyez-moi un lien magique",
-    "sent": "Lien magique envoyé à {{email}}"
+    "confirmationSent": "Étape 1 sur 2 : nous avons envoyé un lien d'approbation à {{email}}. Il expire dans 1 heure.",
+    "pendingTitle": "Changement d'e-mail en cours",
+    "pendingApprove": "Étape 1 sur 2 — ouvrez le lien envoyé à <strong>{{email}}</strong> pour approuver le passage à <strong>{{newEmail}}</strong>.",
+    "pendingVerify": "Étape 2 sur 2 — ouvrez le lien envoyé à <strong>{{newEmail}}</strong> pour la confirmer. Votre e-mail change alors.",
+    "pendingExpiry": "Les liens expirent au bout d'1 heure. Si le vôtre a expiré, refaites la demande.",
+    "approved": "Changement approuvé. Confirmez maintenant depuis le lien envoyé à {{email}}.",
+    "changed": "C'est fait — votre e-mail est désormais {{email}}.",
+    "linkFailed": "Ce lien est invalide ou a expiré. Refaites la demande de changement."
   },
   "connected": {
-    "title": "Comptes connectés",
-    "description": "Méthodes pouvant vous connecter. Ajoutez un fournisseur social pour une connexion plus rapide."
+    "title": "Méthodes de connexion",
+    "description": "Les moyens de vous connecter à ce compte."
   },
   "password": {
     "title": "Mot de passe",
@@ -92,7 +99,18 @@
     "new": "Nouveau mot de passe",
     "hint": "Évitez les mots de passe utilisés ailleurs. La jauge ci-dessous indique la robustesse en temps réel.",
     "change": "Changer le mot de passe",
-    "changed": "Mot de passe modifié. Les autres sessions ont été déconnectées."
+    "changed": "Mot de passe modifié. Les autres sessions ont été déconnectées.",
+    "setTitle": "Définir un mot de passe",
+    "setDescription": "Votre compte n'a pas encore de mot de passe. Ajoutez-en un pour vous connecter avec votre e-mail et un mot de passe.",
+    "set": "Définir le mot de passe",
+    "added": "Mot de passe défini. Vous pouvez maintenant vous connecter avec.",
+    "errors": {
+      "session_not_fresh": "Pour votre sécurité, reconnectez-vous avant de définir un mot de passe — votre session date de plus d'une heure.",
+      "password_already_set": "Ce compte a déjà un mot de passe.",
+      "password_too_short": "Utilisez au moins 12 caractères.",
+      "password_too_long": "Utilisez au plus 128 caractères.",
+      "unknown": "Impossible de définir le mot de passe. Réessayez."
+    }
   },
   "signout": {
     "title": "Déconnexion",
@@ -106,6 +124,33 @@
     "dialogTitle": "Supprimer votre compte ?",
     "dialogDescription": "Nous enverrons un lien de confirmation à <strong>{{email}}</strong>. Cliquez dessus pour supprimer définitivement votre compte. Si vous changez d'avis, ignorez l'e-mail et rien ne se passera.",
     "confirm": "Envoyer la confirmation",
-    "confirmationSent": "Confirmation envoyée à {{email}}. Cliquez sur le lien dans l'heure pour supprimer définitivement."
+    "confirmationSent": "Confirmation envoyée à {{email}}. Cliquez sur le lien dans l'heure pour supprimer définitivement.",
+    "blockedTitle": "Nommez un autre propriétaire, ou supprimez l'organisation",
+    "blocked": "Vous êtes le seul propriétaire des organisations ci-dessous. Une organisation ne peut pas rester sans propriétaire : nommez un autre membre propriétaire de chacune, ou supprimez l'organisation, puis revenez.",
+    "manageMembers": "Gérer les membres de {{name}}",
+    "deleteOrg": "Supprimer",
+    "deleteOrgLabel": "Supprimer {{name}}"
+  },
+  "deletion": {
+    "metaTitle": "Suppression du compte — interw",
+    "home": "Retour à l'accueil",
+    "profile": "Aller à votre profil",
+    "deleted": {
+      "title": "Votre compte a été supprimé",
+      "body": "Votre profil et vos adhésions aux organisations ont été supprimés. Merci d'avoir utilisé interw."
+    },
+    "signin": {
+      "title": "Connectez-vous pour confirmer la suppression",
+      "body": "Pour votre sécurité, ce lien ne fonctionne que là où vous êtes connecté au compte à supprimer. Connectez-vous, nous vous ramènerons ici pour terminer.",
+      "action": "Se connecter pour continuer"
+    },
+    "invalid": {
+      "title": "Ce lien ne peut pas être utilisé",
+      "body": "Il a expiré ou a déjà servi. Demandez-en un nouveau depuis votre profil."
+    },
+    "blocked": {
+      "title": "Votre compte n'a pas été supprimé",
+      "body": "Vous êtes le seul propriétaire d'au moins une organisation. Nommez un autre membre propriétaire, puis refaites la demande de suppression."
+    }
   }
 }

@@ -1,5 +1,10 @@
 # Test plan — Hardened auth (Phases 0 + 1)
 
+> **Partly superseded (2026-09-24).** Sign-up with a password and the magic
+> link are gone: email sign-in is a code, which also creates accounts. The
+> current auth checks are TESTING.md § "Level 2 — Auth"; the password
+> journeys below still apply to reset and to accounts that have a password.
+
 This document is designed to validate the new authentication behaviours
 **without going into implementation details**. Each scenario describes what
 a real user should see, in the order they see it.

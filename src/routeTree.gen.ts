@@ -13,10 +13,12 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AccountDeletionRouteImport } from './routes/account-deletion'
 import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as RShareTokenRouteImport } from './routes/r/$shareToken'
+import { Route as LoginCodeRouteImport } from './routes/login_.code'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as AppMeRouteImport } from './routes/app/me'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
@@ -62,6 +64,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountDeletionRoute = AccountDeletionRouteImport.update({
+  id: '/account-deletion',
+  path: '/account-deletion',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
@@ -80,6 +87,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const RShareTokenRoute = RShareTokenRouteImport.update({
   id: '/r/$shareToken',
   path: '/r/$shareToken',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginCodeRoute = LoginCodeRouteImport.update({
+  id: '/login_/code',
+  path: '/login/code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
@@ -212,6 +224,7 @@ const AppOrgSlugProjectsProjectSlugEditRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/account-deletion': typeof AccountDeletionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
@@ -222,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/login/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
@@ -245,6 +259,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account-deletion': typeof AccountDeletionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
@@ -253,6 +268,7 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/login/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -277,6 +293,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app': typeof AppRouteRouteWithChildren
+  '/account-deletion': typeof AccountDeletionRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
@@ -287,6 +304,7 @@ export interface FileRoutesById {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/login_/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
   '/app/$orgSlug/settings': typeof AppOrgSlugSettingsRouteRouteWithChildren
@@ -313,6 +331,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/app'
+    | '/account-deletion'
     | '/forgot-password'
     | '/login'
     | '/register'
@@ -323,6 +342,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/login/code'
     | '/r/$shareToken'
     | '/app/'
     | '/app/$orgSlug/settings'
@@ -346,6 +366,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/account-deletion'
     | '/forgot-password'
     | '/login'
     | '/register'
@@ -354,6 +375,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/login/code'
     | '/r/$shareToken'
     | '/app'
     | '/api/auth/$'
@@ -377,6 +399,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/app'
+    | '/account-deletion'
     | '/forgot-password'
     | '/login'
     | '/register'
@@ -387,6 +410,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/login_/code'
     | '/r/$shareToken'
     | '/app/'
     | '/app/$orgSlug/settings'
@@ -412,12 +436,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRouteRoute: typeof AppRouteRouteWithChildren
+  AccountDeletionRoute: typeof AccountDeletionRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   STokenRouteRoute: typeof STokenRouteRouteWithChildren
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
+  LoginCodeRoute: typeof LoginCodeRoute
   RShareTokenRoute: typeof RShareTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -452,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account-deletion': {
+      id: '/account-deletion'
+      path: '/account-deletion'
+      fullPath: '/account-deletion'
+      preLoaderRoute: typeof AccountDeletionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app': {
       id: '/app'
       path: '/app'
@@ -478,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/r/$shareToken'
       fullPath: '/r/$shareToken'
       preLoaderRoute: typeof RShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login_/code': {
+      id: '/login_/code'
+      path: '/login/code'
+      fullPath: '/login/code'
+      preLoaderRoute: typeof LoginCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/onboarding': {
@@ -742,12 +782,14 @@ const STokenRouteRouteWithChildren = STokenRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRouteRoute: AppRouteRouteWithChildren,
+  AccountDeletionRoute: AccountDeletionRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   STokenRouteRoute: STokenRouteRouteWithChildren,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
+  LoginCodeRoute: LoginCodeRoute,
   RShareTokenRoute: RShareTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

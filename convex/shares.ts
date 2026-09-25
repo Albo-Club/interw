@@ -221,6 +221,7 @@ const shareViewReturns = v.object({
           questionIndex: v.number(),
           question: v.string(),
           mediaKind: v.union(mediaKindValidator, v.null()),
+          durationSeconds: v.union(v.number(), v.null()),
         }),
       ),
     }),

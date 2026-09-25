@@ -2066,14 +2066,26 @@ Traps worth knowing:
 ## Video is recorded as MP4 wherever the browser can
 
 `VIDEO_MIME_PREFERENCES` puts H.264/AAC MP4 first (Chrome and Edge 126+,
-Safari) and keeps WebM only as the Firefox branch. Two reasons, both on the
-recruiter's side, not the candidate's:
+Safari) and keeps WebM only as the Firefox branch, because **WebM playback on
+Safari, iOS above all, varies by version**: a recruiter on an iPhone could not
+always watch an answer recorded in Chrome. H.264/AAC is also what a server can
+rewrite into an indexed file without re-encoding.
 
-- **MediaRecorder's WebM has no duration and no cues.** The player reports an
-  unknown duration and seeks wherever it guesses, which quietly breaks "jump
-  to the quote". Its MP4 is fragmented, which carries its own timing.
-- **WebM playback on Safari, iOS above all, varies by version.** A recruiter on
-  an iPhone could not always watch an answer recorded in Chrome.
+What MP4 does **not** buy is seeking. MediaRecorder writes a stream, whatever
+the container:
+
+- **WebM** (Firefox) has no `Duration` and no `Cues`.
+- **MP4** (Chrome, Safari) is fragmented: `mvhd`, `tkhd` and `mdhd` carry a
+  duration of 0, and there is no `sidx` or `mfra` to map a time to a byte
+  offset.
+
+So the player reports an unknown (or live-looking) duration, and a seek to a
+part of the file it has not downloaded yet is ignored or lands approximately.
+Sources: addpipe, "Duration in MP4 Files Produced by Chrome/Safari" and
+"Duration in WebM Videos Produced by Chrome". The real fix is to rewrite each
+video server-side into an MP4 with its index up front
+(`-movflags +faststart`), which is not built yet; until then the player works
+around it — see "A MediaRecorder video is played from a downloaded copy".
 
 The **audio** file is deliberately left alone: WebM/Opus on Chrome and
 Firefox, M4A on Safari. It is what gets transcribed, and the transcription
@@ -2081,9 +2093,8 @@ path already takes both — changing it would risk the answer for no gain.
 The transcription call labels the file with `mimeTypeForKey(key)`; it used to
 hard-code `audio/webm`, which was wrong for every Safari answer.
 
-Firefox answers therefore stay WebM, with the seeking problem above, until
-something re-muxes them server-side. Plain `video/mp4` stays in the list
-after the codec-qualified entries for a Safari that answers no codec query.
+Plain `video/mp4` stays in the list after the codec-qualified entries for a
+Safari that answers no codec query.
 
 ## E2E fixtures are opt-in per deployment
 
@@ -2157,17 +2168,45 @@ link and then navigates back into `/app` in the same tab keeps the role's
 language until the next full load. Harmless, and cheaper than a second i18n
 instance for the candidate bundle.
 
-## Seeking a `<video>` before `loadedmetadata` is silently ignored
+## A MediaRecorder video is played from a downloaded copy
 
-Setting `video.currentTime` before metadata has loaded does nothing — no
-error, no warning — and the video plays from the beginning. This is how
-"jump to the quote" quietly becomes "plays from the start", which reads as a
-broken feature rather than a race.
+`AnswerPlayer` does not stream the signed URL. It fetches the whole answer
+(`downloadMedia`, with a visible percentage), plays it from a `blob:` URL, and
+only then applies a quote's seek. The files have no index (see "Video is
+recorded as MP4 wherever the browser can"), and the obvious fixes each fail:
 
-`AnswerPlayer` waits for `readyState >= 1`, or listens once for
-`loadedmetadata`. It also carries a **nonce** on the seek cue, because
-clicking the same quote twice must replay it and a plain
-`{ segmentId, seconds }` object would compare equal.
+- **`preload="auto"` + waiting for `buffered`.** Chrome keeps downloading a
+  paused, cue-less WebM to the end, but `buffered` stays at the first ~2 s it
+  demuxed — measured in Chromium: the network went idle at 19 s with
+  `buffered` still `0–2.3`. A player waiting on `buffered` never seeks.
+  `seekable` is no better: it reports `[0, ∞)`.
+- **`preload` at all, on iOS.** Safari ignores it; nothing is fetched until a
+  gesture asks for the media. `fetch` is not media loading, so the copy starts
+  downloading on the iPhone too.
+- **Seeking the stream and trusting the browser.** Chromium scans forward and
+  lands on the right second (measured on self-timestamped recordings, MP4 and
+  WebM alike), but the addpipe write-ups report ignored or approximate seeks
+  elsewhere, and that is exactly what we cannot see from here. A complete local
+  file removes the variable: every demuxer has every byte before the seek.
+
+Nothing new is opened for it: the bucket's CORS rule already allows `GET`
+(`TESTING.md` P2a), `Content-Length` is a CORS-safelisted header, `connect-src`
+takes `https:` and `media-src` already lists `blob:`. The cost is one full
+download (≈ 7.5 MB a minute) before the first frame. The copy does not expire,
+so the 50-minute re-signing (`useSessionMedia`) must not fetch it again: the
+download is keyed on the answer, and only a failed one retries, with the next
+fresh URL. Only the active answer is kept, and its object URL is revoked on
+switch.
+
+Two rules survive from the streaming days:
+
+- **Seek after `loadedmetadata`.** Setting `currentTime` earlier is silently
+  ignored — no error — and the video plays from the start.
+- **The cue carries a nonce**, because clicking the same quote twice must
+  replay it and a plain `{ segmentId, seconds }` object would compare equal.
+
+A `play()` refused after the wait (iOS no longer sees the click as the cause)
+turns into a visible "Play from 3:30" button, never a click that did nothing.
 
 ## Para-verbal analysis was removed
 
@@ -2887,3 +2926,20 @@ Lazy `import()` chunks are not counted.
 - **A TanStack Start bump can rename or reshape the manifest.** The script
   then fails loudly ("no start manifest", "route … is missing") rather than
   measuring nothing — read the new manifest, don't delete the step.
+
+## Mistral's transcription response is not OpenAI's
+
+Every transcription failed validation, and so every report after it found no
+answer to assess (`no_transcribed_answers`). The parser in `convex/lib/ai.ts`
+required `usage.total_seconds`; Mistral sends `usage.prompt_audio_seconds`
+and token counts, never `total_seconds`. Nothing caught it because
+`transcribe()` had no unit test and the pipeline tests stub it out.
+
+- **Parse the documented shape, not a remembered one.** Segment `start`/`end`
+  are typed `number | null`; a timeless segment is dropped rather than failing
+  the answer. The tests in `convex/lib/ai.test.ts` use a payload copied from
+  Mistral's docs — refresh it from there, not from another provider's.
+- **`language` with `timestamp_granularities`.** One Mistral doc page says the
+  two are incompatible; production says otherwise. With both sent, Voxtral
+  answered HTTP 200 on every call in `jobLog` (September 2026).
+  Keep `language`: it helps accuracy on short answers.

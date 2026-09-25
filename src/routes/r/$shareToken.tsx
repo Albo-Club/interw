@@ -17,6 +17,7 @@ import { Card, CardContent } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
 import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
 import { AnswerPlayer, formatTimecode } from '~/components/report/AnswerPlayer'
+import { Highlights } from '~/components/report/Highlights'
 import { ScoreBadge } from '~/components/candidates/StatusBadge'
 import { cn } from '~/lib/utils'
 
@@ -174,6 +175,13 @@ function SharedReport() {
             questionLabels={questionLabels}
             answerLengths={answerLengths}
             onError={onPlaybackError}
+          />
+        )}
+
+        {report.highlights && (
+          <Highlights
+            highlights={report.highlights}
+            onJump={media && media.length > 0 ? jump : null}
           />
         )}
 

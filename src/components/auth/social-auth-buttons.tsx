@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
 import { authClient } from '~/lib/auth-client'
+import { AUTH_CONTROL } from '~/components/auth/auth-shell'
+import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Spinner } from '~/components/ui/spinner'
@@ -33,19 +35,30 @@ function GoogleIcon() {
 }
 
 /**
- * Renders the social sign-in buttons + the "or continue with" divider as one
- * unit. Returns `null` when no provider is configured (template default), so
- * pages can drop it in unconditionally without an orphan divider. Provider
- * availability comes from `api.publicConfig.enabledSocialProviders`, the single
- * source of truth (credentials live in the Convex env).
+ * Renders the social sign-in buttons + the "or" divider as one unit. Returns
+ * `null` when no provider is configured (template default), so pages can drop
+ * it in unconditionally without an orphan divider. Provider availability
+ * comes from `api.publicConfig.enabledSocialProviders`, the single source of
+ * truth (credentials live in the Convex env).
+ *
+ * A failed or cancelled sign-in comes back to `/login?error=…` with the same
+ * `redirect`, where the page explains it and a retry still lands where the
+ * person was going.
  */
-export function SocialAuthButtons({ redirect }: { redirect?: string }) {
+export function SocialAuthButtons({
+  redirect,
+  lastUsed = false,
+}: {
+  redirect?: string
+  /** Show the "Last used" badge on the Google button. */
+  lastUsed?: boolean
+}) {
   const { t } = useTranslation('auth')
   const providers = useConvexQuery(api.publicConfig.enabledSocialProviders, {})
   const [loading, setLoading] = useState(false)
 
   if (providers === undefined) {
-    return <Skeleton className="h-9 w-full rounded-md" />
+    return <Skeleton className={`${AUTH_CONTROL} w-full rounded-md`} />
   }
 
   if (!providers.google) return null
@@ -55,7 +68,9 @@ export function SocialAuthButtons({ redirect }: { redirect?: string }) {
     const { error } = await authClient.signIn.social({
       provider: 'google',
       callbackURL: redirect ?? '/app',
-      errorCallbackURL: '/login',
+      errorCallbackURL: redirect
+        ? `/login?${new URLSearchParams({ redirect })}`
+        : '/login',
     })
     // On success the browser redirects to Google; we only reach here on error.
     if (error) {
@@ -69,12 +84,17 @@ export function SocialAuthButtons({ redirect }: { redirect?: string }) {
       <Button
         type="button"
         variant="outline"
-        className="w-full"
+        className={`w-full ${AUTH_CONTROL}`}
         onClick={() => void onGoogle()}
         disabled={loading}
       >
         {loading ? <Spinner /> : <GoogleIcon />}
         {t('social.google')}
+        {lastUsed && (
+          <Badge variant="secondary">
+            {t('lastUsed')}
+          </Badge>
+        )}
       </Button>
       <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
         <span className="bg-card text-muted-foreground relative z-10 px-2">

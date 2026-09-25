@@ -5,6 +5,14 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "sign-in-with-a-code": {
+      "title": "Sign in with a code from your email",
+      "body": "Enter your email and we send you a 6-digit code — or a button that fills it in for you. The same steps create your account, so there is no password to choose; you can still sign in with one if you have it. Invitations use the same sign-in, and a session that expires now brings you back to the page you were on."
+    },
+    "verification-link-guidance": {
+      "title": "Clearer email verification",
+      "body": "Opening a verification link while signed in to another account, or after it has expired, now tells you what to do next instead of leaving you on a plain sign-in page. Sign-up also asks you to type your password twice."
+    },
     "team-invitations": {
       "title": "Smoother team invitations",
       "body": "Invite several teammates at once, see who invited whom and when, resend an invitation or copy its link, and spot an email that bounced. Expired invitations are marked as such and can be sent again. People who sign up without the link now see the invitation waiting for them instead of creating a second organization, and anyone can create another organization from the organization menu. The invitation email now says which role you are offered and until when."

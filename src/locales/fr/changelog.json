@@ -5,6 +5,14 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "sign-in-with-a-code": {
+      "title": "Connectez-vous avec un code reçu par e-mail",
+      "body": "Saisissez votre e-mail et nous vous envoyons un code à 6 chiffres — ou un bouton qui le remplit pour vous. Les mêmes étapes créent votre compte : plus de mot de passe à choisir, mais vous pouvez toujours vous connecter avec le vôtre si vous en avez un. Les invitations utilisent la même connexion, et une session expirée vous ramène désormais à la page où vous étiez."
+    },
+    "verification-link-guidance": {
+      "title": "Une vérification d’e-mail plus claire",
+      "body": "Ouvrir un lien de vérification alors que vous êtes connecté à un autre compte, ou après son expiration, vous indique désormais quoi faire au lieu de vous laisser sur une simple page de connexion. L’inscription vous demande aussi de saisir votre mot de passe deux fois."
+    },
     "team-invitations": {
       "title": "Des invitations d’équipe plus simples",
       "body": "Invitez plusieurs collègues d’un coup, voyez qui a invité qui et quand, renvoyez une invitation ou copiez son lien, et repérez un e-mail qui n’a pas été remis. Les invitations expirées sont signalées et peuvent être renvoyées. Une personne qui s’inscrit sans le lien voit désormais l’invitation qui l’attend au lieu de créer une deuxième organisation, et chacun peut créer une autre organisation depuis le menu des organisations. L’e-mail d’invitation précise le rôle proposé et sa date d’expiration."

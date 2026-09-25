@@ -1,14 +1,10 @@
 import { ConvexError, v } from 'convex/values'
-import { internalQuery, mutation, query } from './_generated/server'
+import { mutation, query } from './_generated/server'
 import { components } from './_generated/api'
 import { invitationRoleValidator } from './schema'
 import { authComponent } from './auth'
 import { provisionAppUser, requireAppUser, requireOrgRole } from './lib/auth'
-import {
-  emailsMatch,
-  isInviteValidForSignup,
-  normalizeEmail,
-} from './lib/invitations'
+import { emailsMatch, normalizeEmail } from './lib/invitations'
 import { setLastOrgSlug } from './lib/userPrefs'
 import { RESEND_FROM, resend } from './email'
 import { invitationEmail } from './emailTemplates'
@@ -405,24 +401,6 @@ export const listMine = query({
       })
     }
     return mine
-  },
-})
-
-/**
- * Internal-only gate for the signup databaseHook (convex/auth.ts). Returns
- * true only when `token` resolves to a pending, unexpired invitation whose
- * email matches `email`. The hook uses this to decide whether a signup's
- * email may be pre-verified — token + email-match is mandatory, email alone
- * never qualifies.
- */
-export const validateInviteForSignup = internalQuery({
-  args: { token: v.string(), email: v.string() },
-  handler: async (ctx, { token, email }) => {
-    const inv = await ctx.db
-      .query('invitations')
-      .withIndex('by_token', (q) => q.eq('token', token))
-      .unique()
-    return isInviteValidForSignup(inv, email, Date.now())
   },
 })
 

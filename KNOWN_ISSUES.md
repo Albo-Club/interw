@@ -29,7 +29,8 @@ all three :
 
 1. **All enabled methods must be trusted.** A method is trusted when BA
    marks `emailVerified: true` after the first sign-in. Sources of
-   trust : magic link, OAuth (Google/GitHub/…), or email/password with
+   trust : an email code (or the magic link it replaced), OAuth
+   (Google/GitHub/…), or email/password with
    `requireEmailVerification: true`. **Never enable email/password with
    verification off if any other method is enabled.**
 2. **`account.accountLinking.enabled: true` in `createAuth(...)`.**
@@ -40,12 +41,17 @@ all three :
    re-points the existing row's `betterAuthId` instead of inserting.
    If you ever write a new "create app user" code path, copy that
    pattern — don't dedup on `betterAuthId` alone.
-4. **Magic link must not auto-sign-up**:
-   `magicLink({ disableSignUp: true })` is mandatory. Our only legit
-   entry point is `/register` (password + verification). Without it,
-   any random email gets a verified BA account on first link click,
-   bypassing the `/register` flow and leaving password-less accounts
-   that later 500 on `signIn.email`.
+4. **The email code is the way in; a password never is.** Accounts are
+   created by the email code (or Google), both of which prove the
+   address, so `emailOTP` keeps sign-up on and
+   `emailAndPassword.disableSignUp: true` turns password sign-up off. The
+   rule this replaces — "magic link must not auto-sign-up, `/register`
+   (password + verification) is the only entry" — held while a password
+   sign-up was the entry point; with a code as the entry point it is
+   inverted. A password-less account is normal now: `signIn.email` answers
+   it with the ordinary "invalid email or password", and a password can be
+   added through the reset flow, which creates the credential. See
+   "Email sign-in: one code, typed or confirmed" below.
 
 ### Security coupling
 
@@ -57,7 +63,7 @@ will silently link the attacker's password account to the victim's
 session → account takeover.
 
 Verified email closes *that* hole: OAuth refuses to link an unverified local
-account (`requireLocalEmailVerified`, default true), and a magic link deletes
+account (`requireLocalEmailVerified`, default true), and an email code deletes
 the unproven credential before verifying (`revokeUnprovenAccountAccess`).
 
 **But a verification link is not proof of the password.** It proves control of
@@ -74,76 +80,147 @@ link only redirects to `/login?verifyToken=…`, and the email is verified by a
 change-email link completes only for a clicker already signed in to the
 account. Never re-enable `autoSignInAfterVerification`, and never redeem a
 verification token without the credential. A squatted address is recovered by
-forgot-password (which replaces the stranger's password) or a magic link
+forgot-password (which replaces the stranger's password) or an email code
 (which deletes it).
+
+The same hook also owns the dead ends. An expired or bad token goes to
+`/login?verifyExpired=1`, because BA's own `${callbackURL}?error=` lands on
+`/app`, whose guard drops the error on the way to a bare `/login`. `/login`
+opened with a `verifyToken` in a browser signed in to *another* account
+explains itself instead of bouncing to `/app`, which used to drop the token.
+Google on a still-unverified password account is refused by design
+(`requireLocalEmailVerified`) and comes back as `?error=account_not_linked`,
+which gets its own message (continue with an email code, then Google links).
+
+Every redirect error lands on `/login` with the `redirect` it started with:
+Google's `errorCallbackURL` carries it, and `onAPIError.errorURL` sends a
+callback that fails before its state is read (bad or missing `state`) to
+`/login` rather than Better Auth's bare `/api/auth/error` page.
+
+### TanStack Router JSON-parses search values
+
+`?flag=1` reaches `validateSearch` as the **number** `1`, and `?flag=true` as a
+boolean. A `z.literal('1')` fails, and a failing `validateSearch` renders the
+route's error screen rather than dropping the param. Type flags for what the
+parser produces (`z.literal(1)`), and add `.catch(undefined)` when a malformed
+value should be ignored rather than fatal.
 
 ### Legacy users
 
 Prod accounts created before this fix have `emailVerified: false` on the BA
 side. On the next `signIn.email`, they will be blocked — the `/login` screen
 detects `EMAIL_NOT_VERIFIED` and offers "Resend verification email" to
-unblock. No automatic migration.
+unblock, which keeps their password. Signing in with an email code instead
+also works, and deletes that password (announced on screen). No automatic
+migration.
 
 For duplicate `users` rows already created in prod, `provisionAppUser` will
 converge them to a single row on the user's next login, but the second BA
 user remains in the database. Manual cleanup via the Convex dashboard.
 
-## Invitation signup — token-gated email pre-verification
+## Email sign-in: one code, typed or confirmed
 
-### The problem
+The email method is Better Auth's `emailOTP` plugin (`convex/auth.ts`): a
+6-digit code, valid 10 minutes, 5 tries, stored hashed. It replaced the magic
+link. The same email carries a button to `/login/code#email=…&code=…`.
 
-`emailAndPassword.requireEmailVerification: true` sends every signup through
-a verification email. For an **invited** user that round-trip is both
-redundant and broken: the accept logic lives in a `useEffect` on
-`/accept-invite/$token`, so after clicking the verification link the invitee
-is signed in but lands wherever the callback points — not necessarily back on
-the accept page — and the invitation is never accepted.
+### Why a code, and why the link needs a click
 
-### The fix (and why token-gated, NOT email-gated)
+Corporate mail scanners (Defender Safe Links, Mimecast, Proofpoint…) open
+every link in a message, some in a headless browser that runs the page's
+script. A one-time link is spent by the scanner before the person ever sees
+it. A code has to be typed; and the link only opens our page with the code
+filled in, where nothing happens until a person presses **Confirm** (a POST).
+Keep it that way: the link page must never auto-submit, and the code step
+auto-submits only on digits a person typed.
 
-`convex/auth.ts` adds `databaseHooks.user.create.before`. It reads
-`inviteToken` from the signup body (`context.body`) and, **only** when that
-token resolves to a still-pending, unexpired invitation **for the same
-email** (via the `internal.invitations.validateInviteForSignup` query →
-`isInviteValidForSignup` in `convex/lib/invitations.ts`), returns
-`{ data: { ...user, emailVerified: true } }`. Otherwise it touches nothing
-and the normal verification flow applies. The front then signs the invitee in
-immediately (`signUp` → `signIn` on `/accept-invite`, and `callbackURL` +
-`inviteToken` forwarded from `/register`).
+### Why the fragment
 
-**A matching email is never sufficient on its own.** Email-gating (pre-verify
-any signup whose address equals some pending invite) was rejected: it would
-let an attacker register `victim@example.com` with their own password and get
-it marked verified, then — with `accountLinking.enabled: true` — have BA link
-that account when the victim later signs in (the takeover hole described in
-"Account linking & verified email"). Token-gating closes this: the 32-byte
-token is delivered **only** to the invitee's mailbox, so possessing it already
-proves mailbox control. Keep the token + email-match check; never relax it to
-email alone.
+The address and the code travel after the `#`, which the browser never sends
+to a server — not to our proxy, not to Vercel's or Convex's logs, not in a
+`Referer`. `src/routes/login_.code.tsx` reads it once, then strips it with
+`history.replaceState`. Never move them to the query string. The page's
+return URL is not in the email at all: the browser that asked for the code
+remembers it (`src/lib/auth-memory.ts`), another device lands on `/app`.
 
-### Gotchas for the next dev
+### What Better Auth does with a code (1.6.30)
 
-- **`inviteToken` is not in the Better Auth client type.** It's a custom field
-  the server forwards via `context.body`, not a declared `user.additionalField`
-  (we don't store it). The `/accept-invite` call casts the literal
-  (`as Parameters<typeof authClient.signUp.email>[0]`); `/register` sends it
-  through a conditional spread that needs no cast. If you add it to
-  `additionalFields` it would create a column — don't.
-- **Reading the body needs a run context.** The hook uses
-  `requireRunMutationCtx(ctx).runQuery(...)` (same pattern as the email
-  senders) — `create.before` runs inside the signup mutation, so `runQuery`
-  is available. Do **not** annotate the hook's `context` param; let it infer,
-  or the heavy `databaseHooks` type can trip the TS inference cycle CLAUDE.md
-  flags.
-- **`useRedirectWhenAuthenticated` always SPA-navigates to `/app`** (ignores
-  `redirect`). Both invite entry points work around this without touching the
-  shared guard: `/accept-invite` accepts inline (signUp → signIn → auto-accept
-  effect, no navigation), and `/register` in an invite flow does signUp →
-  signIn → `window.location.assign('/accept-invite/<token>')` — a **full**
-  navigation that wins the race against the guard's SPA `navigate`, handing
-  off to the accept page so the invitee is attached to the org instead of
-  landing on `/app`. If the token is stale the signIn fails and we fall back
-  to the verification screen (`callbackURL` returns to the invite).
+`plugins/email-otp/routes.mjs`, `signInEmailOTP`:
+
+- **No account** → creates one with `emailVerified: true` and an empty
+  name, which is how the UI knows to ask "What should we call you?".
+- **Unverified account** → `revokeUnprovenAccountAccess`
+  (`db/revoke-unproven-account-access.mjs`) deletes its `credential` account
+  and every session, *then* verifies it. That is the anti-squatting fix:
+  whoever set a password on someone else's address loses it when the owner
+  shows up. Verified accounts are not touched — their password keeps working.
+- `atomicVerifyOTP` consumes the code on read; a wrong code puts it back with
+  one more attempt counted; after `allowedAttempts` the next try gets
+  `TOO_MANY_ATTEMPTS` and the code is gone. An expired code is `OTP_EXPIRED`.
+  The identifier is `sign-in-otp-<email>`, so another address's code is just
+  `INVALID_OTP`.
+- Each send **replaces** the pending code (`resendStrategy` defaults to
+  `rotate`) — and it replaces it *before* calling our sender.
+
+### The deleted password is announced, from what the server saw
+
+A person who did choose that unverified password would otherwise find it
+silently gone. `revokedPasswordNotice` records, before the code is checked,
+that an unverified account holding a credential is signing in (keyed by the
+`Request`), and after a successful sign-in adds `passwordRevoked: true` to the
+response only if the credential is actually gone. Don't infer it from the
+response's `user.emailVerified` (still `false` there: Better Auth returns the
+object it read before updating it) — that is an accident of 1.6.30.
+
+### Per-address quotas are charged before Better Auth runs
+
+`perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
+`verificationSend` in a before hook, for every address, and refuses with a
+real 429 (`code: 'RATE_LIMITED'`). It used to happen inside the email senders,
+which was wrong three ways:
+
+1. A sender only runs for an address that has an account, so the quota
+   refusal told a stranger the account existed.
+2. The code endpoint rotates the code before its sender runs, so a refused
+   send still replaced the owner's code — an unmetered stream of fresh codes
+   to guess at, five tries each.
+3. A `ConvexError` thrown inside a Better Auth callback reaches the browser
+   as a bare 500 with no code, which the pages read as "sent".
+
+Rule: never call `consumeLimit` (or throw anything but an `APIError`) inside
+a Better Auth sender.
+
+### What is switched off
+
+- `disabledAuthPaths`: the plugin's verify-email, reset-password and
+  change-email-by-code endpoints. We never mail those codes, and a code
+  minted but never mailed is still six digits someone could guess at. The
+  hook also refuses any code type but `sign-in`.
+- `emailAndPassword.disableSignUp: true`: nobody creates an account with a
+  password any more. Against the account-linking rule above: (1) every way in
+  proves the address on first use — a code verifies on creation, Google
+  returns a verified email — and (2) `accountLinking.enabled` is unchanged.
+  Legacy unverified password accounts still complete their old verification
+  link through `verificationRequiresCredential`.
+
+## Invitations no longer pre-verify anything
+
+`/accept-invite/$token` signs the invitee in with the same email-code flow as
+`/login`, the address fixed to the invited one. The code proves the mailbox,
+so the old `inviteToken` → `databaseHooks.user.create.before` pre-verification
+(and its `validateInviteForSignup` query) had nothing left to do and the hook
+was removed. Two things from that era still matter:
+
+- **A matching email alone never proves anything.** Pre-verifying an account
+  because its address equals a pending invitation would let a stranger
+  register the victim's address and have it blessed. Mailbox proof comes from
+  something delivered to the mailbox: a code, a link token, an invitation
+  token — never from the address itself.
+- **The accept effect waits for the sign-in form.** A new account still has a
+  name to give after its code signs it in, so the page holds its auto-accept
+  (and keeps the form on screen) until the form calls `onDone`
+  (`onBusyChange` in `src/components/auth/email-sign-in.tsx`). `/login` holds
+  its "already signed in" redirect the same way.
 
 ## Google OAuth (template — opt-in)
 
@@ -196,20 +273,15 @@ source for the exact key BA reads (`ctx.context.options.user.changeEmail.<…>`)
 and match it byte-for-byte. The TypeScript types here are permissive
 (extra keys are accepted), so a typo compiles but ships broken.
 
-### Anti-enumeration on `/register`
+### Anti-enumeration on sign-in
 
-When a signup hits `USER_ALREADY_EXISTS`, the UI renders the *exact
-same* "Check your inbox" screen as a successful new signup
-(`src/routes/register.tsx`). No verification email is actually sent in
-the duplicate case — BA aborts at 422. An attacker can no longer
-enumerate registered emails by watching the signup response.
-
-Trade-off : a legit user who signs up twice (e.g. forgot they already
-have an account) gets the success screen but no email, then bounces.
-The "try a different email" link on that screen and the
-`/forgot-password` flow are the recovery paths. Accepted cost for
-closing the enumeration leak — same pattern shipped by Linear and
-Stripe.
+Sign-up and sign-in are one flow (`/register` only redirects to
+`/login?mode=signup`). Asking for a code answers the same for every address —
+Better Auth's `send-verification-otp` stores and sends a code whether or not
+the account exists, since sign-up is on — so the "Check your inbox" step says
+nothing about who has an account. Keep every refusal on that endpoint
+address-independent too: see the per-address quota in "Email sign-in: one
+code, typed or confirmed".
 
 ### Cookie attributes are explicit, secure flag is APP_ENV-gated
 
@@ -235,19 +307,19 @@ applies — same trap as the `SITE_URL` guard below.
 BA's built-in `rateLimit` block with `storage: 'database'` is wired
 into the Convex adapter — no separate component to install. BA writes
 to an auto-created `rateLimit` table on the BA-side schema. We rely
-on it for `/sign-in/email`, `/sign-up/email`, `/forgot-password`,
-`/reset-password`, `/sign-in/magic-link`, `/email-verification/send`,
-`/change-email`, `/change-password`, `/delete-user`.
+on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP.
+Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
 
 `convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
-*separate* — it covers application-level limits (invitations, chat,
-email-send wrappers). Do not confuse the two : BA's limiter is on the
-auth HTTP edge, ours is on Convex mutations/actions.
+*separate* — it covers application-level limits (invitations, chat, and the
+per-address email quotas, charged by the `perEmailQuota` hook). Do not
+confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
+key on Convex mutations/actions.
 
 ### Password policy (Phase 1)
 
 - BA: `minPasswordLength: 12`, `maxPasswordLength: 128`.
-- Zod schemas in `/register`, `/reset-password`, `/me` mirror the
+- Zod schemas in `/reset-password` and `/me` mirror the
   minimum. Both layers must agree — if you tighten the Convex side,
   bump the Zod min in the same commit or signup passes client
   validation and 400s on submit.
@@ -331,7 +403,9 @@ here — `signIn.email` never receives a `callbackURL`, so BA's `trustedOrigins`
 check (`convex/auth.ts`) never runs. Only the redirects *we* navigate to
 ourselves are exposed.
 
-Fixed by `src/lib/safe-redirect.ts`, applied in `/login` and `/register`.
+Fixed by `src/lib/safe-redirect.ts`, applied in `/login` (and `/register`,
+which forwards it there) and to the return URL the code link page reads back
+from storage.
 
 **The trap, and why the obvious fix is wrong.** The tempting predicate is
 "starts with `/` but not `//`":
@@ -366,12 +440,10 @@ Two design notes:
 - The Zod field ends in `.catch(undefined)`, so a hostile value collapses to
   "no redirect" and the page renders normally. Throwing would surface an error
   screen that advertises the attempt.
-- **Nothing in this app produces `?redirect=`.** Every navigation to `/login`
-  and `/register` is bare, and the invitation email links straight to
-  `${siteUrl}/accept-invite/${token}`. The param is externally supplied and only
-  ever *propagated* between the login↔register cross-links. So the guard cannot
-  regress a legitimate flow — but it also means the return-URL is not preserved
-  when the `/app` guard bounces you to `/login` (a UX gap, not a security one).
+- The `/app` guard is the one place that produces `?redirect=`: bounced to
+  `/login` without a session, you come back to the page you were on. Every
+  other occurrence is externally supplied and only *propagated* (Google's
+  `callbackURL` / `errorCallbackURL`, the code link's remembered return URL).
 
 ## Deploys are wired into the Vercel build
 
@@ -663,8 +735,8 @@ either operator:
 
 High severity, *"Account takeover via pre-account hijacking on magic-link and
 email-OTP sign-in"*. Vulnerable `>= 1.1.3, < 1.6.22`; fixed in **1.6.22**.
-`convex/auth.ts` loads `magicLink()`, so this repo sits squarely in the blast
-radius — and because it is a template, every project forked from it is born
+`convex/auth.ts` loads `emailOTP()` (it loaded `magicLink()` when this was
+written), so this repo sits squarely in the blast radius — and because it is a template, every project forked from it is born
 with whatever the lockfile carries. That is why this floor is a lockfile
 concern, not just a range concern: check `pnpm-lock.yaml`, not only
 `package.json`. (The advisory lists a second range, `>=1.7.0-beta.0
@@ -847,8 +919,8 @@ call belongs to. A read-only tool is still an egress path.
 
 ## SITE_URL drift in prod = broken email links
 
-`SITE_URL` is the Convex env var that builds every email URL (magic link,
-invitation accept, change-email verification, delete-account confirm) and
+`SITE_URL` is the Convex env var that builds every email URL (sign-in code
+link, invitation accept, change-email verification, delete-account confirm) and
 feeds Better Auth's `baseURL`. If you forget to set it on the prod Convex
 deployment, emails ship with `http://localhost:3000/...` links — silent
 data loss until a user complains.

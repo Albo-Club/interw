@@ -11,9 +11,10 @@
       "groupName": "non-major"
     },
     {
-      "description": "Auto-merge dev dependencies on green CI.",
+      "description": "Auto-merge dev dependencies on green CI, once the release is 3 days old: nobody reviews an automerged diff, and a hijacked publish is usually caught and yanked within that window.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],
+      "minimumReleaseAge": "3 days",
       "automerge": true
     },
     {

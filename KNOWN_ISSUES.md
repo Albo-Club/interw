@@ -504,15 +504,28 @@ Previews stay off until that last point is wired.
   moving the environment's branch back to a good commit and letting the
   platform redeploy.
 
-### Node version is not pinned the way pnpm is
+### Node is pinned to one major, in three places
 
-`engines.node` is `">=22"`, a range, not a pin. CI runs Node 22; Vercel
-reads the range, overrides the project's own "22.x" setting, and builds on
-the latest major it offers (24 today — the build log warns about it). That
-divergence has been harmless so far, and the range is deliberate (this
-template is forked). If a build ever fails on the platform but passes in CI,
-check the Node major in the build log first, and pin `engines.node` to a
-single major in one deliberate PR rather than guessing at the symptom.
+`engines.node` is `"22.x"`, not a range. Vercel reads `engines.node` and lets
+it **override** the project's own Node setting: while it said `">=22"`, builds
+ran on the newest major Vercel offers (24), CI ran 22, and the only trace was
+a warning in the build log. A range there is a request for "whatever is
+newest", the same way an unpinned pnpm was.
+
+The major lives in three places, and they move together in one PR:
+
+- `engines.node` in `package.json` — what Vercel builds on;
+- `node-version:` in every `actions/setup-node` step of `ci.yml` — what CI
+  tests on;
+- the Vercel project's Settings → Build and Deployment → Node.js Version —
+  ignored while `engines.node` is set, but set it to match so nothing changes
+  if the field is ever removed.
+
+A local Node outside `22.x` still installs: for the project's own `engines`,
+pnpm 10 prints `WARN Unsupported engine` and carries on (`engine-strict` is
+off). Treat that warning as "you are not testing what ships". If a build ever
+fails on the platform but passes in CI, check the Node major in the build log
+first.
 
 ## pnpm.overrides
 
@@ -1299,6 +1312,73 @@ and ~10 MB of data burned **4.8 GB of Database Bandwidth** this way.
    migration has cleared the field from every row — the widen → migrate →
    narrow pattern.
 
+## Third-party GitHub Actions are pinned to a commit SHA
+
+Every `uses:` in `.github/workflows/` names a full commit SHA, with the
+release it corresponds to as a trailing comment:
+
+```yaml
+- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+```
+
+A tag like `@v4` is a movable pointer in someone else's repository: whoever
+controls it — or steals a maintainer's token — can repoint it, and every
+workflow here runs the new code on its next trigger. That is how
+`tj-actions/changed-files` leaked CI secrets across thousands of repositories
+in 2025. What is at stake here: `release-tag.yml` runs with `contents: write`,
+and the `e2e` job holds `CONVEX_DEPLOY_KEY`. A SHA cannot be repointed.
+
+**Bumping one.** Resolve the tag to the commit it points at. For an
+*annotated* tag that is the `^{}` line, not the tag object above it:
+
+```bash
+git ls-remote https://github.com/pnpm/action-setup refs/tags/v4.4.0 'refs/tags/v4.4.0^{}'
+# a15d…  refs/tags/v4.4.0        <- the tag object: not this one
+# fc06…  refs/tags/v4.4.0^{}     <- the commit: pin this
+```
+
+A lightweight tag prints a single line, which is the commit. Replace the SHA
+**and** the comment in every workflow that uses the action — a comment that
+disagrees with its SHA is worse than none. Renovate's `github-actions` manager
+reads this `@<sha> # vX.Y.Z` form and bumps both together once the app is
+installed. The pins were taken from what each major tag (`@v4`) resolved to on
+the day, not from the newest release, so pinning changed no behaviour — which
+is why `pnpm/action-setup` sits on v4.3.0 although v4.4.0 exists.
+
+## `pnpm audit` in CI
+
+The last step of the `check` job is `pnpm audit --prod --audit-level=high`: a
+high or critical advisory in anything `dependencies` pulls in fails CI.
+`--prod` because devDependencies never ship; lower severities are printed, not
+gated.
+
+Two things to know when it goes red:
+
+- **It can fail with no change in the PR.** An advisory published overnight
+  turns every branch red at once. That is the point of the gate, and why it
+  runs last in the job — lint, test and build have already reported.
+- **The hit is usually transitive and fixable in range.** The first run found
+  8 highs, all under `@tanstack/react-start` (`js-yaml` via `xmlbuilder2`,
+  `postcss` and `nanoid` via `vite`, `browserslist` via `@babel/core`), each
+  with a patched release inside the range its parent already declared. The fix
+  was a lockfile refresh, no manifest change:
+
+  ```bash
+  pnpm update --depth Infinity --config.minimum-release-age=4320 js-yaml nanoid postcss browserslist
+  ```
+
+  `minimum-release-age` is in minutes (4320 = three days): it keeps the
+  refresh from pulling a version published this morning, the same cooldown
+  `renovate.json` puts on automerged updates. Review the `pnpm-lock.yaml`
+  diff — it should touch the named packages and their own dependencies only.
+
+Only when the patched version is **outside** the parent's range does it take a
+`pnpm.overrides` entry (in `package.json`, never `pnpm-workspace.yaml` — see
+§ "pnpm 11 silently drops `pnpm.overrides`"), documented under
+§ "pnpm.overrides" with the condition for lifting it. Never mute the step or
+add `--ignore` to get a PR through: a finding that genuinely does not apply is
+argued in the PR body, and its advisory id recorded here.
+
 ## release-please was removed (failed on every merge with `other side closed`)
 
 The `release-please.yml` workflow turned the **Release please** check red on
@@ -1682,6 +1762,15 @@ typed `env` export carrying `CONVEX_CLOUD_URL` / `CONVEX_SITE_URL`). Commit it
 with the bump: `pnpm codegen:api:check` only guards `api.d.ts`, so a stale
 `server.d.ts` sails through CI and reappears as a phantom diff for whoever
 next runs `convex dev`.
+
+`.mcp.json` pins the same version for the Convex MCP server
+(`npx -y convex@<version> mcp start`), and nothing bumps it for you: move it
+with `convex` in the same PR. It is an exact `npx` pin rather than
+`pnpm exec convex` because Claude Code starts MCP servers when a session
+opens, before anyone has run `pnpm install` on a fresh clone, and `pnpm exec`
+finds nothing without `node_modules`. It is not `@latest` because that fetched
+and ran the newest registry release on every start, on machines holding
+Convex credentials — never the version the lockfile had been reviewed at.
 
 ## Convex type inference collapses on two specific cycles
 

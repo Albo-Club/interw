@@ -13,11 +13,11 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # No `version:` — the action reads `packageManager` from package.json,
       # so CI, Corepack and Vercel all resolve the same pnpm. Never re-pin here.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -32,6 +32,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # High/critical advisory in a production dependency. Last on purpose: it
+      # can go red overnight with no change in the PR. When it does, see
+      # KNOWN_ISSUES.md § "`pnpm audit` in CI".
+      - run: pnpm audit --prod --audit-level=high
 
   # The candidate interview in real browsers (e2e/interview.spec.ts), Chromium
   # and WebKit, on fake camera and microphone. Its only backend is staging, so
@@ -57,9 +61,9 @@ jobs:
       VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
       MEDIA_ORIGIN: ${{ secrets.MEDIA_ORIGIN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -77,7 +81,7 @@ jobs:
       - run: pnpm test:e2e
       # The report carries the recording-screen captures and, on failure, the
       # trace.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: playwright-report
@@ -96,8 +100,8 @@ jobs:
   skills-verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - run: node scripts/sync-skills.mjs --verify
@@ -110,8 +114,8 @@ jobs:
   skills-drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
       - run: node scripts/sync-skills.mjs --check

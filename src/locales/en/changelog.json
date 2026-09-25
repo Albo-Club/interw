@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "share-highlights-and-deadlines": {
+      "title": "Highlights on shared reports, no dead invitations",
+      "body": "A shared report now lists the moments worth watching, as the report in the app does. A bounced invitation is flagged on its candidate however much mail the organisation sent since. A role past its deadline, or archived, no longer sends invitations or reminders that would open on a closed interview, and when a role's creator leaves with nobody else on its team, its admins are told when a report is ready."
+    },
     "assistant-history-purged": {
       "title": "Older assistant conversations deleted",
       "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."

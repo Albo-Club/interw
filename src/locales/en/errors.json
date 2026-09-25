@@ -81,6 +81,7 @@
     "password_too_long": "Use at most 128 characters.",
     "password_too_short": "Use at least 12 characters.",
     "project_archived": "This role is archived. Restore it to make changes.",
+    "project_expired": "This role's deadline has passed. Push it back to invite candidates.",
     "project_has_sessions": "This role has candidates, so it cannot be deleted. Archive it instead.",
     "project_not_active": "Publish the role first.",
     "prompt_too_long": "That message is too long.",

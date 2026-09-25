@@ -22,6 +22,7 @@ import { internal } from './_generated/api'
 import {
   criteriaScoresValidator,
   fitMatrixValidator,
+  highlightsValidator,
   mediaKindValidator,
   recommendationValidator,
 } from './schema'
@@ -213,6 +214,7 @@ const shareViewReturns = v.object({
       // the report IS what the report holds, and a second copy would drift.
       criteriaScores: criteriaScoresValidator,
       fitMatrix: v.union(fitMatrixValidator, v.null()),
+      highlights: v.union(highlightsValidator, v.null()),
       answers: v.array(
         v.object({
           segmentId: v.id('segments'),
@@ -290,6 +292,7 @@ export const view = query({
         ),
         criteriaScores: report.criteriaScores,
         fitMatrix: report.fitMatrix ?? null,
+        highlights: report.highlights ?? null,
         answers: segments
           .sort((a, b) => a.questionIndex - b.questionIndex)
           // By id, not by index: see convex/pipeline.ts.

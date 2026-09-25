@@ -87,6 +87,9 @@ function ProjectDetailPage() {
 
   const { project, questions, criteria } = data
   const expired = project.expiresAt !== null && project.expiresAt < Date.now()
+  // Mirrors `assertAcceptsCandidates` in convex/sessions.ts: only a live role
+  // mails a link, since the candidate would otherwise find it already closed.
+  const canInvite = project.status === 'active' && !expired
   // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
   // spares a member an action the server would refuse.
   const ready = me?.kind === 'ready' ? me : null
@@ -126,7 +129,7 @@ function ProjectDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {project.status === 'active' && (
+          {canInvite && (
             <Button onClick={() => setInviting(true)}>
               <UserPlus className="size-4" />
               {t('projects:detail.invite')}
@@ -334,10 +337,9 @@ function ProjectDetailPage() {
           ) : (
             org && (
               <CandidatesTable
-                orgId={org._id}
                 projectId={project._id}
                 orgSlug={orgSlug}
-                canInvite={project.status === 'active'}
+                canInvite={canInvite}
                 canManage={canManage}
                 onInvite={() => setInviting(true)}
                 locale={getLocale()}

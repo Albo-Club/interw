@@ -193,6 +193,17 @@ export const fitMatrixValidator = v.object({
   ),
 })
 
+/** The moments of the recording worth watching first. */
+export const highlightsValidator = v.array(
+  v.object({
+    segmentId: v.id('segments'),
+    startSeconds: v.number(),
+    endSeconds: v.number(),
+    kind: highlightKindValidator,
+    label: v.string(),
+  }),
+)
+
 /** One scored criterion, with the quotes behind the score. */
 export const criteriaScoresValidator = v.array(
   v.object({
@@ -534,17 +545,7 @@ export default defineSchema({
         totalSpeakingSeconds: v.number(),
       }),
     ),
-    highlights: v.optional(
-      v.array(
-        v.object({
-          segmentId: v.id('segments'),
-          startSeconds: v.number(),
-          endSeconds: v.number(),
-          kind: highlightKindValidator,
-          label: v.string(),
-        }),
-      ),
-    ),
+    highlights: v.optional(highlightsValidator),
     model: v.string(),
     generatedAt: v.number(),
   })
@@ -610,6 +611,7 @@ export default defineSchema({
     // the report notification has to be able to ask "did I already send this
     // one?" exactly rather than by scanning the last 200 emails of the org.
     .index('by_session', ['sessionId'])
+    .index('by_session_and_template', ['sessionId', 'template'])
     .index('by_invitation', ['invitationId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,

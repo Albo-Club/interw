@@ -30,7 +30,11 @@ import { ConvexError, v } from 'convex/values'
 import { vOnCompleteValidator } from '@convex-dev/workpool'
 import { internalAction, internalMutation, internalQuery } from './_generated/server'
 import { internal } from './_generated/api'
-import { jobOutcomeValidator, jobStepValidator } from './schema'
+import schema, {
+  jobOutcomeValidator,
+  jobStepValidator,
+  paraverbalValidator,
+} from './schema'
 import { complete, transcribe  } from './lib/ai'
 import { getObjectStream } from './lib/objectStore'
 import { computeParaverbal } from './lib/paraverbal'
@@ -40,7 +44,7 @@ import { reportOutputSchema } from './lib/reportSchema'
 import { normalizeWeights } from './lib/weights'
 import { mediaPool, reportPool } from './lib/workpools'
 import type { GenericMutationCtx } from 'convex/server'
-import type { DataModel, Id } from './_generated/dataModel'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 /* ────────────────────────── Failure reporting ───────────────────────────── */
 
@@ -73,32 +77,54 @@ function logStepFailure(
 
 /* ─────────────────────────────── Job log ────────────────────────────────── */
 
+/**
+ * Which real attempt at `step` (for one answer, when it is a transcription)
+ * a new row belongs to: one per `started` row already in the log.
+ *
+ * Counted here because the work pool does not hand its attempt number to the
+ * job it runs. Relaunches count too, which is the useful figure anyway — it
+ * is how many times this step was actually paid for.
+ */
+async function attemptNumber(
+  ctx: GenericMutationCtx<DataModel>,
+  row: Pick<Doc<'jobLog'>, 'sessionId' | 'step' | 'segmentId' | 'outcome'>,
+): Promise<number> {
+  const started = await ctx.db
+    .query('jobLog')
+    .withIndex('by_attempt', (q) =>
+      q
+        .eq('sessionId', row.sessionId)
+        .eq('step', row.step)
+        .eq('segmentId', row.segmentId)
+        .eq('outcome', 'started'),
+    )
+    .collect()
+  return row.outcome === 'started'
+    ? started.length + 1
+    : Math.max(started.length, 1)
+}
+
 export const recordJob = internalMutation({
   args: {
     sessionId: v.id('sessions'),
     step: jobStepValidator,
     outcome: jobOutcomeValidator,
-    attempt: v.optional(v.number()),
+    segmentId: v.optional(v.id('segments')),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
     promptTokens: v.optional(v.number()),
     completionTokens: v.optional(v.number()),
+    reasoningTokens: v.optional(v.number()),
     audioSeconds: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get('sessions', args.sessionId)
     if (!session) return null
     await ctx.db.insert('jobLog', {
+      ...args,
       orgId: session.orgId,
-      sessionId: args.sessionId,
-      step: args.step,
-      outcome: args.outcome,
-      attempt: args.attempt ?? 1,
-      durationMs: args.durationMs,
+      attempt: await attemptNumber(ctx, args),
       error: args.error?.slice(0, 1_000),
-      promptTokens: args.promptTokens,
-      completionTokens: args.completionTokens,
-      audioSeconds: args.audioSeconds,
       at: Date.now(),
     })
     return null
@@ -263,6 +289,7 @@ export const transcribeSegment = internalAction({
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId: context.sessionId,
         step: 'transcribe',
+        segmentId,
         outcome: 'skipped',
       })
       return null
@@ -271,6 +298,7 @@ export const transcribeSegment = internalAction({
     await ctx.runMutation(internal.pipeline.recordJob, {
       sessionId: context.sessionId,
       step: 'transcribe',
+      segmentId,
       outcome: 'started',
     })
 
@@ -295,6 +323,7 @@ export const transcribeSegment = internalAction({
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId: context.sessionId,
         step: 'transcribe',
+        segmentId,
         outcome: 'succeeded',
         durationMs: Date.now() - started,
         audioSeconds: result.audioSeconds ?? undefined,
@@ -303,6 +332,7 @@ export const transcribeSegment = internalAction({
       await ctx.runMutation(internal.pipeline.recordJob, {
         sessionId: context.sessionId,
         step: 'transcribe',
+        segmentId,
         outcome: 'failed',
         durationMs: Date.now() - started,
         error: error instanceof Error ? error.message : String(error),
@@ -375,8 +405,14 @@ export const onTranscribeComplete = internalMutation({
         orgId: session.orgId,
         sessionId,
         step: 'transcribe',
+        segmentId,
         outcome: 'failed',
-        attempt: 1,
+        attempt: await attemptNumber(ctx, {
+          sessionId,
+          step: 'transcribe',
+          segmentId,
+          outcome: 'failed',
+        }),
         error: `terminal: ${(error ?? 'unknown').slice(0, 900)}`,
         at: Date.now(),
       })
@@ -518,8 +554,18 @@ export const reportInputs = internalQuery({
 export const saveReport = internalMutation({
   args: {
     sessionId: v.id('sessions'),
-    report: v.any(),
-    paraverbal: v.any(),
+    // What `buildReport` produces, derived from the table so the two cannot
+    // drift. The fields this mutation owns are left out, so a report can
+    // never carry its own `orgId` past the spread below.
+    report: schema.tables.reports.validator.omit(
+      'orgId',
+      'sessionId',
+      'partial',
+      'paraverbal',
+      'model',
+      'generatedAt',
+    ),
+    paraverbal: v.union(paraverbalValidator, v.null()),
     model: v.string(),
     partial: v.boolean(),
   },
@@ -652,6 +698,7 @@ export const generateReport = internalAction({
         durationMs: Date.now() - started,
         promptTokens: usage?.promptTokens,
         completionTokens: usage?.completionTokens,
+        reasoningTokens: usage?.reasoningTokens,
         error:
           inputs.missingAnswers > 0
             ? `partial: ${inputs.missingAnswers} answer(s) unreadable`
@@ -679,7 +726,18 @@ export const onReportComplete = internalMutation({
       .query('reports')
       .withIndex('by_session', (q) => q.eq('sessionId', context.sessionId))
       .unique()
-    if (!report) return null
+    if (!report) {
+      // The job is over and produced nothing. Releasing the claim is what
+      // lets an operator relaunch it — while the claim is held, a relaunch
+      // is refused, because it would pay for a second completion.
+      const session = await ctx.db.get('sessions', context.sessionId)
+      if (session) {
+        await ctx.db.patch('sessions', context.sessionId, {
+          reportJobEnqueuedAt: undefined,
+        })
+      }
+      return null
+    }
     await reportPool.enqueueAction(
       ctx,
       internal.pipeline.notifyRecruiter,

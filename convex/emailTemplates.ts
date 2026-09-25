@@ -114,51 +114,82 @@ const urlFallback = (locale: EmailLocale, url: string) =>
     fr: `Si le bouton ne fonctionne pas, copiez cette URL dans votre navigateur :<br><span style="color:${MUTED}; word-break:break-all;">${esc(url)}</span>`,
   })
 
+const MONTHS: Record<EmailLocale, Array<string>> = {
+  en: [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ],
+  fr: [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+  ],
+}
+
+/**
+ * Spelled out by hand rather than through `Intl`, whose locale data this
+ * template has no reason to depend on in the Convex runtime. UTC, and the
+ * copy says so, because the recipient's time zone is unknown.
+ */
+function longDate(locale: EmailLocale, ms: number): string {
+  const d = new Date(ms)
+  const month = MONTHS[locale][d.getUTCMonth()]
+  const day = d.getUTCDate()
+  return locale === 'fr'
+    ? `${day === 1 ? '1er' : day} ${month} ${d.getUTCFullYear()}`
+    : `${month} ${day}, ${d.getUTCFullYear()}`
+}
+
 export function invitationEmail({
   locale,
   inviterName,
   orgName,
+  role,
+  expiresAt,
   acceptUrl,
 }: {
   locale: EmailLocale
   inviterName: string
   orgName: string
+  role: 'admin' | 'member'
+  expiresAt: number
   acceptUrl: string
 }) {
   const safeInviter = esc(inviterName)
   const safeOrg = esc(orgName)
+  const days = Math.max(1, Math.round((expiresAt - Date.now()) / 86_400_000))
+  const date = longDate(locale, expiresAt)
   const c = pick(locale, {
     en: {
-      subject: `You're invited to ${orgName} on ${APP_NAME}`,
-      heading: `Join ${safeOrg}`,
-      intro: `<strong>${safeInviter}</strong> invited you to join <strong>${safeOrg}</strong>.`,
-      followup: `Click the button below to accept. This link expires in 7 days.`,
+      subject: `${inviterName} invited you to ${orgName} on ${APP_NAME}`,
+      heading: `Join ${safeOrg} on ${APP_NAME}`,
+      intro: (inviter: string, org: string) =>
+        `${inviter} invited you to join ${org} on ${APP_NAME} as ${role === 'admin' ? 'an admin' : 'a member'}.`,
+      what: `${APP_NAME} runs asynchronous video interviews: candidates record their answers when it suits them, and your team reviews them together.`,
+      roleLine:
+        role === 'admin'
+          ? `As an admin, you can invite teammates and manage the organization, on top of creating roles and reviewing candidates.`
+          : `As a member, you can create roles, invite candidates and review their interviews.`,
+      expiry: `This invitation expires on ${date} (UTC), in ${days} ${days === 1 ? 'day' : 'days'}.`,
       footer: `If you didn't expect this invitation, you can safely ignore this email.`,
       preheader: `${safeInviter} invited you to join ${safeOrg}.`,
       cta: 'Accept invitation',
-      text: [
-        `${inviterName} invited you to join ${orgName} on ${APP_NAME}.`,
-        `Accept the invitation:`,
-        acceptUrl,
-        `This link expires in 7 days.`,
-        `If you didn't expect this invitation, you can safely ignore this email.`,
-      ],
+      ctaText: 'Accept the invitation:',
     },
     fr: {
-      subject: `Vous êtes invité à rejoindre ${orgName} sur ${APP_NAME}`,
-      heading: `Rejoindre ${safeOrg}`,
-      intro: `<strong>${safeInviter}</strong> vous a invité à rejoindre <strong>${safeOrg}</strong>.`,
-      followup: `Cliquez sur le bouton ci-dessous pour accepter. Ce lien expire dans 7 jours.`,
+      subject: `${inviterName} vous invite à rejoindre ${orgName} sur ${APP_NAME}`,
+      heading: `Rejoindre ${safeOrg} sur ${APP_NAME}`,
+      intro: (inviter: string, org: string) =>
+        `${inviter} vous invite à rejoindre ${org} sur ${APP_NAME} avec le rôle ${role === 'admin' ? 'Admin' : 'Membre'}.`,
+      what: `${APP_NAME} est une plateforme d’entretiens vidéo asynchrones : les personnes candidates enregistrent leurs réponses quand cela leur convient, et votre équipe les évalue ensemble.`,
+      roleLine:
+        role === 'admin'
+          ? `Avec le rôle Admin, vous pourrez inviter des collègues et gérer l’organisation, en plus de créer des postes et d’évaluer les candidatures.`
+          : `Avec le rôle Membre, vous pourrez créer des postes, inviter des personnes candidates et évaluer leurs entretiens.`,
+      expiry: `Cette invitation expire le ${date} (UTC), dans ${days} ${days === 1 ? 'jour' : 'jours'}.`,
       footer: `Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.`,
-      preheader: `${safeInviter} vous a invité à rejoindre ${safeOrg}.`,
+      preheader: `${safeInviter} vous invite à rejoindre ${safeOrg}.`,
       cta: 'Accepter l’invitation',
-      text: [
-        `${inviterName} vous a invité à rejoindre ${orgName} sur ${APP_NAME}.`,
-        `Accepter l’invitation :`,
-        acceptUrl,
-        `Ce lien expire dans 7 jours.`,
-        `Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.`,
-      ],
+      ctaText: 'Accepter l’invitation :',
     },
   })
 
@@ -166,12 +197,29 @@ export function invitationEmail({
     locale,
     preheader: c.preheader,
     heading: c.heading,
-    paragraphs: [c.intro, c.followup],
+    paragraphs: [
+      c.intro(`<strong>${safeInviter}</strong>`, `<strong>${safeOrg}</strong>`),
+      c.what,
+      c.roleLine,
+      c.expiry,
+    ],
     cta: { label: c.cta, url: acceptUrl },
-    footer: c.footer,
+    footer: `${urlFallback(locale, acceptUrl)}<br><br>${c.footer}`,
   })
 
-  return { subject: c.subject, html, text: plainText(c.text) }
+  return {
+    subject: c.subject,
+    html,
+    text: plainText([
+      c.intro(inviterName, orgName),
+      c.what,
+      c.roleLine,
+      c.ctaText,
+      acceptUrl,
+      c.expiry,
+      c.footer,
+    ]),
+  }
 }
 
 export function changeEmailVerificationEmail({
@@ -536,40 +584,52 @@ export function passwordChangedEmail({
   return { subject: c.subject, html, text: plainText(c.text) }
 }
 
-export function magicLinkEmail({
+/**
+ * Sign-in code. The code is the credential; the button only opens our page
+ * with it prefilled (in the URL fragment), where the person still has to press
+ * Confirm — so a mail scanner that follows links cannot spend the code.
+ */
+export function signInCodeEmail({
   locale,
+  code,
   url,
 }: {
   locale: EmailLocale
+  code: string
   url: string
 }) {
+  const codeHtml = `<span style="display:inline-block; font-size:28px; font-weight:700; letter-spacing:0.3em; font-variant-numeric:tabular-nums; padding:12px 16px; border:1px solid ${BORDER}; border-radius:8px;">${esc(code)}</span>`
   const c = pick(locale, {
     en: {
-      subject: `Your ${APP_NAME} sign-in link`,
-      heading: `Sign in to ${APP_NAME}`,
-      intro: `Click the button below to sign in. This link expires in 5 minutes.`,
-      footer: `If you didn't request this, you can safely ignore this email.`,
-      preheader: `Sign in to ${APP_NAME}.`,
-      cta: 'Sign in',
+      subject: `${code} is your ${APP_NAME} sign-in code`,
+      heading: `Your sign-in code`,
+      intro: `Enter this code on the ${APP_NAME} sign-in page:`,
+      expiry: `It expires in 10 minutes and works only once. Or open the sign-in page with the code already filled in:`,
+      footer: `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
+      preheader: `Your ${APP_NAME} sign-in code, valid for 10 minutes.`,
+      cta: 'Continue signing in',
       text: [
-        `Sign in to ${APP_NAME}.`,
-        `Open this link to sign in (expires in 5 minutes):`,
+        `Your ${APP_NAME} sign-in code: ${code}`,
+        `It expires in 10 minutes and works only once.`,
+        `Or open the sign-in page with the code already filled in:`,
         url,
-        `If you didn't request this, you can safely ignore this email.`,
+        `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
       ],
     },
     fr: {
-      subject: `Votre lien de connexion ${APP_NAME}`,
-      heading: `Connexion à ${APP_NAME}`,
-      intro: `Cliquez sur le bouton ci-dessous pour vous connecter. Ce lien expire dans 5 minutes.`,
-      footer: `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
-      preheader: `Connexion à ${APP_NAME}.`,
-      cta: 'Se connecter',
+      subject: `${code} est votre code de connexion ${APP_NAME}`,
+      heading: `Votre code de connexion`,
+      intro: `Saisissez ce code sur la page de connexion ${APP_NAME} :`,
+      expiry: `Il expire dans 10 minutes et ne sert qu’une fois. Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
+      footer: `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
+      preheader: `Votre code de connexion ${APP_NAME}, valable 10 minutes.`,
+      cta: 'Continuer la connexion',
       text: [
-        `Connexion à ${APP_NAME}.`,
-        `Ouvrez ce lien pour vous connecter (expire dans 5 minutes) :`,
+        `Votre code de connexion ${APP_NAME} : ${code}`,
+        `Il expire dans 10 minutes et ne sert qu’une fois.`,
+        `Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
         url,
-        `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
+        `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
       ],
     },
   })
@@ -578,9 +638,9 @@ export function magicLinkEmail({
     locale,
     preheader: c.preheader,
     heading: c.heading,
-    paragraphs: [c.intro, urlFallback(locale, url)],
+    paragraphs: [c.intro, codeHtml, c.expiry],
     cta: { label: c.cta, url },
-    footer: c.footer,
+    footer: `${urlFallback(locale, url)}<br><br>${c.footer}`,
   })
 
   return { subject: c.subject, html, text: plainText(c.text) }

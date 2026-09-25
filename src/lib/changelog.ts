@@ -4,6 +4,9 @@
 export const CHANGELOG_ENTRIES = [
   { id: 'delete-organization', date: '2026-09-25' },
   { id: 'clearer-account-settings', date: '2026-09-24' },
+  { id: 'team-invitations', date: '2026-09-24' },
+  { id: 'sign-in-with-a-code', date: '2026-09-24' },
+  { id: 'verification-link-guidance', date: '2026-09-24' },
   { id: 'sturdier-interview', date: '2026-09-24' },
   { id: 'verification-needs-password', date: '2026-09-24' },
   { id: 'job-import-pinned', date: '2026-09-24' },

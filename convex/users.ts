@@ -104,12 +104,17 @@ export const setPreferredLanguage = mutation({
 
 /**
  * Internal — resolve a recipient's email locale for transactional emails sent
- * from Better Auth callbacks (which only expose a run-mutation ctx). Falls back
- * to English when the recipient has no account or no stored preference.
+ * from Better Auth callbacks (which only expose a run-mutation ctx). A stored
+ * preference wins; otherwise `fallback`, the language of the request that
+ * triggered the email — a first sign-in code goes out before any `users` row
+ * exists — and English last.
  */
 export const localeForEmail = internalQuery({
-  args: { email: v.string() },
-  handler: async (ctx, { email }): Promise<'en' | 'fr'> => {
+  args: {
+    email: v.string(),
+    fallback: v.optional(v.union(v.literal('en'), v.literal('fr'))),
+  },
+  handler: async (ctx, { email, fallback }): Promise<'en' | 'fr'> => {
     const normalized = email.trim().toLowerCase()
     const user =
       (await ctx.db
@@ -120,7 +125,7 @@ export const localeForEmail = internalQuery({
         .query('users')
         .withIndex('by_email', (q) => q.eq('email', email))
         .first())
-    return user?.preferredLanguage ?? 'en'
+    return user?.preferredLanguage ?? fallback ?? 'en'
   },
 })
 

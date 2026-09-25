@@ -2,12 +2,12 @@
   "menu": {
     "accountMenu": "Account menu",
     "profile": "Your profile",
-    "switchOrg": "Switch organization",
     "superAdmin": "Super-admin",
     "signOutEverywhere": "Sign out everywhere",
     "signOut": "Sign out",
     "signOutEverywhereTitle": "Sign out everywhere?",
-    "signOutEverywhereDescription": "This signs out every device including this one. You'll need to sign back in."
+    "signOutEverywhereDescription": "This signs out every device including this one. You'll need to sign back in.",
+    "createOrg": "Create organization"
   },
   "time": {
     "justNow": "just now",

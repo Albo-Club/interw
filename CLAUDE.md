@@ -196,7 +196,7 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Frontend** : React 19 + TypeScript strict, TanStack Start v1 (Node server target), TanStack Router (file-based, `src/routes/`), TanStack Query, TanStack Form + Zod, Vite.
 - **Styling** : Tailwind CSS v4 (CSS-first, no `tailwind.config.js`), shadcn/ui (neutral theme, `src/components/ui/`), Inter, radius `0.5rem`, tokens in `src/styles/brand.css` (oklch).
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
-- **Auth** : Better Auth via `@convex-dev/better-auth` with `magicLink()` + `convex()`. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
+- **Auth** : Better Auth via `@convex-dev/better-auth` with `emailOTP()` (sign-in code, which also creates accounts) + `convex()`; password sign-up is off. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
 - **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front; generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
 - **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
@@ -469,12 +469,19 @@ export const remove = mutation({
 - ❌ Loading BA plugin `admin()` (breaks signup validator).
 - ❌ Inline BA triggers (TS inference cycle with `internal.users.*`).
 - ❌ Enabling a new BA auth method without checking **both** conditions:
-  (1) the method produces a verified email on first use (magic link,
+  (1) the method produces a verified email on first use (email code,
   OAuth, or email/password with `requireEmailVerification: true`), and
   (2) `account.accountLinking.enabled: true` is set in `createAuth`.
   Skipping either creates duplicate BA users — and therefore duplicate
   Convex `users` rows — for the same email. See `KNOWN_ISSUES.md`
   "Account linking & verified email".
+- ❌ `consumeLimit` (or any `ConvexError`) inside a Better Auth email
+  sender. A sender runs only for addresses that have an account, so its
+  refusal enumerates them; the code endpoint has already rotated the code
+  by then; and the browser gets a bare 500 it reads as "sent". Charge
+  per-address quotas in a before hook and refuse with an `APIError` 429 —
+  `perEmailQuota` in `convex/auth.ts`. See `KNOWN_ISSUES.md` § "Email
+  sign-in: one code, typed or confirmed".
 - ❌ Dedup users by `betterAuthId` only in any new code path. Always
   also fall back to email via `withIndex('by_email', ...)` — pattern in
   `convex/lib/auth.ts:provisionAppUser`.

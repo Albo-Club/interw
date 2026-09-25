@@ -28,6 +28,8 @@ describe('email templates', () => {
       locale: 'fr',
       inviterName: 'A',
       orgName: 'B',
+      role: 'member',
+      expiresAt: Date.now(),
       acceptUrl: HOSTILE_URL,
     })
     expect(html).not.toContain('"><img')
@@ -59,5 +61,20 @@ describe('email templates', () => {
       expect(html).not.toContain('<a href="https://evil.test"')
       expect(text).toContain('"><img src=x>')
     }
+  })
+
+  it('names the role and the expiry date in the invitation', () => {
+    const { html, text } = invitationEmail({
+      locale: 'fr',
+      inviterName: 'Alice <b>',
+      orgName: 'Acme',
+      role: 'admin',
+      expiresAt: Date.UTC(2026, 9, 1, 12),
+      acceptUrl: 'https://app.test/accept-invite/t',
+    })
+    expect(text).toContain('Alice <b> vous invite à rejoindre Acme')
+    expect(text).toContain('avec le rôle Admin')
+    expect(text).toContain('le 1er octobre 2026 (UTC)')
+    expect(html).toContain('<strong>Alice &lt;b&gt;</strong>')
   })
 })

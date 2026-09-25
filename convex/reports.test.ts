@@ -141,3 +141,35 @@ describe('the answer length shown to the recruiter', () => {
     expect(await lengthShown()).toBe(60)
   })
 })
+
+/**
+ * Audit 2026-09-22, h09. The page's pipeline trail carried `jobLog.error`,
+ * which holds raw provider output and, until now, an operator's address.
+ * Both are for operators; the recruiter gets the step and its outcome.
+ */
+describe('the pipeline trail shown to the recruiter', () => {
+  it('carries no error text', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const session = await ctx.db.get('sessions', s.sessionId)
+      await ctx.db.insert('jobLog', {
+        orgId: session!.orgId,
+        sessionId: s.sessionId,
+        step: 'report',
+        outcome: 'failed',
+        attempt: 1,
+        error: 'completion failed with HTTP 401: invalid key sk-…',
+        at: 1,
+      })
+    })
+
+    const view = await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .query(api.reports.forSession, { sessionId: s.sessionId })
+
+    expect(view.pipeline).toEqual([
+      { step: 'report', outcome: 'failed', at: 1 },
+    ])
+  })
+})

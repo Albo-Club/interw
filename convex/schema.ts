@@ -127,12 +127,14 @@ export const highlightKindValidator = v.union(
 /** One pipeline step. Mirrors the chain in convex/pipeline.ts.
  *  `relaunch` is not a step but an operator's decision to re-run one, kept in
  *  the same log so the reason a session moved again is where the rest of its
- *  history is. */
+ *  history is. `purge` is the retention job (convex/retention.ts), logged
+ *  when it fails for one session so that failure is not silent. */
 export const jobStepValidator = v.union(
   v.literal('transcribe'),
   v.literal('report'),
   v.literal('notify'),
   v.literal('relaunch'),
+  v.literal('purge'),
 )
 
 export const jobOutcomeValidator = v.union(
@@ -630,7 +632,14 @@ export default defineSchema({
     sessionId: v.id('sessions'),
     step: jobStepValidator,
     outcome: jobOutcomeValidator,
+    /** The answer a `transcribe` row is about; one job runs per answer. */
+    segmentId: v.optional(v.id('segments')),
+    /** Which real attempt at this step (for this answer) the row belongs to,
+     *  counted from the log itself — relaunches included. */
     attempt: v.number(),
+    /** The operator behind a `relaunch`. An id, never an address: this log
+     *  is read back on the recruiter's candidate page. */
+    actorId: v.optional(v.id('users')),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
     /** What the step cost, when the provider says. Without these, "what does
@@ -638,10 +647,16 @@ export default defineSchema({
      *  under every other question about pricing this product. */
     promptTokens: v.optional(v.number()),
     completionTokens: v.optional(v.number()),
+    /** The part of `completionTokens` a reasoning model spent thinking —
+     *  billed, never seen. Only when the provider reports it. */
+    reasoningTokens: v.optional(v.number()),
     audioSeconds: v.optional(v.number()),
     at: v.number(),
   })
     .index('by_session', ['sessionId'])
+    // Per answer, so counting one transcription's attempts does not read —
+    // and conflict with — the rows its sibling answers are writing.
+    .index('by_attempt', ['sessionId', 'step', 'segmentId', 'outcome'])
     .index('by_step_and_outcome', ['step', 'outcome', 'at'])
     .index('by_org_and_at', ['orgId', 'at']),
 

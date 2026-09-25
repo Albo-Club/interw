@@ -2159,6 +2159,31 @@ permission keeps the `<video>` on screen, so "not found" never means "no
 permission". To tell them apart, read the page snapshot in the report's
 `error-context.md`.
 
+## The interview stage: the camera layer never remounts, the question plays itself
+
+The question screen is one video surface (`src/components/candidate/Stage.tsx`)
+where the question and the candidate's camera swap places: the recruiter's
+video fills it and the camera is a corner thumbnail, then the camera fills it
+once the answer starts. Two traps come with that.
+
+**The camera's `<video>` must not remount.** Its `srcObject` is set once, by
+the effect in `interview.tsx` that waits for both the stream and the element.
+Rendering the camera in two different places — one JSX branch for the
+thumbnail and another for full screen — creates a new element on every swap,
+and the candidate records an answer to a black box. `Stage` therefore keeps
+the camera's layer in a fixed position in the tree and changes only its
+classes. Keep it that way. When the camera needs hiding, render `null` for
+it; don't move it.
+
+**Autoplay with sound is allowed, not guaranteed.** The candidate reached the
+question by pressing a button, and Chrome and Firefox count that gesture
+across the client-side navigation, so the question's `<video autoPlay>` starts
+with sound. iOS Safari and some browser settings refuse it anyway. Nothing
+catches that refusal: the video stays paused, and `QuestionPrompt` renders a
+**Play the question** button whenever it is paused. Never make the video
+`muted` to win the autoplay: a question the candidate can't hear is worse than
+one they have to press play on.
+
 ## The candidate surface switches the shared i18n instance
 
 `useCandidateLanguage` calls `i18n.changeLanguage(project.language)` on the

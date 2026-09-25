@@ -149,12 +149,16 @@
       "continue": "I'm ready"
     },
     "hint": "A tip",
+    "prompt": {
+      "play": "Play the question",
+      "pause": "Pause",
+      "replay": "Watch again"
+    },
     "audioOnly": "Audio only — your camera isn't available, so this interview records your voice. That is enough to take part.",
     "startAnswer": "Start my answer",
     "recording": "Recording",
     "finishAnswer": "I've finished my answer",
     "timeLeft": "{{seconds}}s left",
-    "timeUpSoon": "Recording will stop in {{seconds}} seconds",
     "timeUp": "Time is up for this question — your answer was saved.",
     "interrupted": "Your last answer stopped when you left the page or a device was disconnected. What you had said was saved.",
     "recovered": "We found your last answer on this device after the page closed, and sent it.",

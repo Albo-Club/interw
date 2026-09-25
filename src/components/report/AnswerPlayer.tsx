@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { downloadMedia } from './download'
 import { Button } from '~/components/ui/button'
 import { fireAndForget } from '~/lib/fire-and-forget'
-import { cn } from '~/lib/utils'
+import { cn, formatTimecode } from '~/lib/utils'
 
 export type PlayableSegment = {
   segmentId: string
@@ -240,10 +240,4 @@ export function AnswerPlayer({
       </div>
     </div>
   )
-}
-
-/** `m:ss`, for a citation label. */
-export function formatTimecode(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds))
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
 }

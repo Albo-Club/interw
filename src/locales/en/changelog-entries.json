@@ -1,4 +1,8 @@
 {
+  "interview-stage": {
+    "title": "A calmer, video-first interview for your candidates",
+    "body": "Each question now fills one screen, like a video call: your recorded question plays on its own, with the candidate's camera in the corner to check their framing, and once they answer their camera takes the whole screen with the question kept as a caption. Time left is always visible, and your logo now appears at the top of every candidate page."
+  },
   "simpler-role-creation": {
     "title": "Creating a role, simplified",
     "body": "A role now starts with a single title, the one candidates see (an internal name is still available if you need one), then four guided steps — Questions, Evaluation, Candidate experience, Publish — each showing what is left to complete. The length candidates are told is no longer typed: it is computed from each question's answer time. Answers are transcribed in their own language, even when a role mixes French and English, and candidates can switch the language of their screens."

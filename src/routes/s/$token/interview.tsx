@@ -33,13 +33,20 @@ import {
   interviewReducer,
   opensOnIntro,
 } from '~/lib/interview-machine'
+import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
+import { AnswerTimer } from '~/components/candidate/AnswerTimer'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
-import { PromptMedia } from '~/components/candidate/PromptMedia'
+import {
+  QuestionPrompt,
+  QuestionText,
+  QuestionVideo,
+} from '~/components/candidate/QuestionPrompt'
+import { Stage } from '~/components/candidate/Stage'
 import { RecordingMic } from '~/components/candidate/RecordingMic'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
@@ -57,9 +64,6 @@ export const Route = createFileRoute('/s/$token/interview')({
   component: InterviewRunner,
   head: () => candidateHead('interview'),
 })
-
-/** The countdown appears for the last 30 seconds, never before. */
-const COUNTDOWN_THRESHOLD_SECONDS = 30
 
 const detail = (cause: unknown) =>
   cause instanceof Error ? cause.message : 'unknown'
@@ -519,31 +523,48 @@ function InterviewRunner() {
 
   if (data === undefined || !languageReady || state.phase === 'loading') {
     return (
-      <CandidateShell width="wide">
-        <div className="space-y-6">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-24 w-full rounded-lg" />
-          <Skeleton className="aspect-[3/4] w-full rounded-lg sm:aspect-video" />
-        </div>
+      <CandidateShell width="stage">
+        <Skeleton className="mb-4 h-5 w-40" />
+        <Skeleton className="min-h-0 flex-1 rounded-xl" />
+        <Skeleton className="mx-auto mt-4 h-11 w-48" />
       </CandidateShell>
     )
   }
 
+  const brand = {
+    organisationName: data.organisationName,
+    logoUrl: data.organisationLogoUrl,
+  }
+  const notices = (
+    <>
+      {!online && (
+        <Alert>
+          <WifiOff className="size-4" />
+          <AlertDescription>{t('interview:run.offline')}</AlertDescription>
+        </Alert>
+      )}
+      <LastAnswerNotice state={state} />
+    </>
+  )
+
   if (state.phase === 'intro') {
     return (
-      <CandidateShell width="wide">
-        <div className="space-y-6">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('interview:run.intro.title')}
-          </h1>
-          {media.intro && (
-            <PromptMedia
-              src={media.intro}
-              kind="video"
-              label={t('interview:run.intro.title')}
-              className="rounded-lg"
-            />
-          )}
+      <CandidateShell width="stage" {...brand}>
+        <h1 className="mb-4 text-lg font-semibold tracking-tight">
+          {t('interview:run.intro.title')}
+        </h1>
+        <Stage
+          prompt={
+            media.intro ? (
+              <QuestionVideo
+                src={media.intro}
+                label={t('interview:run.intro.title')}
+              />
+            ) : null
+          }
+          self={null}
+        />
+        <div className="flex justify-center pt-4">
           <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
             {t('interview:run.intro.continue')}
           </Button>
@@ -556,130 +577,146 @@ function InterviewRunner() {
     state.phase === 'review' ||
     state.phase === 'finishing' ||
     state.phase === 'finishFailed'
-  const remaining = current
-    ? Math.max(0, current.maxResponseSeconds - elapsed)
-    : 0
-  const countdown =
-    state.phase === 'recording' && remaining <= COUNTDOWN_THRESHOLD_SECONDS
-      ? remaining
-      : null
 
-  return (
-    <CandidateShell width="wide">
-      <div className="space-y-6">
+  if (inReview) {
+    return (
+      <CandidateShell {...brand}>
         <LiveStatus state={state} />
-
-        {!online && (
-          <Alert>
-            <WifiOff className="size-4" />
-            <AlertDescription>{t('interview:run.offline')}</AlertDescription>
-          </Alert>
-        )}
-
-        <LastAnswerNotice state={state} />
-
-        {inReview ? (
+        <div className="space-y-6">
+          {notices}
           <ReviewScreen
             state={state}
             missing={answered.flatMap((done, index) => (done ? [] : [index]))}
             onRevisit={(index) => dispatch({ type: 'revisit', index })}
             onFinish={() => void finishInterview()}
           />
-        ) : (
-          current && (
-            <>
-              <div className="space-y-2">
-                <p className="text-muted-foreground text-sm tabular-nums">
-                  {t('interview:run.progress', {
-                    index: state.index + 1,
-                    total: state.total,
-                  })}
-                </p>
-                <Progress value={((state.index + 1) / state.total) * 100} />
-              </div>
+        </div>
+      </CandidateShell>
+    )
+  }
 
-              <section className="space-y-4 rounded-lg border p-5">
-                {current.hasMedia && media.questions[current.questionId] ? (
-                  <PromptMedia
-                    key={current.questionId}
-                    src={media.questions[current.questionId]}
-                    kind={current.mediaKind ?? 'video'}
-                    label={t('interview:run.progress', {
-                      index: state.index + 1,
-                      total: state.total,
-                    })}
-                  />
-                ) : null}
-                <div className="space-y-2">
-                  <h1 className="text-xl leading-relaxed font-medium">
-                    {current.content}
-                  </h1>
-                  {current.hintText && (
-                    <p className="text-muted-foreground text-sm">
-                      {t('interview:run.hint')} — {current.hintText}
-                    </p>
-                  )}
-                </div>
-              </section>
+  if (!current) return <CandidateShell width="stage" {...brand} />
 
-              <CameraPreview
-                ref={setPreview}
-                audioOnly={audioOnly}
-                recording={state.phase === 'recording'}
-                countdown={countdown}
-              />
+  const recording = state.phase === 'recording'
+  // The question has the stage until the candidate starts answering; from
+  // then on it is their camera, with the question kept as a caption.
+  const asking = state.phase === 'prompt'
+  const promptUrl = current.hasMedia
+    ? media.questions[current.questionId]
+    : undefined
+  const questionMedia = promptUrl
+    ? { src: promptUrl, kind: current.mediaKind ?? 'video' }
+    : null
+  const questionLabel = t('interview:run.progress', {
+    index: state.index + 1,
+    total: state.total,
+  })
+  const overlay =
+    state.phase === 'saving' ? (
+      <Saving state={state} />
+    ) : state.phase === 'saveFailed' || state.phase === 'recordingLost' ? (
+      <SaveFailed
+        lost={state.phase === 'recordingLost'}
+        onRetry={retry}
+        onRerecord={() => dispatch({ type: 'rerecord' })}
+        onSkip={skip}
+      />
+    ) : null
 
-              {state.phase === 'recording' && <RecordingMic stream={stream} />}
+  return (
+    <CandidateShell width="stage" {...brand}>
+      <LiveStatus state={state} />
 
-              {state.error && state.phase === 'prompt' && (
-                <Alert variant="destructive">
-                  <CircleAlert className="size-4" />
-                  <AlertDescription>
-                    {t(state.error, {
-                      defaultValue: t('interview:errors.unexpected'),
-                    })}
-                  </AlertDescription>
-                </Alert>
+      <div className="mb-4 flex items-center gap-4">
+        <p className="text-muted-foreground shrink-0 text-sm tabular-nums">
+          {questionLabel}
+        </p>
+        {/* One segment per question: where this one sits in the whole. */}
+        <ol aria-hidden className="flex flex-1 gap-1">
+          {answered.map((done, index) => (
+            <li
+              key={index}
+              className={cn(
+                'h-1 flex-1 rounded-full',
+                done || index === state.index ? 'bg-primary' : 'bg-primary/20',
               )}
+            />
+          ))}
+        </ol>
+      </div>
 
-              {(state.phase === 'saveFailed' ||
-                state.phase === 'recordingLost') && (
-                <SaveFailed
-                  lost={state.phase === 'recordingLost'}
-                  onRetry={retry}
-                  onRerecord={() => dispatch({ type: 'rerecord' })}
-                  onSkip={skip}
-                />
-              )}
+      <div className="mb-4 space-y-3 empty:hidden">
+        {notices}
+        {state.error && asking && (
+          <Alert variant="destructive">
+            <CircleAlert className="size-4" />
+            <AlertDescription>
+              {t(state.error, {
+                defaultValue: t('interview:errors.unexpected'),
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
 
-              {state.phase === 'saving' && <Saving state={state} />}
-
-              {/* The finish button is the only thing that ends an answer, so
-                  it is always in the same place and never below the fold. */}
-              <div className="bg-background sticky bottom-0 flex flex-wrap gap-3 border-t py-4">
-                {state.phase === 'recording' ? (
-                  <Button size="lg" onClick={() => void stopAndSave('finished')}>
-                    <Square className="size-4" />
-                    {t('interview:run.finishAnswer')}
-                  </Button>
-                ) : (
-                  <Button
-                    size="lg"
-                    onClick={() => void beginRecording()}
-                    disabled={state.phase !== 'prompt'}
-                  >
-                    <Play className="size-4" />
-                    {t('interview:run.startAnswer')}
-                  </Button>
-                )}
-                {countdown !== null && (
-                  <p className="text-warning-strong self-center text-sm tabular-nums">
-                    {t('interview:run.timeUpSoon', { seconds: countdown })}
-                  </p>
-                )}
-              </div>
-            </>
+      <Stage
+        prompt={
+          asking ? (
+            <QuestionPrompt
+              key={current.questionId}
+              content={current.content}
+              hint={current.hintText}
+              media={questionMedia}
+              label={questionLabel}
+            />
+          ) : null
+        }
+        self={
+          <CameraPreview
+            ref={setPreview}
+            fill
+            audioOnly={audioOnly}
+            recording={recording}
+          />
+        }
+        caption={
+          (!asking || questionMedia?.kind === 'video') && (
+            <QuestionText content={current.content} hint={current.hintText} />
           )
+        }
+        status={
+          recording && (
+            <AnswerTimer limit={current.maxResponseSeconds} elapsed={elapsed} />
+          )
+        }
+        overlay={overlay}
+      />
+
+      {recording && (
+        <div className="pt-3">
+          <RecordingMic stream={stream} />
+        </div>
+      )}
+
+      {/* The finish button is the only thing that ends an answer, so it is
+          always in the same place and never below the fold. While a save
+          covers the stage, its own actions are the way on: the bar keeps its
+          room but steps aside. */}
+      <div className={cn('flex justify-center pt-4', overlay && 'invisible')}>
+        {recording ? (
+          <Button size="lg" onClick={() => void stopAndSave('finished')}>
+            <Square className="size-4" />
+            {t('interview:run.finishAnswer')}
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            onClick={() => void beginRecording()}
+            disabled={!asking}
+          >
+            <Play className="size-4" />
+            {t('interview:run.startAnswer')}
+          </Button>
         )}
       </div>
     </CandidateShell>

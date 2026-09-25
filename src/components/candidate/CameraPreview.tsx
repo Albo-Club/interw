@@ -10,19 +10,20 @@ import { cn } from '~/lib/utils'
  *
  * Portrait on a phone, landscape from `sm` up: a phone held upright gives a
  * portrait stream, and a 16:9 box cropped the candidate to a strip of face.
+ * With `fill`, the box is whatever the interview stage makes it instead.
  */
 export function CameraPreview({
   ref,
   audioOnly,
+  fill = false,
   recording = false,
-  countdown = null,
   children,
 }: {
   ref: Ref<HTMLVideoElement>
   audioOnly: boolean
+  /** Fill the parent instead of keeping its own aspect ratio. */
+  fill?: boolean
   recording?: boolean
-  /** Seconds left, once the countdown is showing. */
-  countdown?: number | null
   /** Overlaid on the preview, for a status line. */
   children?: ReactNode
 }) {
@@ -30,14 +31,24 @@ export function CameraPreview({
   return (
     <div
       className={cn(
-        'bg-muted relative aspect-[3/4] w-full overflow-hidden rounded-lg sm:aspect-video',
-        recording && 'ring-destructive ring-2',
+        '@container relative overflow-hidden',
+        fill
+          ? 'bg-stage size-full'
+          : 'bg-muted aspect-[3/4] w-full rounded-lg sm:aspect-video',
       )}
     >
       {audioOnly ? (
-        <div className="text-muted-foreground flex size-full flex-col items-center justify-center gap-3 p-6 text-center text-sm">
+        <div
+          className={cn(
+            'flex size-full flex-col items-center justify-center gap-3 p-6 text-center text-sm',
+            fill ? 'text-stage-foreground/80' : 'text-muted-foreground',
+          )}
+        >
           <Mic className="size-8" />
-          <p className="max-w-sm leading-relaxed">{t('run.audioOnly')}</p>
+          {/* In the stage's thumbnail there is room for the icon only. */}
+          <p className="hidden max-w-sm leading-relaxed @xs:block">
+            {t('run.audioOnly')}
+          </p>
         </div>
       ) : (
         <video
@@ -48,6 +59,11 @@ export function CameraPreview({
         />
       )}
       {children}
+      {/* Drawn over the video: an inset ring on the box itself would sit
+          under it. */}
+      {recording && (
+        <div className="ring-destructive pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset" />
+      )}
       {recording && (
         <div className="bg-destructive text-destructive-foreground absolute top-3 left-3 flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium">
           {/* The dot pulses to say "live". It stops under
@@ -55,11 +71,6 @@ export function CameraPreview({
               for minutes, and the badge still reads as recording without it. */}
           <span className="size-2 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
           {t('run.recording')}
-        </div>
-      )}
-      {countdown !== null && (
-        <div className="bg-warning text-warning-foreground absolute top-3 right-3 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums">
-          {t('run.timeLeft', { seconds: countdown })}
         </div>
       )}
     </div>

@@ -149,12 +149,16 @@
       "continue": "Je suis prêt"
     },
     "hint": "Un conseil",
+    "prompt": {
+      "play": "Lire la question",
+      "pause": "Pause",
+      "replay": "Revoir la question"
+    },
     "audioOnly": "Audio uniquement — votre caméra n'est pas disponible, cet entretien enregistre donc votre voix. Cela suffit pour participer.",
     "startAnswer": "Commencer ma réponse",
     "recording": "Enregistrement",
     "finishAnswer": "J'ai terminé ma réponse",
     "timeLeft": "{{seconds}} s restantes",
-    "timeUpSoon": "L'enregistrement s'arrête dans {{seconds}} secondes",
     "timeUp": "Le temps est écoulé pour cette question — votre réponse a été enregistrée.",
     "interrupted": "Votre dernière réponse s'est arrêtée quand vous avez quitté la page ou qu'un appareil a été déconnecté. Ce que vous aviez dit a été enregistré.",
     "recovered": "Nous avons retrouvé votre dernière réponse sur cet appareil après la fermeture de la page, et l'avons envoyée.",

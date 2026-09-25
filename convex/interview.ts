@@ -31,6 +31,7 @@ import {
 } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
+import { resolveLogoUrl } from './lib/storage'
 import { looksLikeToken } from './lib/tokens'
 import {
   extensionForMimeType,
@@ -110,7 +111,11 @@ async function requireOpenSession(
   ctx: GenericQueryCtx<DataModel>,
   token: string,
   now: number,
-): Promise<{ session: Doc<'sessions'>; project: Doc<'projects'> }> {
+): Promise<{
+  session: Doc<'sessions'>
+  project: Doc<'projects'>
+  org: Doc<'organizations'>
+}> {
   const session = await resolveSessionByToken(ctx, token)
   const project = await ctx.db.get('projects', session.projectId)
   if (!project) throw new ConvexError('not_found')
@@ -122,7 +127,7 @@ async function requireOpenSession(
     throw new ConvexError(gate.state)
   }
   if (gate.needsConsent) throw new ConvexError('consent_required')
-  return { session, project }
+  return { session, project, org }
 }
 
 /**
@@ -191,11 +196,14 @@ export const questions = query({
     language: languageValidator,
     introMode: introModeValidator,
     hasIntroMedia: v.boolean(),
+    /** Who the candidate is talking to, for the interview's header. */
+    organisationName: v.string(),
+    organisationLogoUrl: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { token, now }) => {
     // The candidate's clock keeps the gate reactive; it does not decide it.
     // See convex/lib/clock.ts.
-    const { session, project } = await requireOpenSession(
+    const { session, project, org } = await requireOpenSession(
       ctx,
       token,
       effectiveNow(now),
@@ -211,6 +219,8 @@ export const questions = query({
       language: project.language,
       introMode: effectiveIntroMode(project),
       hasIntroMedia: project.introMediaKey !== undefined,
+      organisationName: org.name,
+      organisationLogoUrl: await resolveLogoUrl(ctx, org),
     }
   },
 })

@@ -44,16 +44,13 @@ import { MemberName } from '~/components/MemberName'
 import { ShareReportDialog } from '~/components/report/ShareReportDialog'
 import { Highlights } from '~/components/report/Highlights'
 import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
-import {
-  AnswerPlayer,
-  formatTimecode,
-} from '~/components/report/AnswerPlayer'
+import { AnswerPlayer } from '~/components/report/AnswerPlayer'
 import {
   DecisionBadge,
   ScoreBadge,
   SessionStatusBadge,
 } from '~/components/candidates/StatusBadge'
-import { cn } from '~/lib/utils'
+import { cn, formatTimecode } from '~/lib/utils'
 import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/candidates/$sessionId')({

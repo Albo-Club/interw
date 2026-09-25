@@ -1751,6 +1751,47 @@ Do not spend the afternoon on it: run the candidate e2e in CI, where the
 runner reaches the deployment directly. Locally, `pnpm test` covers the
 reducer, the recorder and the server; the browser path needs CI or a phone.
 
+## The WebKit e2e leg: what removes the preview
+
+When `expectLivePreview` fails with "element(s) not found" on the device
+check, the page took one of two branches, and only these two render no
+`<video>`:
+
+- **The browser encodes no format the product records.** No video format
+  (`detectRecorderSupport().video === null`) opens the devices audio only;
+  no audio format shows "This browser can't record video interviews".
+  `expectRecordableFormats` now asserts this first and prints what the
+  browser encodes, so this case names itself in the CI log.
+- **The camera failed as busy or missing while the microphone worked.**
+  `openInterviewStream` falls back to audio only, and the page shows "Audio
+  only — your camera isn't available".
+
+A `getUserMedia` rejection with no fallback (a refused permission, or no
+devices at all) lands in the `failed` phase, which **keeps** the `<video>`,
+so the failure moves on to the `videoWidth` poll. "Not found" therefore never
+means "no camera permission". To tell the two branches apart, read the
+page snapshot in the report's `error-context.md`.
+
+Two things to avoid when "fixing" the harness:
+
+- **Do not stub `getUserMedia` in WebKit.** Playwright's Linux WebKit ships
+  mock capture devices, gated on the `camera`/`microphone` permissions this
+  config already grants (Playwright's own `tests/library/permissions.spec.ts`
+  asserts a live audio and video track). WebKit needs no equivalent of
+  Chromium's `--use-fake-device-for-media-stream`.
+- **Never fake the microphone with WebAudio.** On a Linux machine with no sound
+  card, WebKit's `AudioContext` stays `suspended` and `resume()` never
+  settles. A `MediaStreamAudioDestinationNode` track then records **0
+  bytes**, both alone and muxed with video. A `canvas.captureStream()` track
+  records normally. Measured on WebKitGTK 2.52 on Ubuntu 24.04.
+
+Reference point from the same machine, with the GStreamer packages that
+`playwright install --with-deps webkit` installs (base, good, bad, libav) and
+WebKit's mock devices on: `MediaRecorder` encodes `video/mp4` and `audio/mp4`
+and no WebM (H.264 comes from `openh264enc` in plugins-bad), the preview is
+1280 px wide, and both recorders produce data. If Playwright's WebKit build
+reports fewer formats, that build is what differs, not the runner's packages.
+
 ## The candidate surface switches the shared i18n instance
 
 `useCandidateLanguage` calls `i18n.changeLanguage(project.language)` on the

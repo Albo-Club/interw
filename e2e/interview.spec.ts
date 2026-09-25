@@ -1,5 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
+import {
+  AUDIO_MIME_PREFERENCES,
+  VIDEO_MIME_PREFERENCES,
+} from '../src/lib/media/recorder'
 import type { Page } from '@playwright/test'
 
 // The seed and the database check are internal functions: only the deploy
@@ -9,6 +13,23 @@ function convexRun<T>(fn: string, args: Record<string, unknown>): T {
     encoding: 'utf8',
   })
   return JSON.parse(out) as T
+}
+
+/**
+ * The premise of this test: the browser can encode the formats the product
+ * records. Without a video format the device check rightly opens audio only,
+ * and without an audio format it says the browser is unsupported — either
+ * way the preview assertion would only report that no <video> exists. See
+ * KNOWN_ISSUES.md § "The WebKit e2e leg: what removes the preview".
+ */
+async function expectRecordableFormats(page: Page) {
+  const formats = await page.evaluate(
+    (types) => types.filter((type) => MediaRecorder.isTypeSupported(type)),
+    [...VIDEO_MIME_PREFERENCES, ...AUDIO_MIME_PREFERENCES],
+  )
+  const message = `MediaRecorder formats this browser encodes: ${JSON.stringify(formats)}`
+  expect(formats.some((type) => type.startsWith('video/')), message).toBe(true)
+  expect(formats.some((type) => type.startsWith('audio/')), message).toBe(true)
 }
 
 /** A black preview is the bug this guards against: frames must be arriving. */
@@ -40,6 +61,7 @@ test('a candidate records two answers, gets through a failed upload, and finishe
   )
   try {
     await page.goto(`/s/${token}`)
+    await expectRecordableFormats(page)
     await page
       .getByRole('checkbox', { name: 'I understand and agree to be recorded' })
       .check()

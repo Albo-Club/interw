@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "quote-seek-reliable": {
+      "title": "Quotes that land on the second, and every answer's length",
+      "body": "In a report, each answer now shows its length straight away. Clicking a quote shows the answer loading, then starts it at the moment quoted. If the browser will not start playback on its own, a \"Play from\" button appears instead of a click that seems to do nothing."
+    },
     "invitations-hardening": {
       "title": "Team invitations tightened",
       "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."
@@ -87,7 +91,7 @@
     },
     "recordings-play-everywhere": {
       "title": "Answers that play everywhere, and a phone that stays awake",
-      "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included, so jumping to a quote in a report lands where it should. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."
+      "body": "Answers recorded in Chrome, Edge or Safari now use a format every browser plays, iPhones included. A phone no longer locks its screen mid-answer, a microphone taken by a call ends the answer cleanly instead of recording silence, and when an answer's video could not be sent you still hear what the candidate said."
     },
     "delete-organization": {
       "title": "Delete an organization",

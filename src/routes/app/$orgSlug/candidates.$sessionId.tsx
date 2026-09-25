@@ -122,6 +122,13 @@ function CandidateReportPage() {
     }
     return labels
   }, [data, t])
+  const answerLengths = useMemo(
+    () =>
+      Object.fromEntries(
+        (data?.answers ?? []).map((a) => [a.segmentId, a.durationSeconds]),
+      ),
+    [data],
+  )
 
   if (data === undefined) {
     return (
@@ -559,6 +566,7 @@ function CandidateReportPage() {
               activeSegmentId={activeSegment}
               onSelect={setActiveSegment}
               questionLabels={questionLabels}
+              answerLengths={answerLengths}
               onError={onPlaybackError}
             />
           )}

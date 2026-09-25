@@ -220,7 +220,7 @@ export const start = mutation({
   handler: async (ctx, { token }) => {
     const now = Date.now()
     const { session } = await requireOpenSession(ctx, token, now)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
     if (session.status === 'pending') {
       await ctx.db.patch('sessions', session._id, {
         status: 'in_progress',
@@ -342,7 +342,7 @@ export const reserveSegment = internalMutation({
   handler: async (ctx, { token, questionIndex, audio, video }) => {
     const now = Date.now()
     const { session, project } = await requireOpenSession(ctx, token, now)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     const question = await ctx.db
       .query('questions')
@@ -510,7 +510,7 @@ export const markSegmentUploaded = mutation({
   handler: async (ctx, { token, segmentId, durationSeconds }) => {
     const now = Date.now()
     const { session } = await requireOpenSession(ctx, token, now)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     const segment = await requireSessionSegment(ctx, session, segmentId)
 
@@ -550,7 +550,7 @@ export const markVideoUploaded = mutation({
   args: { token: v.string(), segmentId: v.id('segments') },
   handler: async (ctx, { token, segmentId }) => {
     const { session } = await requireOpenSession(ctx, token, Date.now())
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     const segment = await requireSessionSegment(ctx, session, segmentId)
     if (!segment.videoKey) throw new ConvexError('not_found')
@@ -564,7 +564,7 @@ export const markSegmentFailed = mutation({
   handler: async (ctx, { token, segmentId, detail }) => {
     const now = Date.now()
     const { session } = await requireOpenSession(ctx, token, now)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     await requireSessionSegment(ctx, session, segmentId)
     await ctx.db.patch('segments', segmentId, { uploadState: 'failed' })
@@ -589,7 +589,7 @@ export const logEvent = mutation({
     // be recordable when something has gone wrong enough that the interview
     // is no longer "open" — that is exactly when the trail is worth having.
     const session = await resolveSessionByToken(ctx, token)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
     await appendSessionEvent(ctx, session, { kind, detail, at: Date.now() })
     return null
   },
@@ -637,7 +637,7 @@ export const finish = mutation({
     if (session.status !== 'in_progress' || gate.needsConsent) {
       throw new ConvexError('not_started')
     }
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     await ctx.db.patch('sessions', session._id, {
       status: 'completed',
@@ -690,7 +690,7 @@ export const sendCompletionEmail = internalMutation({
     const { subject, html, text } = candidateCompletedEmail({
       locale: project.language,
       candidateName: session.candidateName,
-      jobTitle: project.jobTitle ?? project.title,
+      jobTitle: project.jobTitle ?? null,
       orgName: org?.name ?? '',
       privacyUrl: `${siteUrl.replace(/\/+$/, '')}/s/${session.accessToken}/privacy`,
     })

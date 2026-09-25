@@ -13,6 +13,7 @@ import { effectiveIntroMode } from './lib/candidateView'
 import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
+  leaveTeam,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
   sharedProjectIds,
@@ -109,7 +110,7 @@ export const list = query({
     const shared = await sharedProjectIds(ctx, user._id)
     return visible.map((project) => ({
       ...toSummary(project),
-      onTeam: project.createdBy === user._id || shared.has(project._id),
+      onTeam: shared.has(project._id),
     }))
   },
 })
@@ -205,6 +206,7 @@ export const create = mutation({
           .first()) !== null,
     )
 
+    const now = Date.now()
     const projectId = await ctx.db.insert('projects', {
       orgId,
       slug,
@@ -216,9 +218,18 @@ export const create = mutation({
       maxDurationMinutes: 20,
       candidateFields: DEFAULT_CANDIDATE_FIELDS,
       createdBy: user._id,
-      createdAt: Date.now(),
+      createdAt: now,
       sessionCount: 0,
       completedSessionCount: 0,
+    })
+    // The creator's seat is a row like anyone's (T17-2), so removal, which
+    // deletes the rows, also takes it: `createdBy` alone grants nothing.
+    await ctx.db.insert('projectShares', {
+      orgId,
+      projectId,
+      userId: user._id,
+      grantedBy: user._id,
+      grantedAt: now,
     })
     if (team) {
       await writeTeam(
@@ -378,7 +389,7 @@ export const remove = mutation({
     // data too, and deleting only the rows left them in the bucket with
     // nothing pointing at them: unreachable by any later purge, billed
     // indefinitely, and removable only by hand.
-    const keys: Array<string> = []
+    const keys: Array<string> = [...(project.pendingMediaKeys ?? [])]
     if (project.introMediaKey) keys.push(project.introMediaKey)
 
     for (const table of ['questions', 'criteria'] as const) {
@@ -387,8 +398,9 @@ export const remove = mutation({
         .withIndex('by_project', (q) => q.eq('projectId', projectId))
         .collect()
       for (const row of rows) {
-        if (table === 'questions' && 'mediaKey' in row && row.mediaKey) {
-          keys.push(row.mediaKey)
+        if ('mediaKey' in row && row.mediaKey) keys.push(row.mediaKey)
+        if ('pendingMediaKeys' in row && row.pendingMediaKeys) {
+          keys.push(...row.pendingMediaKeys)
         }
         await ctx.db.delete(table, row._id)
       }
@@ -408,8 +420,9 @@ export const remove = mutation({
 })
 
 /**
- * Replace a role's team with `userIds`. The creator is on every team by
- * construction, so naming them is a no-op rather than a stored row.
+ * Replace a role's team with `userIds`. The creator's seat is never dropped
+ * here, named or not: nobody unticks the person who opened the search. Once
+ * removal has taken it, naming them puts them back like anyone else.
  */
 async function writeTeam(
   ctx: MutationCtx,
@@ -419,7 +432,6 @@ async function writeTeam(
 ) {
   if (userIds.length > TEAM_MAX) throw new ConvexError('team_too_large')
   const wanted = new Set(userIds)
-  wanted.delete(project.createdBy)
 
   // Everyone named must already be a member of this organisation — a team
   // must never become a side door into another org's data.
@@ -438,10 +450,10 @@ async function writeTeam(
     .withIndex('by_project', (q) => q.eq('projectId', project._id))
     .collect()
   for (const share of existing) {
-    if (!wanted.has(share.userId)) {
-      await ctx.db.delete('projectShares', share._id)
-    } else {
+    if (wanted.has(share.userId)) {
       wanted.delete(share.userId)
+    } else if (share.userId !== project.createdBy) {
+      await leaveTeam(ctx, share)
     }
   }
   for (const userId of wanted) {

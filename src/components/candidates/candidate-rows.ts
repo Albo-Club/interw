@@ -1,21 +1,17 @@
 /**
  * The candidate table's rules, kept out of the component so they can be
- * tested: what a filter keeps, how a column sorts, and which invitations
- * never reached their candidate.
+ * tested: what a filter keeps and how a column sorts.
  */
 
 import type { FunctionReturnType } from 'convex/server'
 
 import type { api } from '../../../convex/_generated/api'
-import type { Id } from '../../../convex/_generated/dataModel'
 
 export type CandidateRow = FunctionReturnType<
   typeof api.sessions.listByProject
 >['page'][number]
 
-type EmailEvent = FunctionReturnType<typeof api.emailEvents.recent>[number]
-
-export type DeliveryIssue = 'bounced' | 'complained' | 'failed'
+export type DeliveryIssue = NonNullable<CandidateRow['deliveryIssue']>
 
 export type StatusFilter = CandidateRow['status'] | 'all'
 export type DecisionFilter =
@@ -61,29 +57,4 @@ export const SORT_SPECS = {
     accessorFn: (row: CandidateRow) => row.durationSeconds ?? undefined,
     sortUndefined: 'last' as const,
   },
-}
-
-/**
- * The invitations whose latest send did not reach the candidate. Events come
- * newest first, so the first invitation event seen for a session is its
- * current state: an invitation re-sent and delivered after a bounce clears it.
- */
-export function deliveryIssues(
-  events: Array<EmailEvent>,
-): Map<Id<'sessions'>, DeliveryIssue> {
-  const seen = new Set<Id<'sessions'>>()
-  const issues = new Map<Id<'sessions'>, DeliveryIssue>()
-  for (const event of events) {
-    if (event.template !== 'candidate-invitation' || !event.sessionId) continue
-    if (seen.has(event.sessionId)) continue
-    seen.add(event.sessionId)
-    if (
-      event.status === 'bounced' ||
-      event.status === 'complained' ||
-      event.status === 'failed'
-    ) {
-      issues.set(event.sessionId, event.status)
-    }
-  }
-  return issues
 }

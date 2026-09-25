@@ -42,6 +42,7 @@ export function ProjectTeamDialog({
   const setTeam = useConvexMutation(api.projects.setTeam)
   const [selected, setSelected] = useState<Array<Id<'users'>> | null>(null)
   const [saving, setSaving] = useState(false)
+  const creatorSeated = team?.members.includes(team.createdBy) ?? false
 
   // Seed once per opening, not on every live update: a colleague's change
   // arriving mid-edit must not overwrite what this recruiter is ticking.
@@ -73,9 +74,10 @@ export function ProjectTeamDialog({
           <DialogDescription>{t('projects:team.subtitle')}</DialogDescription>
         </DialogHeader>
 
-        {/* A current creator is the locked first row of the picker; one
-            removed since is no longer in it, but keeps the credit. */}
-        {team?.creator.removed && (
+        {/* A creator with a seat is the locked first row of the picker. One
+            who lost it with their membership keeps the credit, and if they
+            are back in the org, an ordinary row anyone may tick. */}
+        {team && !creatorSeated && (
           <p className="text-muted-foreground text-sm">
             <Trans
               t={t}
@@ -87,7 +89,7 @@ export function ProjectTeamDialog({
 
         <TeamPicker
           orgId={orgId}
-          creatorId={team?.createdBy}
+          creatorId={creatorSeated ? team?.createdBy : undefined}
           selected={selected}
           onChange={setSelected}
         />

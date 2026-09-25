@@ -4,7 +4,7 @@ import { internalMutation } from './_generated/server'
 import { RESEND_FROM, resend } from './email'
 import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
-import type { Id } from './_generated/dataModel'
+import { seesEverything } from './lib/projectAccess'
 
 const siteUrl = process.env.SITE_URL!
 
@@ -90,28 +90,42 @@ export const sendReportReady = internalMutation({
     if (!project || !report) return false
     const org = await ctx.db.get('organizations', session.orgId)
 
-    // The role's team and nobody else: its creator plus the colleagues they
-    // chose. Admins and owners see every role but are only mailed about the
-    // ones they follow — an org of 40 used to get 40 emails per candidate.
-    const recipients = new Set<Id<'users'>>([project.createdBy])
+    // The role's team and nobody else: its seats, the creator's included.
+    // Admins and owners see every role but are only mailed about the ones
+    // they follow — an org of 40 used to get 40 emails per candidate.
     const team = await ctx.db
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
-    for (const row of team) recipients.add(row.userId)
+
+    // Membership is checked here, at send time: a team row is an attribution
+    // inside the org, never a grant that outlives removal.
+    let audience = (
+      await Promise.all(
+        team.map(({ userId }) =>
+          ctx.db
+            .query('organizationMembers')
+            .withIndex('by_org_and_user', (q) =>
+              q.eq('orgId', session.orgId).eq('userId', userId),
+            )
+            .unique(),
+        ),
+      )
+    ).filter((member) => member !== null)
+    // A team whose members all left would leave its reports landing with
+    // nobody told. The admins, who can already see the role, inherit it.
+    if (audience.length === 0) {
+      audience = (
+        await ctx.db
+          .query('organizationMembers')
+          .withIndex('by_org', (q) => q.eq('orgId', session.orgId))
+          .collect()
+      ).filter((member) => seesEverything(member.role))
+    }
 
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
-    for (const userId of recipients) {
-      // Membership is re-checked at send time: `createdBy` and a team row are
-      // attributions inside the org, never a grant that outlives removal.
-      const membership = await ctx.db
-        .query('organizationMembers')
-        .withIndex('by_org_and_user', (q) =>
-          q.eq('orgId', session.orgId).eq('userId', userId),
-        )
-        .unique()
-      if (!membership) continue
+    for (const { userId } of audience) {
       const user = await ctx.db.get('users', userId)
       if (!user) continue
       const { subject, html, text } = reportReadyEmail({

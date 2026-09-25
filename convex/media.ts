@@ -24,6 +24,7 @@ import {
   presignGet,
   presignPut,
   projectMediaKey,
+  withPendingKey,
 } from './lib/objectStore'
 import { requireProjectAccess, requireProjectEditable } from './lib/projectAccess'
 import type { Doc, Id } from './_generated/dataModel'
@@ -68,7 +69,7 @@ function validateSize(contentLength: number): number {
 
 /* ───────────────────────────── Upload ──────────────────────────────────── */
 
-export const resolveIntroUpload = internalQuery({
+export const reserveIntroUpload = internalMutation({
   args: {
     projectId: v.id('projects'),
     mimeType: v.string(),
@@ -78,19 +79,20 @@ export const resolveIntroUpload = internalQuery({
     const { project } = await requireProjectEditable(ctx, projectId)
     const contentType = normalizeMimeType(mimeType, INTRO_RECORDING_TYPES)
     validateSize(contentLength)
-    return {
-      key: projectMediaKey(
-        project.orgId,
-        project._id,
-        'intro',
-        extensionForMimeType(contentType),
-      ),
-      contentType,
-    }
+    const key = projectMediaKey(
+      project.orgId,
+      project._id,
+      'intro',
+      extensionForMimeType(contentType),
+    )
+    await ctx.db.patch('projects', project._id, {
+      pendingMediaKeys: withPendingKey(project.pendingMediaKeys, key),
+    })
+    return { key, contentType }
   },
 })
 
-export const resolveQuestionUpload = internalQuery({
+export const reserveQuestionUpload = internalMutation({
   args: {
     questionId: v.id('questions'),
     mimeType: v.string(),
@@ -102,15 +104,16 @@ export const resolveQuestionUpload = internalQuery({
     await requireProjectEditable(ctx, question.projectId)
     const contentType = normalizeMimeType(mimeType)
     validateSize(contentLength)
-    return {
-      key: projectMediaKey(
-        question.orgId,
-        question.projectId,
-        `q-${question._id}`,
-        extensionForMimeType(contentType),
-      ),
-      contentType,
-    }
+    const key = projectMediaKey(
+      question.orgId,
+      question.projectId,
+      `q-${question._id}`,
+      extensionForMimeType(contentType),
+    )
+    await ctx.db.patch('questions', question._id, {
+      pendingMediaKeys: withPendingKey(question.pendingMediaKeys, key),
+    })
+    return { key, contentType }
   },
 })
 
@@ -133,7 +136,7 @@ export const requestIntroUpload = action({
     ctx,
     args,
   ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
-    const target = await ctx.runQuery(internal.media.resolveIntroUpload, args)
+    const target = await ctx.runMutation(internal.media.reserveIntroUpload, args)
     return {
       uploadUrl: await presignPut(
         target.key,
@@ -157,7 +160,10 @@ export const requestQuestionUpload = action({
     ctx,
     args,
   ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
-    const target = await ctx.runQuery(internal.media.resolveQuestionUpload, args)
+    const target = await ctx.runMutation(
+      internal.media.reserveQuestionUpload,
+      args,
+    )
     return {
       uploadUrl: await presignPut(
         target.key,
@@ -202,7 +208,10 @@ export const swapIntroKey = internalMutation({
       throw new ConvexError('key_mismatch')
     }
     const previous = project.introMediaKey
-    await ctx.db.patch('projects', projectId, { introMediaKey: key })
+    await ctx.db.patch('projects', projectId, {
+      introMediaKey: key,
+      pendingMediaKeys: project.pendingMediaKeys?.filter((k) => k !== key),
+    })
     return { previous: previous && previous !== key ? previous : null }
   },
 })
@@ -226,7 +235,11 @@ export const swapQuestionKey = internalMutation({
     // played in <audio> or <video>, and the client's word is not needed.
     const mediaKind = type.startsWith('video/') ? 'video' : 'audio'
     const previous = question.mediaKey
-    await ctx.db.patch('questions', questionId, { mediaKey: key, mediaKind })
+    await ctx.db.patch('questions', questionId, {
+      mediaKey: key,
+      mediaKind,
+      pendingMediaKeys: question.pendingMediaKeys?.filter((k) => k !== key),
+    })
     return { previous: previous && previous !== key ? previous : null }
   },
 })

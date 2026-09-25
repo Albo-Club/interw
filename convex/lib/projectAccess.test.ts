@@ -109,10 +109,12 @@ describe('project visibility', () => {
     })
   })
 
-  it('shows a role to its creator, who is never a stored row', async () => {
+  // Audit T17-2: the creator's seat is a row, so removal can revoke it.
+  // `createdBy` is attribution and, alone, shows the creator nothing.
+  it('hides a role from its creator once their seat is gone', async () => {
     await t.run(async (ctx) => {
       const project = (await ctx.db.get('projects', s.confidentialProject))!
-      expect(await canSeeProject(ctx, project, s.authorId, 'member')).toBe(true)
+      expect(await canSeeProject(ctx, project, s.authorId, 'member')).toBe(false)
     })
   })
 

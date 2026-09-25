@@ -51,7 +51,7 @@ function newTest() {
 /**
  * Two organisations, and inside the first one every role that matters:
  *
- *   acmeOwner    owner of Acme, creator of both roles
+ *   acmeOwner    owner of Acme, creator of both roles, seated on both
  *   acmeAdmin    admin of Acme, on neither team
  *   acmeMember   plain member of Acme, on the Backend team only
  *   acmeShared   plain member of Acme, on the Chief of Staff team only
@@ -143,6 +143,8 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
       completedSessionCount: 0,
     })
     for (const [projectId, userId] of [
+      [backendProjectId, users.acmeOwner],
+      [chiefProjectId, users.acmeOwner],
       [backendProjectId, users.acmeMember],
       [chiefProjectId, users.acmeShared],
     ] as const) {
@@ -307,43 +309,17 @@ describe('project visibility inside an organisation', () => {
 
   /**
    * Audit 2026-09-22, `convex/emailEvents.ts:recent:org-scope-without-project-visibility`.
-   * The deliverability list is derived from the invitations, so it inherits
-   * the visibility of the role each one was sent for.
+   * The org-wide deliverability list lost its only screen when the candidate
+   * table started reading each invitation's own delivery (PR #45), so it is
+   * gone rather than kept filtered for nobody.
    */
-  it('does not leak the candidates of a role through the deliverability list', async () => {
-    await t.run(async (ctx) => {
-      const hidden = await ctx.db.insert('sessions', {
-        orgId: w.acmeOrgId,
-        projectId: w.chiefProjectId,
-        accessToken: 'h'.repeat(43),
-        candidateName: 'Sam Hidden',
-        candidateEmail: 'hidden@candidate.test',
-        status: 'pending',
-        lastQuestionIndex: 0,
-        invitedBy: (await ctx.db.get('projects', w.chiefProjectId))!
-          .createdBy,
-        invitedAt: 0,
-      })
-      await ctx.db.insert('emailLog', {
-        orgId: w.acmeOrgId,
-        template: 'candidate-invitation',
-        recipient: 'hidden@candidate.test',
-        status: 'sent',
-        sessionId: hidden,
-        createdAt: 1,
-      })
-    })
-
-    const excluded = await as(t, 'acmeMember').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(excluded.map((row) => row.recipient)).not.toContain(
-      'hidden@candidate.test',
-    )
-    const named = await as(t, 'acmeShared').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(named.map((row) => row.recipient)).toContain('hidden@candidate.test')
+  it('no longer exposes the org-wide deliverability list', async () => {
+    await expect(
+      as(t, 'acmeMember').query(
+        makeFunctionReference<'query'>('emailEvents:recent'),
+        { orgId: w.acmeOrgId },
+      ),
+    ).rejects.toThrow()
   })
 
   /**
@@ -492,6 +468,25 @@ describe('removing a member revokes what was granted through them', () => {
     expect(recipients).toContain('acmeMember@example.test')
   })
 
+  /** PR #43: a creator who left alone on their role left it mailing nobody. */
+  it('hands the reports of a role left with nobody to the admins', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('projects', w.backendProjectId, { createdBy: userId })
+      for (const row of await ctx.db
+        .query('projectShares')
+        .withIndex('by_project', (q) => q.eq('projectId', w.backendProjectId))
+        .collect()) {
+        await ctx.db.delete('projectShares', row._id)
+      }
+    })
+    const recipients = await completeInterviewOn(t, w, w.backendProjectId)
+    expect(recipients.sort()).toEqual([
+      'acmeAdmin@example.test',
+      'acmeOwner@example.test',
+    ])
+  })
+
   it('does not put them back on the team on re-invitation', async () => {
     const userId = await removeShared()
     await t.run(async (ctx) =>
@@ -549,7 +544,10 @@ describe("the role's team", () => {
     const team = await as(t, 'acmeOwner').query(api.projects.team, {
       projectId: w.chiefProjectId,
     })
-    expect(team.members).toEqual([await userId(t, 'acmeShared')])
+    expect(team.members).toEqual([
+      await userId(t, 'acmeOwner'),
+      await userId(t, 'acmeShared'),
+    ])
     expect(team.creator).toEqual({
       name: 'acmeOwner@example.test',
       removed: false,
@@ -651,16 +649,19 @@ describe("the role's team", () => {
       }),
     ).rejects.toThrow('insufficient_role')
     expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
       await userId(t, 'acmeMember'),
     ])
   })
 
-  it('keeps the creator on the team without storing them', async () => {
-    await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+  it("keeps the creator's seat through a team that leaves them out", async () => {
+    await as(t, 'acmeAdmin').mutation(api.projects.setTeam, {
       projectId: w.backendProjectId,
-      userIds: [await userId(t, 'acmeOwner')],
+      userIds: [],
     })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
     expect(await completeInterviewOn(t, w, w.backendProjectId)).toEqual([
       'acmeOwner@example.test',
     ])
@@ -681,7 +682,10 @@ describe("the role's team", () => {
       api.projects.create,
       { orgId: w.acmeOrgId, title: 'Designer', language: 'en', team: [shared] },
     )
-    expect(await teamRowsOf(t, projectId)).toEqual([shared])
+    expect(await teamRowsOf(t, projectId)).toEqual([
+      await userId(t, 'acmeMember'),
+      shared,
+    ])
     const detail = await as(t, 'acmeShared').query(api.projects.getBySlug, {
       orgId: w.acmeOrgId,
       slug,
@@ -752,7 +756,9 @@ describe('leaving revokes team places and report links', () => {
       [member]: true,
       [await userId(t, 'acmeOwner')]: false,
     })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
   })
 
   it('clears team places and revokes links when the account is deleted', async () => {
@@ -762,7 +768,9 @@ describe('leaving revokes team places and report links', () => {
       betterAuthId: 'ba_acmeMember',
     })
     expect(await linkStates()).toEqual({ [member]: true })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
   })
 })
 

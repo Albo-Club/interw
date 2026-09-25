@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, internal } from './_generated/api'
 import { projectMediaKey } from './lib/objectStore'
@@ -206,13 +206,13 @@ describe('the intro is a video or nothing', () => {
 
   it('issues no intro upload slot for audio alone', async () => {
     await expect(
-      owner(t).query(internal.media.resolveIntroUpload, {
+      owner(t).mutation(internal.media.reserveIntroUpload, {
         projectId: w.projectId,
         mimeType: 'audio/webm;codecs=opus',
         contentLength: 1_000,
       }),
     ).rejects.toThrow('unsupported_media_type')
-    const slot = await owner(t).query(internal.media.resolveIntroUpload, {
+    const slot = await owner(t).mutation(internal.media.reserveIntroUpload, {
       projectId: w.projectId,
       mimeType: 'video/mp4',
       contentLength: 1_000,
@@ -350,5 +350,113 @@ describe('migrateLegacyIntroModes', () => {
     expect(
       await t.mutation(internal.media.migrateLegacyIntroModes, {}),
     ).toEqual({ migrated: 0, done: true })
+  })
+})
+
+// Fingerprint: convex/media.ts:requestIntroUpload:signed-before-named
+// Same gap as the candidate's documents: an upload slot signed a PUT before
+// any row named its key, so a take recorded and never attached stayed in the
+// bucket after the role — or the question — was deleted.
+describe('a recruiter recording is named before its upload', () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+
+  beforeEach(async () => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+    // What is deleted is read off the scheduled jobs; nothing reaches a bucket.
+    vi.spyOn(
+      await import('./lib/objectStore'),
+      'deleteObjects',
+    ).mockResolvedValue()
+    t = newTest()
+    w = await seed(t)
+    // Editing questions and deleting the role both need a role nobody sat.
+    await t.run(async (ctx) => {
+      for (const session of await ctx.db.query('sessions').collect()) {
+        await ctx.db.delete('sessions', session._id)
+      }
+      await ctx.db.patch('projects', w.projectId, { sessionCount: 0 })
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+  })
+
+  const questionKey = (extension: string) =>
+    projectMediaKey(w.orgId, w.projectId, `q-${w.questionId}`, extension)
+  const requestIntro = () =>
+    owner(t).action(api.media.requestIntroUpload, {
+      projectId: w.projectId,
+      mimeType: 'video/mp4',
+      contentLength: 1_000,
+    })
+  const requestQuestion = (mimeType: string) =>
+    owner(t).action(api.media.requestQuestionUpload, {
+      questionId: w.questionId,
+      mimeType,
+      contentLength: 1_000,
+    })
+  const scheduledDeletions = async () =>
+    (
+      await t.run((ctx) =>
+        ctx.db.system.query('_scheduled_functions').collect(),
+      )
+    )
+      .filter((job) => job.name === 'media:deleteKeys')
+      .flatMap((job) => (job.args[0] as { keys: Array<string> }).keys)
+      .sort()
+
+  it('is deleted with its role even if it was never attached', async () => {
+    await requestIntro()
+    await requestQuestion('audio/webm')
+    await owner(t).mutation(api.projects.remove, { projectId: w.projectId })
+    expect(await scheduledDeletions()).toEqual(
+      [
+        projectMediaKey(w.orgId, w.projectId, 'intro', 'mp4'),
+        projectMediaKey(w.orgId, w.projectId, 'intro', 'webm'),
+        questionKey('weba'),
+      ].sort(),
+    )
+  })
+
+  it('is erased with its organisation even if it was never attached', async () => {
+    await requestIntro()
+    const [batch] = await t.query(internal.orgErasure.projectBatch, {
+      orgId: w.orgId,
+    })
+    expect(batch.keys).toContain(
+      projectMediaKey(w.orgId, w.projectId, 'intro', 'mp4'),
+    )
+  })
+
+  it('is deleted with its question, attached or only issued', async () => {
+    await requestQuestion('audio/mp4')
+    await owner(t).action(api.media.attachQuestionMedia, {
+      questionId: w.questionId,
+      key: questionKey('m4a'),
+    })
+    await requestQuestion('video/webm')
+    await owner(t).mutation(api.questions.remove, {
+      questionId: w.questionId,
+    })
+    expect(await scheduledDeletions()).toEqual(
+      [questionKey('m4a'), questionKey('webm')].sort(),
+    )
+  })
+
+  it('is named once, by the row, once attached', async () => {
+    await requestIntro()
+    await owner(t).mutation(internal.media.swapIntroKey, {
+      projectId: w.projectId,
+      key: projectMediaKey(w.orgId, w.projectId, 'intro', 'mp4'),
+    })
+    const project = await t.run((ctx) => ctx.db.get('projects', w.projectId))
+    expect(project?.pendingMediaKeys ?? []).toEqual([])
   })
 })

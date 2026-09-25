@@ -341,6 +341,46 @@ describe('what a share link shows of the role and the answers', () => {
     ])
     expect(JSON.stringify(result)).not.toContain('orgs/')
   })
+
+  /** PR #46: the moments worth watching were on the recruiter's page only. */
+  it('carries the highlights, and null for a report without any', async () => {
+    const before = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(before.report?.highlights).toBeNull()
+
+    const highlight = await t.run(async (ctx) => {
+      const share = (await ctx.db.get('reportShares', s.shareId))!
+      const report = (await ctx.db.get('reports', share.reportId))!
+      const session = (await ctx.db.get('sessions', report.sessionId))!
+      const questionId = await ctx.db.insert('questions', {
+        orgId: session.orgId,
+        projectId: session.projectId,
+        orderIndex: 0,
+        content: 'Tell me about a migration.',
+        maxResponseSeconds: 120,
+      })
+      const segmentId = await ctx.db.insert('segments', {
+        orgId: session.orgId,
+        sessionId: session._id,
+        questionId,
+        questionIndex: 0,
+        audioKey: 'orgs/o/sessions/s/q0.weba',
+        uploadState: 'uploaded',
+        uploadAttempts: 1,
+        recordedAt: 0,
+      })
+      const moment = {
+        segmentId,
+        startSeconds: 12,
+        endSeconds: 30,
+        kind: 'strength' as const,
+        label: 'Explains the rollback plan',
+      }
+      await ctx.db.patch('reports', report._id, { highlights: [moment] })
+      return moment
+    })
+    const after = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(after.report?.highlights).toEqual([highlight])
+  })
 })
 
 /**

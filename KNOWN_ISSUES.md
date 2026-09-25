@@ -1445,7 +1445,7 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   on `blocked` for someone who became the last one meanwhile, and
   `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
 
-## A removed member keeps their credit — and their creator rights on return
+## A removed member keeps their credit, not their creator rights
 
 Removing someone from an organisation deletes their membership, their team
 rows and their report share links (`revokeMemberGrants`), never the ids that
@@ -1455,11 +1455,11 @@ ids through `memberName` (`convex/lib/memberName.ts`), which keeps the name
 and flags `removed`, and render them with `src/components/MemberName.tsx`;
 a deleted account has no name left and reads "Former member". A new screen
 that credits someone goes through the same pair rather than reading `users`
-itself. Authorisation does not read that flag: a removed creator is
-locked out by `requireOrgMember` like anyone else. If they are re-invited,
-`createdBy` still names them, so they regain creator rights on their own roles
-(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
-their work — but it is the one thing removal does not reset.
+itself. Authorisation does not read that flag, nor `createdBy` itself: the
+creator's seat on the team is a `projectShares` row (audit T17-2), deleted
+with the others, so a creator re-invited as a plain member gets `not_found` on
+their own roles until someone puts them back on the team. Credit survives
+removal; rights do not.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -2220,15 +2220,23 @@ organisation:
 - **Is mailed "report ready"**: the team only, membership re-checked at send
   time. Admins and owners see every role but are mailed only about the ones
   they are on. The old rule mailed up to 200 members of the org per report.
+  One exception: when nobody on the team is still a member (a creator who
+  left alone on their role), the admins and owners are mailed instead, so a
+  report never lands with nobody told.
 - **Edits the team**: the creator, an admin or an owner
   (`requireProjectOwnerOrAdmin`), at creation or from the Team dialog.
 
 Traps:
 
-- **The creator is never a row.** They are on the team by construction
-  (`project.createdBy`), so they cannot be unticked and the person who opened
-  the search always hears about it. `setTeam` silently drops their id. Code
-  that lists "the team" must add `createdBy` to the `projectShares` rows.
+- **The creator is a row, and `createdBy` grants nothing.** `projects.create`
+  writes the creator's seat; `setTeam` never drops it, so the person who
+  opened the search cannot be unticked, but removal from the org takes it like
+  any other (T17-2 — `createdBy` used to be the seat, and survived removal).
+  Owner tier (`requireProjectOwnerOrAdmin`) is an admin/owner, or the
+  `createdBy` member *while seated*: it runs after `requireProjectAccess`, so
+  an unseated creator never reaches the comparison. Roles from before carry
+  their seat from the one-off `migrations.backfillCreatorSeats`; until it has
+  run on a deployment, plain-member creators do not see those roles.
 - **The table is still called `projectShares`.** Renaming a Convex table is a
   copy migration. The rows of the former "restricted" roles already meant
   exactly "named colleagues", and a former "open" role had none — so the
@@ -2248,6 +2256,17 @@ Traps:
   report share links they created there; `users.cascadeDelete` does the same in
   every org. A share link acts for whoever made it, so it must not outlive
   their membership (h03).
+- **Leaving one team is a smaller leaving** (`leaveTeam`, used by both
+  `setTeam` and `revokeMemberGrants`): the person's report links on that role
+  are revoked, and `purge.eraseRoleThreads` erases their assistant threads
+  that read its candidates, found through `chatThreadSessions` like erasure
+  finds them. An admin or owner still sees the role by rank and keeps both.
+  Threads that never read a candidate carry no row and stay: `listRoles`
+  output (titles and counts) is not tracked.
+- **New slugs end in six random characters** (`uniqueSlug`, T17-3). Slugs are
+  unique across the org, hidden roles included, so a counter (`-2`) told a
+  member that a hidden role of that title existed. Never derive a suffix from
+  what else is taken.
 
 ## A role's intro is a video, or nothing
 
@@ -2746,6 +2765,9 @@ minutes, whatever the question. Both now follow `question.maxResponseSeconds`
   what an unopened invitation keeps.
 - **`expired` is terminal.** Pushing the deadline back after the cron ran does
   not reopen those links — the recruiter re-invites. Before it ran, it does.
+- **The grace is for finishing, not for sending.** `invite` and
+  `resendInvitation` refuse `project_expired` from the deadline itself: a link
+  mailed during the grace day would open on "This interview has closed".
 
 The pass is bounded (25 roles, 200 session writes) and reschedules itself
 with the same cursor until the range is drained. It rescans every

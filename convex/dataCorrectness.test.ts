@@ -139,7 +139,7 @@ describe("role slugs past 200 roles (Back M4)", () => {
     f = await seed(t);
   });
 
-  it("suffixes a slug taken by the 250th role", async () => {
+  it("redraws a slug taken by the 250th role", async () => {
     // The old guard read the first 200 roles of the org: a slug taken by any
     // later one was invisible to it, and a duplicate was inserted.
     await t.run(async (ctx) => {
@@ -151,17 +151,23 @@ describe("role slugs past 200 roles (Back M4)", () => {
       }
       await ctx.db.insert(
         "projects",
-        projectFields(f.orgId, f.userId, "product-manager"),
+        projectFields(f.orgId, f.userId, "product-manager-aaaaaa"),
       );
     });
 
+    // The first suffix drawn is the one the 250th role holds.
+    vi.spyOn(crypto, "getRandomValues").mockImplementationOnce((bytes) => {
+      (bytes as Uint8Array).fill(0);
+      return bytes;
+    });
     const { slug } = await asOwner(t).mutation(api.projects.create, {
       orgId: f.orgId,
       title: "Product Manager",
       language: "en",
     });
 
-    expect(slug).toBe("product-manager-2");
+    expect(slug).toMatch(/^product-manager-[a-z0-9]{6}$/);
+    expect(slug).not.toBe("product-manager-aaaaaa");
   });
 
   it("still opens a role whose slug was duplicated before the fix", async () => {
@@ -291,6 +297,41 @@ describe("sessions past their role deadline (B6)", () => {
         sessionId: session._id,
       }),
     ).rejects.toThrow(/session_closed/);
+  });
+
+  /** PR #50: past the deadline, a new link was mailed already closed. */
+  it("sends no invitation nor reminder once the deadline has passed", async () => {
+    const deadline = Date.now() + HOUR_MS;
+    const sessionId = await t.run(async (ctx) => {
+      await ctx.db.patch("projects", f.projectId, { expiresAt: deadline });
+      return ctx.db.insert("sessions", sessionFields(f));
+    });
+    const invite = () =>
+      asOwner(t).mutation(api.sessions.invite, {
+        projectId: f.projectId,
+        candidates: [{ name: "Alex Martin", email: "alex@example.test" }],
+      });
+    // Inside the grace window: the session is still open, the role is not.
+    vi.setSystemTime(deadline + HOUR_MS);
+    await expect(invite()).rejects.toThrow(/project_expired/);
+    await expect(
+      asOwner(t).mutation(api.sessions.resendInvitation, { sessionId }),
+    ).rejects.toThrow(/project_expired/);
+
+    await t.run(async (ctx) =>
+      ctx.db.patch("projects", f.projectId, { expiresAt: undefined }),
+    );
+    await expect(invite()).resolves.toMatchObject({ created: 1 });
+  });
+
+  it("sends no reminder for an archived role", async () => {
+    const sessionId = await t.run(async (ctx) => {
+      await ctx.db.patch("projects", f.projectId, { status: "archived" });
+      return ctx.db.insert("sessions", sessionFields(f));
+    });
+    await expect(
+      asOwner(t).mutation(api.sessions.resendInvitation, { sessionId }),
+    ).rejects.toThrow(/project_archived/);
   });
 });
 

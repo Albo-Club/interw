@@ -18,6 +18,13 @@ describe('the auth proxy headers', () => {
     expect(out.get('cookie')).toBe('a=b')
   })
 
+  it('keeps only the first address of a forwarded chain', () => {
+    const out = withPlatformClientIp(
+      new Headers({ 'x-forwarded-for': '198.51.100.7, 10.0.0.1' }),
+    )
+    expect(out.get(CLIENT_IP_HEADER)).toBe('198.51.100.7')
+  })
+
   it('sends no client IP at all rather than one the client chose', () => {
     const out = withPlatformClientIp(
       new Headers({ 'x-real-ip': '203.0.113.1', [CLIENT_IP_HEADER]: '203.0.113.2' }),

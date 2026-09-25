@@ -16,7 +16,9 @@ export const CLIENT_IP_HEADER = 'x-interw-client-ip'
  */
 export function withPlatformClientIp(incoming: Headers): Headers {
   const headers = new Headers(incoming)
-  const ip = incoming.get('x-forwarded-for')?.trim()
+  // Its first entry: a chain would make Better Auth discard the value and put
+  // every user in one shared bucket.
+  const ip = incoming.get('x-forwarded-for')?.split(',')[0]?.trim()
   for (const name of ['x-forwarded-for', 'x-real-ip', CLIENT_IP_HEADER])
     headers.delete(name)
   if (ip) headers.set(CLIENT_IP_HEADER, ip)

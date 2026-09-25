@@ -2437,3 +2437,32 @@ compute everything from them, so "decisions so far" dropped as pending
 invitations piled up (Back M3). Same rule on `/app/admin` (`1000+`). If you
 need exact totals, denormalise a counter in the mutation that changes the
 status — do not raise the cap on a reactive query.
+
+## Reduced motion collapses durations, and spares the spinner
+
+`src/styles/app.css` answers `prefers-reduced-motion: reduce` once for the
+whole app instead of per component. Durations go to `0.01ms`, not
+`animation: none`: Radix waits for `animationend` before it unmounts a closing
+dialog or menu, and an animation that never runs never fires it. `.animate-spin`
+is put back afterwards, because a spinner that stops looks like a frozen page —
+its rotation is the only sign work is still in progress. A new loop that
+carries meaning the same way needs the same exemption.
+
+## `ui/command.tsx` is not vendored: the search uses cmdk directly
+
+The candidate search (⌘K) is the shadcn `CommandDialog` pattern built by hand:
+`cmdk` inside the vendored `ui/dialog`. The shadcn registry
+(`ui.shadcn.com`) was unreachable from the environment that wrote it, and
+`src/components/ui/*` is never hand-written. When the CLI works, `pnpm dlx
+shadcn@latest add command` and swapping `Command.*` for the vendored parts is
+a mechanical change. `shouldFilter={false}` must stay: results are ranked by
+the server, and cmdk would otherwise re-filter them on the client. `cmdk` is on
+the candidate-bundle ban list in `eslint.config.mjs`.
+
+## A `?raw` glob of a stylesheet is empty under Vitest
+
+`import.meta.glob('./*.css', { query: '?raw' })` returns `''` for every file in
+a Vitest run — the CSS pipeline claims `.css` before the raw loader does. A
+test that asserts on stylesheet source reads it with `readFileSync` instead
+(`src/styles/design-pass.test.ts`). `.ts`/`.tsx` sources glob fine.
+

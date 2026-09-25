@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "calmer-interface": {
+      "title": "Une interface plus calme et plus cohérente",
+      "body": "Interw utilise désormais sa propre police partout, respecte le réglage « réduire les animations » de votre système et montre la forme de la page pendant le chargement plutôt qu'une ligne de texte. La recherche de candidats (⌘K) s'ouvre en une liste parcourable aux flèches, et elle est accessible depuis un téléphone. Les dates suivent la langue de l'application, la liste des postes signale ceux dont vous êtes dans l'équipe, et l'import d'une offre ajoute tout ou rien."
+    },
     "candidate-leave-guard": {
       "title": "Le candidat est prévenu avant de perdre une réponse",
       "body": "Un candidat qui fait Retour ou ferme l'onglet pendant qu'une réponse s'enregistre, s'envoie ou attend un nouvel essai doit désormais confirmer ; s'il part quand même, le journal de l'entretien le note, et une réponse manquante ne passe plus pour une question sautée. Un lien ouvert sans https le dit, au lieu d'accuser le navigateur, chaque écran de l'entretien a son propre titre, et nos rapports d'erreur ne conservent plus rien des liens de partage de rapport."

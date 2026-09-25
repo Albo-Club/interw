@@ -26,7 +26,12 @@ function convexRun<T>(fn: string, args: Record<string, unknown>): T {
  */
 async function recordsVideo(page: Page, browserName: string) {
   const formats = await page.evaluate(
-    (types) => types.filter((type) => MediaRecorder.isTypeSupported(type)),
+    // A build without MediaRecorder encodes nothing: the empty list then
+    // fails the audio assertion below with the reason in its message.
+    (types) =>
+      typeof MediaRecorder === 'undefined'
+        ? []
+        : types.filter((type) => MediaRecorder.isTypeSupported(type)),
     [...VIDEO_MIME_PREFERENCES, ...AUDIO_MIME_PREFERENCES],
   )
   const description = `MediaRecorder formats this browser encodes: ${JSON.stringify(formats)}`

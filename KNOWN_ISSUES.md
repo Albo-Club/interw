@@ -1955,6 +1955,17 @@ reducer, the recorder and the server; the browser path needs CI or a phone.
 
 ## The WebKit e2e leg: what removes the preview
 
+**Measured on CI (2026-09-25): Playwright's Linux WebKit has no
+`MediaRecorder` at all.** `page.evaluate` in WebKit 26.6 (Playwright webkit
+v2359, `ubuntu-latest`) throws `ReferenceError: Can't find variable:
+MediaRecorder`. The page then takes the "unsupported browser" branch below,
+and no fake device or audio-only path can help: nothing can be recorded.
+Safari has had `MediaRecorder` since 14.1, so this is the Linux build, not the
+product. That is why the CI `e2e` job runs its WebKit leg on `macos-latest`
+(`.github/workflows/ci.yml`), and Chromium stays on Ubuntu. Running
+`--project=webkit` on a Linux machine reproduces the failure; it does not
+prove a regression.
+
 When `expectLivePreview` fails with "element(s) not found" on the device
 check, the page took one of two branches, and only these two render no
 `<video>`:

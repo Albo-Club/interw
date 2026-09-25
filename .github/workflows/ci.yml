@@ -45,10 +45,26 @@ jobs:
   # staging with unmerged code. It runs after every merge to `main` and on
   # demand (Actions → CI → Run workflow, on any branch). Once real candidates
   # depend on it, drop the `if:` to gate every PR again.
+  #
+  # WebKit runs on macOS: Playwright's Linux WebKit ships without MediaRecorder,
+  # so it cannot record at all and the candidate page says the browser is
+  # unsupported. See KNOWN_ISSUES.md § "The WebKit e2e leg: what removes the
+  # preview".
   e2e:
+    name: e2e (${{ matrix.browser }})
     needs: check
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            os: ubuntu-latest
+            install: --only-shell chromium
+          - browser: webkit
+            os: macos-latest
+            install: webkit
+    runs-on: ${{ matrix.os }}
     concurrency:
       group: e2e-staging
       cancel-in-progress: false
@@ -73,14 +89,14 @@ jobs:
       - run: pnpm build
         env:
           DEPLOY_CONVEX: 'true'
-      - run: pnpm exec playwright install --with-deps --only-shell chromium webkit
-      - run: pnpm test:e2e
+      - run: pnpm exec playwright install --with-deps ${{ matrix.install }}
+      - run: pnpm test:e2e --project=${{ matrix.browser }}
       # The report carries the recording-screen captures and, on failure, the
       # trace.
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: playwright-report/
 
   # Two jobs, two distinct questions — keep both:

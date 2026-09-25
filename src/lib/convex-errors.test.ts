@@ -81,13 +81,16 @@ describe('every ConvexError code has copy', () => {
   ] as const
   const blockedGateStates = sessionStatuses
     .flatMap((status) =>
-      (['draft', 'active', 'archived'] as const).map(
-        (projectStatus) =>
-          evaluateSessionGate({
-            session: { status },
-            project: { status: projectStatus },
-            now: 0,
-          }).state,
+      (['draft', 'active', 'archived'] as const).flatMap((projectStatus) =>
+        [{}, { deletingAt: 1 }].map(
+          (org) =>
+            evaluateSessionGate({
+              session: { status },
+              project: { status: projectStatus },
+              org,
+              now: 0,
+            }).state,
+        ),
       ),
     )
     .filter((state) => state !== 'ready' && state !== 'resumable')

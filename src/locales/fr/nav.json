@@ -27,7 +27,7 @@
   },
   "orgSwitcher": {
     "label": "Organisations",
-    "allOrganizations": "Toutes les organisations"
+    "createOrganization": "Créer une organisation"
   },
   "theme": {
     "label": "Thème",
@@ -40,31 +40,34 @@
   "loading": "Chargement…",
   "redirecting": "Redirection…",
   "onboarding": {
-    "metaTitle": "Créez votre organisation — interw",
-    "title": "Créez votre première organisation",
-    "description": "Votre espace de travail est rattaché à une organisation. Vous pourrez en créer d'autres plus tard.",
+    "metaTitle": "Créer une organisation — interw",
+    "title": "Créer une organisation",
+    "description": "Vos postes, vos candidatures et votre équipe sont rattachés à une organisation. Vous pourrez en créer d'autres plus tard.",
     "name": "Nom",
     "namePlaceholder": "Acme Inc.",
-    "slug": "Identifiant",
+    "slug": "Adresse web",
     "slugPlaceholder": "acme",
-    "slugHintPrefix": "Utilisé dans les URL :",
-    "slugFallback": "votre-identifiant",
+    "slugFallback": "votre-organisation",
     "submit": "Créer l'organisation",
     "created": "Organisation créée",
     "errors": {
-      "slugTaken": "Cet identifiant est déjà pris",
-      "slugReserved": "Cet identifiant est réservé — choisissez-en un autre",
-      "invalidSlug": "Format d'identifiant invalide",
+      "slugTaken": "Cette adresse est déjà prise",
+      "slugReserved": "Cette adresse est réservée, choisissez-en une autre",
+      "invalidSlug": "De 3 à 40 lettres minuscules, chiffres ou tirets",
       "invalidName": "Nom invalide",
       "couldNotCreate": "Impossible de créer l'organisation"
     },
     "availability": {
       "checking": "Vérification de la disponibilité…",
-      "available": "Identifiant disponible",
-      "invalid": "Format d'identifiant invalide",
-      "reserved": "Cet identifiant est réservé",
-      "taken": "Cet identifiant est déjà pris"
-    }
+      "available": "Cette adresse est disponible",
+      "invalid": "De 3 à 40 lettres minuscules, chiffres ou tirets",
+      "reserved": "Cette adresse est réservée",
+      "taken": "Cette adresse est déjà prise"
+    },
+    "descriptionAnother": "Un espace de travail distinct, avec ses propres postes, candidatures et équipe.",
+    "slugPermanent": "Cette adresse ne pourra plus être modifiée.",
+    "waitingHint": "Vous attendez une invitation ? Consultez votre boîte de réception : elle arrive à {{email}}. Vous pourrez l'accepter d'ici dès sa réception.",
+    "backToApp": "Retour à mon organisation"
   },
   "admin": {
     "metaTitle": "Super-administration — interw",
@@ -138,5 +141,10 @@
     },
     "backToRoles": "Retour aux postes",
     "backToApp": "Retour à l'application"
+  },
+  "pendingInvitations": {
+    "join": "Rejoindre {{orgName}}",
+    "expired": "Cette invitation a expiré. Demandez-en une nouvelle.",
+    "failed": "Impossible de rejoindre cette organisation"
   }
 }

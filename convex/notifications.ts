@@ -1,35 +1,46 @@
 import { v } from 'convex/values'
 
-import { internalMutation, mutation } from './_generated/server'
-import { requireAppUser } from './lib/auth'
+import { internalMutation } from './_generated/server'
 import { RESEND_FROM, resend } from './email'
-import { consumeLimit } from './rateLimiters'
+import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
 import type { Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL!
 
 /**
- * Post-event notifications. Called after the security-critical state change
- * has already succeeded — these emails inform the user; they are not part of
- * the action itself, so failures here must never roll back the underlying op.
+ * "Your password was changed" — or, with `added`, "a password was added".
  *
- * Public mutations rather than internalMutations so the client can fire them
- * immediately after a BA call succeeds. The recipient address is always
- * read from the authenticated user (server-side), never from client input —
- * so the endpoint cannot be abused to spam arbitrary inboxes.
+ * Sent by the server once the change itself has succeeded (Better Auth's
+ * change-password and reset hooks, `users.setPassword`), so no client can
+ * skip it and none can trigger it without a change. It informs; it is not
+ * part of the change, which is already committed and must still read as a
+ * success — so past the per-user budget it logs and returns instead of
+ * throwing.
  */
-
-export const notifyPasswordChanged = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireAppUser(ctx)
-    await consumeLimit(ctx, 'passwordChangedNotify', user._id)
-    const resetUrl = `${siteUrl}/forgot-password`
+export const passwordChanged = internalMutation({
+  args: { betterAuthId: v.string(), added: v.optional(v.boolean()) },
+  handler: async (ctx, { betterAuthId, added }): Promise<boolean> => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', betterAuthId))
+      .unique()
+    if (!user) return false
+    const { ok } = await rateLimiter.limit(ctx, 'passwordChangedNotify', {
+      key: user._id,
+    })
+    if (!ok) {
+      console.warn('[password-changed-notice] rate_limited', {
+        userId: user._id,
+      })
+      return false
+    }
     const { subject, html, text } = passwordChangedEmail({
       locale: user.preferredLanguage ?? 'en',
       email: user.email,
-      resetUrl,
+      added: added ?? false,
+      resetUrl: `${siteUrl}/forgot-password`,
+      sessionsUrl: `${siteUrl}/app/me?tab=sessions`,
     })
     await resend.sendEmail(ctx, {
       from: RESEND_FROM,
@@ -38,6 +49,7 @@ export const notifyPasswordChanged = mutation({
       html,
       text,
     })
+    return true
   },
 })
 

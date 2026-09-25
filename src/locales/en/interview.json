@@ -97,10 +97,11 @@
   },
   "device": {
     "title": "Let's check your camera and microphone",
-    "subtitle": "Nothing here is recorded or saved. This is just to make sure everything works before you start.",
+    "subtitle": "Nothing here is sent or kept. This is just to make sure everything works before you start.",
     "cameraLabel": "Camera",
     "micLabel": "Microphone",
     "preview": "You should see yourself below",
+    "cameraDark": "Your camera is only showing black. Check that nothing covers the lens and that its privacy shutter is open.",
     "speakPrompt": "Say something out loud — the bar should move",
     "micGood": "Your microphone is picking you up",
     "micQuiet": "We can barely hear you. Try speaking up, moving closer, or choosing another microphone.",
@@ -114,7 +115,14 @@
     "inAppBrowser": "You seem to be in an in-app browser. Recording often fails here. Open this link in Safari or Chrome instead.",
     "retry": "Check again",
     "continue": "Everything works — start the interview",
-    "continueAnyway": "Start anyway"
+    "continueAnyway": "Start anyway",
+    "practice": {
+      "title": "Hear yourself before you start",
+      "start": "Record a {{seconds}}-second test",
+      "stop": "Stop ({{seconds}}s)",
+      "again": "Record another test",
+      "failed": "The test recording didn't work. You can still start the interview — or try another browser if it keeps failing."
+    }
   },
   "run": {
     "progress": "Question {{index}} of {{total}}",
@@ -132,6 +140,8 @@
     "timeUpSoon": "Recording will stop in {{seconds}} seconds",
     "timeUp": "Time is up for this question — your answer was saved.",
     "interrupted": "Your last answer stopped when you left the page or a device was disconnected. What you had said was saved.",
+    "recovered": "We found your last answer on this device after the page closed, and sent it.",
+    "cantHearYou": "We can't hear you. Check that your microphone isn't muted — your answer is still recording.",
     "videoLost": "Your last answer was saved, but its video didn't get through — only the sound did.",
     "sending": "Saving your answer…",
     "sendingHint": "Keep this page open.",

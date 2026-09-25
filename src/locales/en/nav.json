@@ -27,7 +27,7 @@
   },
   "orgSwitcher": {
     "label": "Organizations",
-    "allOrganizations": "All organizations"
+    "createOrganization": "Create organization"
   },
   "theme": {
     "label": "Theme",
@@ -40,31 +40,34 @@
   "loading": "Loading…",
   "redirecting": "Redirecting…",
   "onboarding": {
-    "metaTitle": "Create your organization — interw",
-    "title": "Create your first organization",
-    "description": "Your workspace is scoped to an organization. You can create more later.",
+    "metaTitle": "Create an organization — interw",
+    "title": "Create an organization",
+    "description": "Your roles, candidates and teammates live in an organization. You can create more later.",
     "name": "Name",
     "namePlaceholder": "Acme Inc.",
-    "slug": "Slug",
+    "slug": "Web address",
     "slugPlaceholder": "acme",
-    "slugHintPrefix": "Used in URLs:",
-    "slugFallback": "your-slug",
+    "slugFallback": "your-organization",
     "submit": "Create organization",
     "created": "Organization created",
     "errors": {
-      "slugTaken": "That slug is already taken",
-      "slugReserved": "That slug is reserved — pick another",
-      "invalidSlug": "Invalid slug shape",
+      "slugTaken": "That address is already taken",
+      "slugReserved": "That address is reserved, pick another",
+      "invalidSlug": "Use 3 to 40 lowercase letters, digits or dashes",
       "invalidName": "Invalid name",
       "couldNotCreate": "Could not create organization"
     },
     "availability": {
       "checking": "Checking availability…",
-      "available": "Slug is available",
-      "invalid": "Invalid slug shape",
-      "reserved": "This slug is reserved",
-      "taken": "This slug is already taken"
-    }
+      "available": "This address is available",
+      "invalid": "Use 3 to 40 lowercase letters, digits or dashes",
+      "reserved": "This address is reserved",
+      "taken": "This address is already taken"
+    },
+    "descriptionAnother": "A separate workspace, with its own roles, candidates and team.",
+    "slugPermanent": "This address can't be changed later.",
+    "waitingHint": "Waiting for an invitation? Check your inbox: it goes to {{email}}. You can accept it from here as soon as it arrives.",
+    "backToApp": "Back to my organization"
   },
   "admin": {
     "metaTitle": "Super-admin — interw",
@@ -138,5 +141,10 @@
     },
     "backToRoles": "Back to roles",
     "backToApp": "Back to the app"
+  },
+  "pendingInvitations": {
+    "join": "Join {{orgName}}",
+    "expired": "This invitation has expired. Ask for a new one.",
+    "failed": "Could not join this organization"
   }
 }

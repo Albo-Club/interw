@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  DARK_FRAME_BRIGHTNESS,
   assessMicLevels,
   classifyMediaError,
   detectBrowserSupport,
+  frameBrightness,
   isInAppBrowser,
   levelFromTimeDomain,
   openInterviewStream,
@@ -159,12 +161,38 @@ describe('openInterviewStream', () => {
       getUserMedia,
     )
     expect(getUserMedia).toHaveBeenCalledWith({
-      audio: { deviceId: { exact: 'mic-2' } },
-      video: {
-        deviceId: { exact: 'cam-2' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
+      audio: expect.objectContaining({ deviceId: { exact: 'mic-2' } }),
+      video: expect.objectContaining({ deviceId: { exact: 'cam-2' } }),
+    })
+  })
+
+  it('asks for mono speech with echo cancellation, and caps the frame rate', async () => {
+    const getUserMedia = vi.fn(() => Promise.resolve(stream))
+    await openInterviewStream({ video: true }, getUserMedia)
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: expect.objectContaining({
+        echoCancellation: true,
+        noiseSuppression: true,
+        channelCount: 1,
+      }),
+      video: expect.objectContaining({ frameRate: { ideal: 24, max: 30 } }),
+    })
+  })
+
+  /** A headset unplugged since the check used to cost the camera. */
+  it('opens the defaults, camera included, when the chosen device is gone', async () => {
+    const getUserMedia = vi
+      .fn<(c: MediaStreamConstraints) => Promise<MediaStream>>()
+      .mockRejectedValueOnce(domError('OverconstrainedError'))
+      .mockResolvedValueOnce(stream)
+    const result = await openInterviewStream(
+      { cameraId: 'cam-gone', micId: 'mic-gone', video: true },
+      getUserMedia,
+    )
+    expect(result).toEqual({ stream, audioOnly: false })
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio: expect.not.objectContaining({ deviceId: expect.anything() }),
+      video: expect.objectContaining({ facingMode: 'user' }),
     })
   })
 
@@ -174,7 +202,6 @@ describe('openInterviewStream', () => {
     await openInterviewStream({ video: true }, getUserMedia)
     expect(getUserMedia).toHaveBeenCalledWith(
       expect.objectContaining({
-        audio: true,
         video: expect.objectContaining({ facingMode: 'user' }),
       }),
     )
@@ -190,7 +217,10 @@ describe('openInterviewStream', () => {
         .mockResolvedValueOnce(stream)
       const result = await openInterviewStream({ video: true }, getUserMedia)
       expect(result).toEqual({ stream, audioOnly: true })
-      expect(getUserMedia).toHaveBeenLastCalledWith({ audio: true, video: false })
+      expect(getUserMedia).toHaveBeenLastCalledWith({
+        audio: expect.anything(),
+        video: false,
+      })
     },
   )
 
@@ -208,6 +238,28 @@ describe('openInterviewStream', () => {
     const getUserMedia = vi.fn(() => Promise.resolve(stream))
     const result = await openInterviewStream({ video: false }, getUserMedia)
     expect(result.audioOnly).toBe(true)
-    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: false })
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: expect.anything(),
+      video: false,
+    })
+  })
+})
+
+describe('frameBrightness', () => {
+  const frame = (r: number, g: number, b: number, pixels = 4) =>
+    new Uint8ClampedArray(Array.from({ length: pixels }, () => [r, g, b, 255]).flat())
+
+  it('reads a covered lens as dark', () => {
+    expect(frameBrightness(frame(3, 3, 3))).toBeLessThan(DARK_FRAME_BRIGHTNESS)
+  })
+
+  it('reads a dim room as an image', () => {
+    expect(frameBrightness(frame(40, 35, 30))).toBeGreaterThan(
+      DARK_FRAME_BRIGHTNESS,
+    )
+  })
+
+  it('reads an empty frame as dark', () => {
+    expect(frameBrightness(new Uint8ClampedArray())).toBe(0)
   })
 })

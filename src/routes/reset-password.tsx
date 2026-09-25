@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useForm } from '@tanstack/react-form'
 import { useTranslation } from 'react-i18next'
-import { Check } from 'lucide-react'
 import { z } from 'zod'
 import { toast } from 'sonner'
 
@@ -13,6 +12,7 @@ import { classifyAuthError, formatAuthError } from '~/lib/auth-errors'
 import { isPasswordPwned } from '~/lib/hibp'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
+import { ConfirmPasswordField } from '~/components/auth/confirm-password-field'
 import { PasswordInput } from '~/components/auth/password-input'
 import { PasswordStrength } from '~/components/auth/password-strength'
 import {
@@ -171,52 +171,24 @@ function ResetPasswordPage() {
               {(field) => (
                 <form.Subscribe
                   selector={(s) => ({
-                    newPw: s.values.newPassword,
-                    confirmPw: s.values.confirmPassword,
+                    newPassword: s.values.newPassword,
+                    submitted: s.submissionAttempts > 0,
                   })}
                 >
-                  {({ newPw, confirmPw }) => {
-                    // Cross-field match feedback. Stays silent while the
-                    // user is still typing (confirm shorter than new); kicks
-                    // in once they've typed enough to potentially match.
-                    const match =
-                      newPw.length > 0 &&
-                      confirmPw.length > 0 &&
-                      newPw === confirmPw
-                    const readyToCompare =
-                      newPw.length > 0 && confirmPw.length >= newPw.length
-                    const mismatch =
-                      readyToCompare && confirmPw.length > 0 && !match
-                    return (
-                      <Field data-invalid={mismatch || undefined}>
-                        <FieldLabel htmlFor={field.name}>
-                          {t('auth:fields.confirmPassword')}
-                        </FieldLabel>
-                        <PasswordInput
-                          id={field.name}
-                          name={field.name}
-                          autoComplete="new-password"
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          aria-invalid={mismatch || undefined}
-                        />
-                        <div aria-live="polite">
-                          {match && (
-                            <p className="flex items-center gap-1.5 text-xs font-medium text-success-strong">
-                              <Check className="size-3.5" aria-hidden="true" />
-                              {t('auth:reset.match')}
-                            </p>
-                          )}
-                          {mismatch && (
-                            <p className="text-destructive text-xs">
-                              {t('auth:reset.mismatch')}
-                            </p>
-                          )}
-                        </div>
-                      </Field>
-                    )
-                  }}
+                  {({ newPassword, submitted }) => (
+                    <ConfirmPasswordField
+                      id={field.name}
+                      password={newPassword}
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      onBlur={field.handleBlur}
+                      errors={
+                        field.state.meta.isBlurred || submitted
+                          ? field.state.meta.errors
+                          : undefined
+                      }
+                    />
+                  )}
                 </form.Subscribe>
               )}
             </form.Field>

@@ -117,14 +117,14 @@ export function OrgSwitcher({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={() => navigate({ to: '/app' })}
+              onSelect={() => navigate({ to: '/app/onboarding' })}
               className="gap-2"
             >
               <div className="bg-background flex size-6 items-center justify-center rounded border">
                 <Plus className="size-4" />
               </div>
               <span className="text-muted-foreground">
-                {t('nav:orgSwitcher.allOrganizations')}
+                {t('nav:orgSwitcher.createOrganization')}
               </span>
             </DropdownMenuItem>
           </DropdownMenuContent>

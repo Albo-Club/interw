@@ -255,27 +255,52 @@ export function projectMediaKey(
 }
 
 /**
+ * What a player can load for one answer: the video once it has landed, the
+ * audio otherwise. An answer whose video upload failed still carries its
+ * `videoKey` — it was written before the upload — and signing it handed the
+ * recruiter a 404 in place of an answer whose audio was right there.
+ */
+export function playbackMedia(segment: {
+  videoKey?: string
+  audioKey?: string
+  videoUploaded?: boolean
+}): { key: string; kind: 'video' | 'audio' } | null {
+  if (segment.videoKey && segment.videoUploaded !== false) {
+    return { key: segment.videoKey, kind: 'video' }
+  }
+  return segment.audioKey ? { key: segment.audioKey, kind: 'audio' } : null
+}
+
+/** One extension per accepted content type, and so one type per extension. */
+const EXTENSIONS: Record<string, string> = {
+  'video/webm': 'webm',
+  'video/mp4': 'mp4',
+  'audio/webm': 'weba',
+  'audio/mp4': 'm4a',
+  'audio/ogg': 'ogg',
+  'application/pdf': 'pdf',
+}
+
+const MIME_TYPES: Record<string, string> = Object.fromEntries(
+  Object.entries(EXTENSIONS).map(([mimeType, ext]) => [ext, mimeType]),
+)
+
+/**
  * Extension for a recorder MIME type. `MediaRecorder` reports types like
  * `video/webm;codecs=vp8,opus`, so the parameters are stripped first.
  */
 export function extensionForMimeType(mimeType: string): string {
   const base = mimeType.split(';')[0].trim().toLowerCase()
-  switch (base) {
-    case 'video/webm':
-      return 'webm'
-    case 'video/mp4':
-      return 'mp4'
-    case 'audio/webm':
-      return 'weba'
-    case 'audio/mp4':
-      return 'm4a'
-    case 'audio/mpeg':
-      return 'mp3'
-    case 'audio/ogg':
-      return 'ogg'
-    case 'application/pdf':
-      return 'pdf'
-    default:
-      return 'bin'
-  }
+  return EXTENSIONS[base] ?? 'bin'
+}
+
+/**
+ * The content type an object was stored under, read back from its key. Keys
+ * are derived from the validated type, so the extension is the record of it —
+ * a Safari answer is `.m4a`, and labelling it `audio/webm` for the
+ * transcription provider was a guess that was wrong for every one of them.
+ */
+export function mimeTypeForKey(key: string): string {
+  const extension = key.slice(key.lastIndexOf('.') + 1)
+  return MIME_TYPES[extension] ?? 'application/octet-stream'
 }

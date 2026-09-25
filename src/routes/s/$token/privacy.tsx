@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '../../../../convex/_generated/api'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { fireAndForget } from '~/lib/fire-and-forget'
+import { openTakeStore } from '~/lib/media/takeStore'
 import { Button } from '~/components/ui/button'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription } from '~/components/ui/alert'
@@ -80,6 +82,8 @@ function CandidatePrivacy() {
     setErasure('deleting')
     try {
       await deleteMyData({ token })
+      // An answer copied to this device while it recorded goes too.
+      fireAndForget(openTakeStore(token).prune(), 'drop takes')
       setErasure('deleted')
     } catch (cause) {
       setErasure('idle')

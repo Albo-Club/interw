@@ -8,6 +8,9 @@ let initialized = false
  */
 const TOKEN_PATH = /\/([sr])\/[A-Za-z0-9_-]+/g
 
+/** The sign-in code in a `/login/code#…&code=` link: it opens the account. */
+const SIGN_IN_CODE = /([#&]code=)\d+/g
+
 /**
  * Mask every candidate and share token in an event before it leaves the
  * browser.
@@ -21,7 +24,11 @@ const TOKEN_PATH = /\/([sr])\/[A-Za-z0-9_-]+/g
  */
 export function scrubAccessTokens<T>(event: T): T {
   return JSON.parse(
-    JSON.stringify(event).replace(TOKEN_PATH, '/$1/[token]'),
+    JSON.stringify(event)
+      .replace(TOKEN_PATH, '/$1/[token]')
+      // The page strips the fragment on load, but the navigation breadcrumb
+      // recorded before that still carries it.
+      .replace(SIGN_IN_CODE, '$1[code]'),
   ) as T
 }
 

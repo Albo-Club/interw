@@ -97,10 +97,11 @@
   },
   "device": {
     "title": "Vérifions votre caméra et votre micro",
-    "subtitle": "Rien n'est enregistré ni conservé ici. C'est juste pour s'assurer que tout fonctionne avant de commencer.",
+    "subtitle": "Rien de ce qui se passe ici n'est envoyé ni conservé. C'est juste pour s'assurer que tout fonctionne avant de commencer.",
     "cameraLabel": "Caméra",
     "micLabel": "Micro",
     "preview": "Vous devriez vous voir ci-dessous",
+    "cameraDark": "Votre caméra n'affiche que du noir. Vérifiez que rien ne couvre l'objectif et que son cache est ouvert.",
     "speakPrompt": "Dites quelque chose à voix haute — la barre doit bouger",
     "micGood": "Votre micro vous capte bien",
     "micQuiet": "On vous entend à peine. Parlez plus fort, rapprochez-vous, ou choisissez un autre micro.",
@@ -114,7 +115,14 @@
     "inAppBrowser": "Vous semblez être dans un navigateur intégré à une application. L'enregistrement y échoue souvent. Ouvrez plutôt ce lien dans Safari ou Chrome.",
     "retry": "Vérifier à nouveau",
     "continue": "Tout fonctionne — commencer l'entretien",
-    "continueAnyway": "Commencer quand même"
+    "continueAnyway": "Commencer quand même",
+    "practice": {
+      "title": "Écoutez-vous avant de commencer",
+      "start": "Enregistrer un test de {{seconds}} secondes",
+      "stop": "Arrêter ({{seconds}} s)",
+      "again": "Refaire un test",
+      "failed": "L'enregistrement de test n'a pas fonctionné. Vous pouvez quand même commencer l'entretien — ou essayer un autre navigateur si cela se reproduit."
+    }
   },
   "run": {
     "progress": "Question {{index}} sur {{total}}",
@@ -132,6 +140,8 @@
     "timeUpSoon": "L'enregistrement s'arrête dans {{seconds}} secondes",
     "timeUp": "Le temps est écoulé pour cette question — votre réponse a été enregistrée.",
     "interrupted": "Votre dernière réponse s'est arrêtée quand vous avez quitté la page ou qu'un appareil a été déconnecté. Ce que vous aviez dit a été enregistré.",
+    "recovered": "Nous avons retrouvé votre dernière réponse sur cet appareil après la fermeture de la page, et l'avons envoyée.",
+    "cantHearYou": "Nous ne vous entendons pas. Vérifiez que votre micro n'est pas coupé — votre réponse est toujours en cours d'enregistrement.",
     "videoLost": "Votre dernière réponse a été enregistrée, mais sa vidéo n'est pas passée — seul le son est arrivé.",
     "sending": "Enregistrement de votre réponse…",
     "sendingHint": "Gardez cette page ouverte.",

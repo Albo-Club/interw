@@ -14,8 +14,10 @@ import { ConvexError, v } from 'convex/values'
 
 import { internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
+import { deleteObjects } from './lib/objectStore'
+import type { ActionCtx } from './_generated/server'
 import type { GenericMutationCtx } from 'convex/server'
-import type { DataModel, Id } from './_generated/dataModel'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 /**
  * A stable, non-reversible identifier for the deletion register. Hashing the
@@ -187,6 +189,7 @@ export const deleteSessionRecords = internalMutation({
       v.literal('retention'),
       v.literal('candidate_request'),
       v.literal('recruiter_delete'),
+      v.literal('org_delete'),
     ),
     candidateEmailHash: v.string(),
     objectsDeleted: v.number(),
@@ -231,6 +234,32 @@ export const deleteSessionRecords = internalMutation({
     return null
   },
 })
+
+/**
+ * Erase one session completely: its objects, then its rows, then the register
+ * entry. The one sequence every full erasure runs — the candidate's own
+ * request, a recruiter's deletion, an organisation's deletion — so they cannot
+ * drift into deleting different things. A session already gone is a success.
+ */
+export async function eraseSession(
+  ctx: ActionCtx,
+  sessionId: Id<'sessions'>,
+  reason: Exclude<Doc<'purgeLog'>['reason'], 'retention'>,
+): Promise<void> {
+  const objects = await ctx.runQuery(internal.purge.collectSessionObjects, {
+    sessionId,
+  })
+  if (!objects) return
+  // Objects first: a failure here is retried and finds the rows still
+  // present. The reverse order would orphan video in the bucket.
+  await deleteObjects(objects.keys)
+  await ctx.runMutation(internal.purge.deleteSessionRecords, {
+    sessionId,
+    reason,
+    candidateEmailHash: await hashEmail(objects.candidateEmail),
+    objectsDeleted: objects.keys.length,
+  })
+}
 
 /**
  * Retention purge: the media goes, the assessment stays.

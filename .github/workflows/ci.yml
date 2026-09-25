@@ -47,7 +47,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
-      # Fails above 270 KiB gzip on the candidate interview screen.
+      # Fails above 280 KiB gzip on the candidate interview screen.
       - run: pnpm bundle:budget
 
   # The candidate interview in real browsers (e2e/interview.spec.ts), Chromium

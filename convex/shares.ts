@@ -30,7 +30,7 @@ import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
 import { normalizeWeights } from './lib/weights'
-import { presignGet } from './lib/objectStore'
+import { playbackMedia, presignGet } from './lib/objectStore'
 import { consumeLimit } from './rateLimiters'
 import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -60,6 +60,12 @@ async function resolveShare(
     .withIndex('by_token', (q) => q.eq('token', token))
     .unique()
   if (!share) return { state: 'not_found', share: null }
+  // An organisation being deleted takes its share links down with it at once,
+  // not when erasure reaches the report — and fails like any unknown link.
+  const org = await ctx.db.get('organizations', share.orgId)
+  if (!org || org.deletingAt !== undefined) {
+    return { state: 'not_found', share: null }
+  }
   if (share.revokedAt !== undefined) return { state: 'revoked', share: null }
   if (share.expiresAt !== undefined && share.expiresAt < now) {
     return { state: 'expired', share: null }
@@ -332,8 +338,8 @@ export const resolveSharedMedia = internalMutation({
       .withIndex('by_session', (q) => q.eq('sessionId', report.sessionId))
       .collect()
     return segments.flatMap((segment) => {
-      const key = segment.videoKey ?? segment.audioKey
-      return key ? [{ segmentId: segment._id, key }] : []
+      const media = playbackMedia(segment)
+      return media ? [{ segmentId: segment._id, key: media.key }] : []
     })
   },
 })

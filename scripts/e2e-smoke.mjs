@@ -329,7 +329,7 @@ async function checkEnv() {
   )
   warn(
     'RESEND_API_KEY + RESEND_TEST_MODE=false',
-    'required for real invitation / magic-link / change-email / delete-account emails',
+    'required for real invitation / sign-in code / change-email / delete-account emails',
   )
   warn(
     'BETTER_AUTH_SECRET + SITE_URL',

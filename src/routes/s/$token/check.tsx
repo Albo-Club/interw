@@ -11,10 +11,11 @@ import { fireAndForget } from '~/lib/fire-and-forget'
 import {
   assessMicLevels,
   detectBrowserSupport,
-  levelFromTimeDomain,
   openInterviewStream,
 } from '~/lib/media/devices'
 import { detectRecorderSupport } from '~/lib/media/recorder'
+import { useAudioLevel } from '~/lib/media/useAudioLevel'
+import { useCameraDark } from '~/lib/media/useCameraDark'
 import { Button } from '~/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Skeleton } from '~/components/ui/skeleton'
@@ -29,6 +30,8 @@ import { Label } from '~/components/ui/label'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { MicMeter } from '~/components/candidate/MicMeter'
+import { PracticeTake } from '~/components/candidate/PracticeTake'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
@@ -61,22 +64,15 @@ function DeviceCheck() {
   const [audioOnly, setAudioOnly] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [preview, setPreview] = useState<HTMLVideoElement | null>(null)
-  const [level, setLevel] = useState(0)
-  const [verdict, setVerdict] = useState<MicVerdict>('silent')
 
   const streamRef = useRef<MediaStream | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const levelsRef = useRef<Array<number>>([])
+  const [verdict, setVerdict] = useState<MicVerdict>('silent')
+  const cameraDark = useCameraDark(phase === 'live' && !audioOnly ? preview : null)
 
   const support = detectBrowserSupport()
   const recorderSupport = detectRecorderSupport()
 
   const teardown = useCallback(() => {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
-    rafRef.current = null
-    void audioContextRef.current?.close().catch(() => undefined)
-    audioContextRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setStream(null)
@@ -93,7 +89,6 @@ function DeviceCheck() {
   const startPreview = useCallback(async () => {
     teardown()
     setPhase('starting')
-    levelsRef.current = []
     try {
       // The very call the interview makes, so what is checked here is what
       // will be recorded — the audio-only fallback included.
@@ -111,31 +106,6 @@ function DeviceCheck() {
       const devices = await navigator.mediaDevices.enumerateDevices()
       setCameras(devices.filter((d) => d.kind === 'videoinput'))
       setMicrophones(devices.filter((d) => d.kind === 'audioinput'))
-
-      // Safari below 14.1 only exposes the prefixed constructor.
-      const scope = window as unknown as {
-        AudioContext?: typeof AudioContext
-        webkitAudioContext?: typeof AudioContext
-      }
-      const AudioCtx = scope.AudioContext ?? scope.webkitAudioContext
-      if (!AudioCtx) throw new Error('no AudioContext')
-      const context = new AudioCtx()
-      audioContextRef.current = context
-      const analyser = context.createAnalyser()
-      analyser.fftSize = 1024
-      context.createMediaStreamSource(opened.stream).connect(analyser)
-      const buffer = new Uint8Array(analyser.fftSize)
-
-      const tick = () => {
-        analyser.getByteTimeDomainData(buffer)
-        const value = levelFromTimeDomain(buffer)
-        setLevel(value)
-        levelsRef.current.push(value)
-        if (levelsRef.current.length > 600) levelsRef.current.shift()
-        setVerdict(assessMicLevels(levelsRef.current))
-        rafRef.current = requestAnimationFrame(tick)
-      }
-      rafRef.current = requestAnimationFrame(tick)
       setPhase('live')
     } catch (error) {
       setFailure(candidateErrorKey(error))
@@ -249,32 +219,26 @@ function DeviceCheck() {
               </Alert>
             )}
 
+            {cameraDark && (
+              <Alert>
+                <CircleAlert className="size-4" />
+                <AlertDescription>{t('interview:device.cameraDark')}</AlertDescription>
+              </Alert>
+            )}
+
             {phase === 'live' && (
               <>
-                <section className="space-y-3">
-                  <p className="text-sm font-medium">
-                    {t('interview:device.speakPrompt')}
-                  </p>
-                  <MicMeter level={level} verdict={verdict} />
-                  <p
-                    role="status"
-                    aria-live="polite"
-                    className={cn(
-                      'text-sm',
-                      verdict === 'good'
-                        ? 'text-success-strong'
-                        : verdict === 'quiet'
-                          ? 'text-warning-strong'
-                          : 'text-muted-foreground',
-                    )}
-                  >
-                    {verdict === 'good'
-                      ? t('interview:device.micGood')
-                      : verdict === 'quiet'
-                        ? t('interview:device.micQuiet')
-                        : t('interview:device.micSilent')}
-                  </p>
-                </section>
+                <MicCheck stream={stream} onVerdict={setVerdict} />
+
+                {stream && recorderSupport.audio && (
+                  <PracticeTake
+                    stream={stream}
+                    mimeType={
+                      (!audioOnly && recorderSupport.video) ||
+                      recorderSupport.audio
+                    }
+                  />
+                )}
 
                 <section className="grid gap-4 sm:grid-cols-2">
                   <DevicePicker
@@ -330,30 +294,49 @@ function DeviceCheck() {
   )
 }
 
-function MicMeter({ level, verdict }: { level: number; verdict: MicVerdict }) {
-  const { t } = useTranslation('interview')
-  const percent = Math.min(100, Math.round(level * 320))
+/**
+ * Its own component so the meter's ten readings a second re-render the meter,
+ * not the whole screen. The page only hears about the verdict, which changes
+ * rarely.
+ */
+function MicCheck({
+  stream,
+  onVerdict,
+}: {
+  stream: MediaStream | null
+  onVerdict: (verdict: MicVerdict) => void
+}) {
+  const { t } = useTranslation(['interview', 'common'])
+  // The last ten seconds: someone who says one sentence and then waits has a
+  // working microphone.
+  const { level, recent } = useAudioLevel(stream, 10_000)
+  const verdict = assessMicLevels(recent)
+  useEffect(() => onVerdict(verdict), [verdict, onVerdict])
   return (
-    <div
-      className="bg-muted h-3 w-full overflow-hidden rounded-full"
-      role="meter"
-      aria-label={t('device.micLabel')}
-      aria-valuenow={percent}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <div
+    <section className="space-y-3">
+      <p className="text-sm font-medium">
+        {t('interview:device.speakPrompt')}
+      </p>
+      <MicMeter level={level} verdict={verdict} />
+      <p
+        role="status"
+        aria-live="polite"
         className={cn(
-          'h-full transition-[width] duration-75 motion-reduce:transition-none',
+          'text-sm',
           verdict === 'good'
-            ? 'bg-success'
+            ? 'text-success-strong'
             : verdict === 'quiet'
-              ? 'bg-warning'
-              : 'bg-muted-foreground/40',
+              ? 'text-warning-strong'
+              : 'text-muted-foreground',
         )}
-        style={{ width: `${percent}%` }}
-      />
-    </div>
+      >
+        {verdict === 'good'
+          ? t('interview:device.micGood')
+          : verdict === 'quiet'
+            ? t('interview:device.micQuiet')
+            : t('interview:device.micSilent')}
+      </p>
+    </section>
   )
 }
 

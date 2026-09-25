@@ -378,7 +378,7 @@ describe('erasure', () => {
         video: video ? { mimeType: video, contentLength: 4096 } : undefined,
       })
     await reserve('audio/webm;codecs=opus', 'video/webm')
-    await reserve('audio/mpeg')
+    await reserve('audio/mp4')
     // Back to the first container: named once, not twice.
     await reserve('audio/webm')
 
@@ -394,7 +394,7 @@ describe('erasure', () => {
 
     const prefix = `orgs/${s.orgId}/sessions/${s.sessionId}/`
     expect(deleted.sort()).toEqual(
-      ['q0.mp3', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
+      ['q0.m4a', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
     )
   })
 

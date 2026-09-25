@@ -17,6 +17,7 @@ import {
 } from '~/components/ui/dialog'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Spinner } from '~/components/ui/spinner'
+import { SignInAgainButton } from '~/components/auth/sign-in-again-button'
 
 type BaSession = {
   id: string
@@ -40,11 +41,16 @@ export function ActiveSessions() {
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [confirmRevokeAll, setConfirmRevokeAll] = useState(false)
   const [revokingAll, setRevokingAll] = useState(false)
+  const [needsSignIn, setNeedsSignIn] = useState(false)
 
   async function refresh() {
     const { data, error } = await authClient.listSessions()
     if (error) {
-      toast.error(formatAuthError(classifyAuthError(error), 'signin', te))
+      const code = classifyAuthError(error)
+      // Better Auth only lists sessions for a sign-in younger than `freshAge`
+      // (convex/auth.ts) — say so instead of a skeleton that never resolves.
+      if (code === 'SESSION_EXPIRED') setNeedsSignIn(true)
+      else toast.error(formatAuthError(code, 'signin', te))
       return
     }
     setSessions(data)
@@ -77,6 +83,19 @@ export function ActiveSessions() {
     }
     toast.success(t('account:sessions.revokedOthers'))
     void refresh()
+  }
+
+  if (needsSignIn) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-muted-foreground text-sm">
+          {t('account:sessions.reauth')}
+        </p>
+        <SignInAgainButton returnTo="/app/me?tab=sessions">
+          {t('account:reauthAction')}
+        </SignInAgainButton>
+      </div>
+    )
   }
 
   if (sessions === null) {

@@ -36,7 +36,6 @@ const ALLOWED_RECORDING_TYPES = [
   'video/mp4',
   'audio/webm',
   'audio/mp4',
-  'audio/mpeg',
 ]
 
 /** The intro is filmed: a role opens on the recruiter's face or on nothing. */

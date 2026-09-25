@@ -23,8 +23,7 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { generateToken } from './lib/tokens'
-import { deleteObjects } from './lib/objectStore'
-import { hashEmail } from './purge'
+import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
 import { candidateInvitationEmail } from './emailTemplates'
@@ -395,17 +394,7 @@ export const deleteCandidateData = action({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, { sessionId }): Promise<{ deleted: true }> => {
     await ctx.runQuery(internal.sessions.assertCanDelete, { sessionId })
-    const objects = await ctx.runQuery(internal.purge.collectSessionObjects, {
-      sessionId,
-    })
-    if (!objects) return { deleted: true }
-    await deleteObjects(objects.keys)
-    await ctx.runMutation(internal.purge.deleteSessionRecords, {
-      sessionId,
-      reason: 'recruiter_delete',
-      candidateEmailHash: await hashEmail(objects.candidateEmail),
-      objectsDeleted: objects.keys.length,
-    })
+    await eraseSession(ctx, sessionId, 'recruiter_delete')
     return { deleted: true }
   },
 })

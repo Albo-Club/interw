@@ -53,6 +53,34 @@
       "title": "Les indicateurs d’élocution quittent les rapports",
       "body": "Les rapports n’affichent plus la section Élocution (débit, hésitations, silences, etc.). Ces indicateurs n’étaient pas assez fiables pour éclairer une décision de recrutement : nous les avons retirés. Scores, citations, réponses et enregistrements ne changent pas, y compris sur les rapports déjà reçus."
     },
+    "interview-survives-crash": {
+      "title": "Une réponse survit à un plantage, et les candidats peuvent s’écouter avant de commencer",
+      "body": "Pendant qu’un candidat répond, l’enregistrement est désormais aussi conservé sur son appareil : si la page plante ou se ferme, rouvrir le lien envoie la réponse au lieu de la perdre. Il voit aussi un indicateur de micro pendant qu’il parle — avec une alerte si nous ne l’entendons plus — et l’écran de vérification le prévient quand sa caméra n’affiche que du noir et lui permet d’enregistrer un court test pour s’écouter avant de commencer."
+    },
+    "recordings-play-everywhere": {
+      "title": "Des réponses lisibles partout, et un téléphone qui reste allumé",
+      "body": "Les réponses enregistrées sous Chrome, Edge ou Safari utilisent désormais un format que tous les navigateurs lisent, iPhone compris : sauter à une citation dans un rapport tombe au bon endroit. Le téléphone ne verrouille plus son écran en pleine réponse, un micro pris par un appel termine proprement la réponse au lieu d’enregistrer du silence, et quand la vidéo d’une réponse n’a pas pu être envoyée, vous entendez quand même ce que le candidat a dit."
+    },
+    "delete-organization": {
+      "title": "Supprimer une organisation",
+      "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."
+    },
+    "clearer-account-settings": {
+      "title": "Des réglages de compte plus clairs",
+      "body": "Votre profil suit désormais un changement d’e-mail étape par étape, affiche vos vraies méthodes de connexion et vous permet de définir un mot de passe si votre compte n’en a pas. Un lien de suppression de compte ouvert sur un autre appareil mène maintenant à une page claire, et un compte ne peut plus laisser une organisation sans propriétaire. Nous avons aussi renforcé les avis de sécurité : un e-mail vous prévient désormais aussi après une réinitialisation de mot de passe."
+    },
+    "sign-in-with-a-code": {
+      "title": "Connectez-vous avec un code reçu par e-mail",
+      "body": "Saisissez votre e-mail et nous vous envoyons un code à 6 chiffres — ou un bouton qui le remplit pour vous. Les mêmes étapes créent votre compte : plus de mot de passe à choisir, mais vous pouvez toujours vous connecter avec le vôtre si vous en avez un. Les invitations utilisent la même connexion, et une session expirée vous ramène désormais à la page où vous étiez."
+    },
+    "verification-link-guidance": {
+      "title": "Une vérification d’e-mail plus claire",
+      "body": "Ouvrir un lien de vérification alors que vous êtes connecté à un autre compte, ou après son expiration, vous indique désormais quoi faire au lieu de vous laisser sur une simple page de connexion. L’inscription vous demande aussi de saisir votre mot de passe deux fois."
+    },
+    "team-invitations": {
+      "title": "Des invitations d’équipe plus simples",
+      "body": "Invitez plusieurs collègues d’un coup, voyez qui a invité qui et quand, renvoyez une invitation ou copiez son lien, et repérez un e-mail qui n’a pas été remis. Les invitations expirées sont signalées et peuvent être renvoyées. Une personne qui s’inscrit sans le lien voit désormais l’invitation qui l’attend au lieu de créer une deuxième organisation, et chacun peut créer une autre organisation depuis le menu des organisations. L’e-mail d’invitation précise le rôle proposé et sa date d’expiration."
+    },
     "sturdier-interview": {
       "title": "Un entretien plus solide pour vos candidats",
       "body": "Les candidats se voient désormais pendant qu’ils enregistrent, peuvent continuer en audio seul quand leur caméra est prise par une autre application, suivent l’envoi de leurs réponses et voient ce qui manque avant de terminer. L’entretien parle la langue de votre poste, quelle que soit celle de leur navigateur, et ils reçoivent un e-mail quand il vous parvient — avec un lien pour consulter ou supprimer leurs données. Nous avons aussi renforcé le traitement de leurs liens d’entretien dans notre suivi des erreurs."

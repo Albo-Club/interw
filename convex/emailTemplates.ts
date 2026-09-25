@@ -114,51 +114,82 @@ const urlFallback = (locale: EmailLocale, url: string) =>
     fr: `Si le bouton ne fonctionne pas, copiez cette URL dans votre navigateur :<br><span style="color:${MUTED}; word-break:break-all;">${esc(url)}</span>`,
   })
 
+const MONTHS: Record<EmailLocale, Array<string>> = {
+  en: [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ],
+  fr: [
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+  ],
+}
+
+/**
+ * Spelled out by hand rather than through `Intl`, whose locale data this
+ * template has no reason to depend on in the Convex runtime. UTC, and the
+ * copy says so, because the recipient's time zone is unknown.
+ */
+function longDate(locale: EmailLocale, ms: number): string {
+  const d = new Date(ms)
+  const month = MONTHS[locale][d.getUTCMonth()]
+  const day = d.getUTCDate()
+  return locale === 'fr'
+    ? `${day === 1 ? '1er' : day} ${month} ${d.getUTCFullYear()}`
+    : `${month} ${day}, ${d.getUTCFullYear()}`
+}
+
 export function invitationEmail({
   locale,
   inviterName,
   orgName,
+  role,
+  expiresAt,
   acceptUrl,
 }: {
   locale: EmailLocale
   inviterName: string
   orgName: string
+  role: 'admin' | 'member'
+  expiresAt: number
   acceptUrl: string
 }) {
   const safeInviter = esc(inviterName)
   const safeOrg = esc(orgName)
+  const days = Math.max(1, Math.round((expiresAt - Date.now()) / 86_400_000))
+  const date = longDate(locale, expiresAt)
   const c = pick(locale, {
     en: {
-      subject: `You're invited to ${orgName} on ${APP_NAME}`,
-      heading: `Join ${safeOrg}`,
-      intro: `<strong>${safeInviter}</strong> invited you to join <strong>${safeOrg}</strong>.`,
-      followup: `Click the button below to accept. This link expires in 7 days.`,
+      subject: `${inviterName} invited you to ${orgName} on ${APP_NAME}`,
+      heading: `Join ${safeOrg} on ${APP_NAME}`,
+      intro: (inviter: string, org: string) =>
+        `${inviter} invited you to join ${org} on ${APP_NAME} as ${role === 'admin' ? 'an admin' : 'a member'}.`,
+      what: `${APP_NAME} runs asynchronous video interviews: candidates record their answers when it suits them, and your team reviews them together.`,
+      roleLine:
+        role === 'admin'
+          ? `As an admin, you can invite teammates and manage the organization, on top of creating roles and reviewing candidates.`
+          : `As a member, you can create roles, invite candidates and review their interviews.`,
+      expiry: `This invitation expires on ${date} (UTC), in ${days} ${days === 1 ? 'day' : 'days'}.`,
       footer: `If you didn't expect this invitation, you can safely ignore this email.`,
       preheader: `${safeInviter} invited you to join ${safeOrg}.`,
       cta: 'Accept invitation',
-      text: [
-        `${inviterName} invited you to join ${orgName} on ${APP_NAME}.`,
-        `Accept the invitation:`,
-        acceptUrl,
-        `This link expires in 7 days.`,
-        `If you didn't expect this invitation, you can safely ignore this email.`,
-      ],
+      ctaText: 'Accept the invitation:',
     },
     fr: {
-      subject: `Vous êtes invité à rejoindre ${orgName} sur ${APP_NAME}`,
-      heading: `Rejoindre ${safeOrg}`,
-      intro: `<strong>${safeInviter}</strong> vous a invité à rejoindre <strong>${safeOrg}</strong>.`,
-      followup: `Cliquez sur le bouton ci-dessous pour accepter. Ce lien expire dans 7 jours.`,
+      subject: `${inviterName} vous invite à rejoindre ${orgName} sur ${APP_NAME}`,
+      heading: `Rejoindre ${safeOrg} sur ${APP_NAME}`,
+      intro: (inviter: string, org: string) =>
+        `${inviter} vous invite à rejoindre ${org} sur ${APP_NAME} avec le rôle ${role === 'admin' ? 'Admin' : 'Membre'}.`,
+      what: `${APP_NAME} est une plateforme d’entretiens vidéo asynchrones : les personnes candidates enregistrent leurs réponses quand cela leur convient, et votre équipe les évalue ensemble.`,
+      roleLine:
+        role === 'admin'
+          ? `Avec le rôle Admin, vous pourrez inviter des collègues et gérer l’organisation, en plus de créer des postes et d’évaluer les candidatures.`
+          : `Avec le rôle Membre, vous pourrez créer des postes, inviter des personnes candidates et évaluer leurs entretiens.`,
+      expiry: `Cette invitation expire le ${date} (UTC), dans ${days} ${days === 1 ? 'jour' : 'jours'}.`,
       footer: `Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.`,
-      preheader: `${safeInviter} vous a invité à rejoindre ${safeOrg}.`,
+      preheader: `${safeInviter} vous invite à rejoindre ${safeOrg}.`,
       cta: 'Accepter l’invitation',
-      text: [
-        `${inviterName} vous a invité à rejoindre ${orgName} sur ${APP_NAME}.`,
-        `Accepter l’invitation :`,
-        acceptUrl,
-        `Ce lien expire dans 7 jours.`,
-        `Si vous n'attendiez pas cette invitation, vous pouvez ignorer cet e-mail.`,
-      ],
+      ctaText: 'Accepter l’invitation :',
     },
   })
 
@@ -166,12 +197,29 @@ export function invitationEmail({
     locale,
     preheader: c.preheader,
     heading: c.heading,
-    paragraphs: [c.intro, c.followup],
+    paragraphs: [
+      c.intro(`<strong>${safeInviter}</strong>`, `<strong>${safeOrg}</strong>`),
+      c.what,
+      c.roleLine,
+      c.expiry,
+    ],
     cta: { label: c.cta, url: acceptUrl },
-    footer: c.footer,
+    footer: `${urlFallback(locale, acceptUrl)}<br><br>${c.footer}`,
   })
 
-  return { subject: c.subject, html, text: plainText(c.text) }
+  return {
+    subject: c.subject,
+    html,
+    text: plainText([
+      c.intro(inviterName, orgName),
+      c.what,
+      c.roleLine,
+      c.ctaText,
+      acceptUrl,
+      c.expiry,
+      c.footer,
+    ]),
+  }
 }
 
 export function changeEmailVerificationEmail({
@@ -252,7 +300,7 @@ export function deleteAccountVerificationEmail({
         ? `${safeName}, you asked to delete your ${APP_NAME} account.`
         : `You asked to delete your ${APP_NAME} account.`,
       followup: `This will permanently remove your profile, your organization memberships, and your access. <strong>This cannot be undone.</strong>`,
-      footer: `If you didn't request this, ignore this email and nothing happens.`,
+      footer: `This link expires in 1 hour. If you didn't request this, ignore this email and nothing happens.`,
       preheader: `Confirm account deletion.`,
       cta: 'Delete my account',
       text: [
@@ -260,7 +308,7 @@ export function deleteAccountVerificationEmail({
           ? `${name}, you asked to delete your ${APP_NAME} account.`
           : `You asked to delete your ${APP_NAME} account.`,
         `This will permanently remove your profile and access. This cannot be undone.`,
-        `Confirm by opening this link:`,
+        `Confirm by opening this link (it expires in 1 hour):`,
         url,
         `If you didn't request this, ignore this email.`,
       ],
@@ -272,7 +320,7 @@ export function deleteAccountVerificationEmail({
         ? `${safeName}, vous avez demandé à supprimer votre compte ${APP_NAME}.`
         : `Vous avez demandé à supprimer votre compte ${APP_NAME}.`,
       followup: `Cela supprimera définitivement votre profil, vos adhésions aux organisations et votre accès. <strong>Cette action est irréversible.</strong>`,
-      footer: `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et rien ne se passera.`,
+      footer: `Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et rien ne se passera.`,
       preheader: `Confirmer la suppression du compte.`,
       cta: 'Supprimer mon compte',
       text: [
@@ -280,7 +328,7 @@ export function deleteAccountVerificationEmail({
           ? `${name}, vous avez demandé à supprimer votre compte ${APP_NAME}.`
           : `Vous avez demandé à supprimer votre compte ${APP_NAME}.`,
         `Cela supprimera définitivement votre profil et votre accès. Cette action est irréversible.`,
-        `Confirmez en ouvrant ce lien :`,
+        `Confirmez en ouvrant ce lien (il expire dans 1 heure) :`,
         url,
         `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.`,
       ],
@@ -349,6 +397,66 @@ export function verificationEmail({
   return { subject: c.subject, html, text: plainText(c.text) }
 }
 
+export function newEmailVerificationEmail({
+  locale,
+  url,
+  oldEmail,
+  newEmail,
+}: {
+  locale: EmailLocale
+  url: string
+  oldEmail: string
+  newEmail: string
+}) {
+  // Second step of an email change, sent to the NEW address once the current
+  // one has approved. The change happens when this link is opened.
+  const safeOld = esc(oldEmail)
+  const safeNew = esc(newEmail)
+  const c = pick(locale, {
+    en: {
+      subject: `Confirm your new email address for ${APP_NAME}`,
+      heading: `Confirm your new email address`,
+      intro: `You asked to use <strong>${safeNew}</strong> for your ${APP_NAME} account instead of <strong>${safeOld}</strong>, and approved it from that address. One last step: confirm this one.`,
+      followup: `If you aren't signed in to ${APP_NAME} on this device, you'll be asked to sign in first. This link expires in 1 hour.`,
+      footer: `Didn't ask for this? Ignore this email — the account keeps its current address.`,
+      preheader: `One last step to switch to ${safeNew}.`,
+      cta: 'Confirm new address',
+      text: [
+        `Confirm your new email address for ${APP_NAME}.`,
+        `You asked to use ${newEmail} for your ${APP_NAME} account instead of ${oldEmail}. Open this link to confirm (it expires in 1 hour):`,
+        url,
+        `Didn't ask for this? Ignore this email — the account keeps its current address.`,
+      ],
+    },
+    fr: {
+      subject: `Confirmez votre nouvelle adresse e-mail pour ${APP_NAME}`,
+      heading: `Confirmez votre nouvelle adresse e-mail`,
+      intro: `Vous avez demandé à utiliser <strong>${safeNew}</strong> pour votre compte ${APP_NAME} à la place de <strong>${safeOld}</strong>, et l'avez approuvé depuis cette adresse. Dernière étape : confirmez celle-ci.`,
+      followup: `Si vous n'êtes pas connecté à ${APP_NAME} sur cet appareil, il vous sera demandé de vous connecter d'abord. Ce lien expire dans 1 heure.`,
+      footer: `Vous n'avez rien demandé ? Ignorez cet e-mail — le compte garde son adresse actuelle.`,
+      preheader: `Dernière étape pour passer à ${safeNew}.`,
+      cta: 'Confirmer la nouvelle adresse',
+      text: [
+        `Confirmez votre nouvelle adresse e-mail pour ${APP_NAME}.`,
+        `Vous avez demandé à utiliser ${newEmail} pour votre compte ${APP_NAME} à la place de ${oldEmail}. Ouvrez ce lien pour confirmer (il expire dans 1 heure) :`,
+        url,
+        `Vous n'avez rien demandé ? Ignorez cet e-mail — le compte garde son adresse actuelle.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.followup, urlFallback(locale, url)],
+    cta: { label: c.cta, url },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}
+
 export function resetPasswordEmail({
   locale,
   url,
@@ -402,41 +510,64 @@ export function resetPasswordEmail({
 export function passwordChangedEmail({
   locale,
   email,
+  added,
   resetUrl,
+  sessionsUrl,
 }: {
   locale: EmailLocale
   email: string
+  /** A first password was set on an account that had none. */
+  added: boolean
   resetUrl: string
+  sessionsUrl: string
 }) {
-  // Post-event notification — fired AFTER the password is already changed.
+  // Post-event notification — sent AFTER the password is already changed.
   const safeEmail = esc(email)
+  const sessionsLink = (label: string) =>
+    `<a href="${esc(sessionsUrl)}" style="color:${BRAND};">${label}</a>`
   const c = pick(locale, {
     en: {
-      subject: `Your ${APP_NAME} password was changed`,
-      heading: `Password changed`,
-      intro: `The password for <strong>${safeEmail}</strong> was just changed on ${APP_NAME}.`,
-      followup: `If you made this change, no action is needed. <strong>If you didn't, your account may be compromised</strong> — reset your password now and review your active sessions.`,
-      footer: `For your safety, all other sessions were signed out automatically.`,
-      preheader: `Password changed for ${safeEmail}.`,
+      subject: added
+        ? `A password was added to your ${APP_NAME} account`
+        : `Your ${APP_NAME} password was changed`,
+      heading: added ? `Password added` : `Password changed`,
+      intro: added
+        ? `A password was just added to <strong>${safeEmail}</strong> on ${APP_NAME}. It can now be used to sign in.`
+        : `The password for <strong>${safeEmail}</strong> was just changed on ${APP_NAME}.`,
+      followup: `If you did this, no action is needed. <strong>If you didn't, your account may be compromised</strong> — reset your password now and ${sessionsLink('review your active sessions')}.`,
+      footer: `We send this notice every time the password on your account changes.`,
+      preheader: added
+        ? `Password added for ${safeEmail}.`
+        : `Password changed for ${safeEmail}.`,
       cta: 'Reset password',
       text: [
-        `Your ${APP_NAME} password was just changed.`,
+        added
+          ? `A password was just added to your ${APP_NAME} account.`
+          : `Your ${APP_NAME} password was just changed.`,
         `If you didn't do this, reset your password now: ${resetUrl}`,
-        `For your safety, all other sessions were signed out automatically.`,
+        `Then review your active sessions: ${sessionsUrl}`,
       ],
     },
     fr: {
-      subject: `Votre mot de passe ${APP_NAME} a été modifié`,
-      heading: `Mot de passe modifié`,
-      intro: `Le mot de passe de <strong>${safeEmail}</strong> vient d'être modifié sur ${APP_NAME}.`,
-      followup: `Si vous êtes à l'origine de ce changement, aucune action n'est requise. <strong>Sinon, votre compte est peut-être compromis</strong> — réinitialisez votre mot de passe maintenant et vérifiez vos sessions actives.`,
-      footer: `Pour votre sécurité, toutes les autres sessions ont été déconnectées automatiquement.`,
-      preheader: `Mot de passe modifié pour ${safeEmail}.`,
+      subject: added
+        ? `Un mot de passe a été ajouté à votre compte ${APP_NAME}`
+        : `Votre mot de passe ${APP_NAME} a été modifié`,
+      heading: added ? `Mot de passe ajouté` : `Mot de passe modifié`,
+      intro: added
+        ? `Un mot de passe vient d'être ajouté à <strong>${safeEmail}</strong> sur ${APP_NAME}. Il permet désormais de se connecter.`
+        : `Le mot de passe de <strong>${safeEmail}</strong> vient d'être modifié sur ${APP_NAME}.`,
+      followup: `Si c'est vous, aucune action n'est requise. <strong>Sinon, votre compte est peut-être compromis</strong> — réinitialisez votre mot de passe maintenant et ${sessionsLink('vérifiez vos sessions actives')}.`,
+      footer: `Nous envoyons cet avis à chaque changement du mot de passe de votre compte.`,
+      preheader: added
+        ? `Mot de passe ajouté pour ${safeEmail}.`
+        : `Mot de passe modifié pour ${safeEmail}.`,
       cta: 'Réinitialiser le mot de passe',
       text: [
-        `Votre mot de passe ${APP_NAME} vient d'être modifié.`,
-        `Si vous n'êtes pas à l'origine de ce changement, réinitialisez votre mot de passe maintenant : ${resetUrl}`,
-        `Pour votre sécurité, toutes les autres sessions ont été déconnectées automatiquement.`,
+        added
+          ? `Un mot de passe vient d'être ajouté à votre compte ${APP_NAME}.`
+          : `Votre mot de passe ${APP_NAME} vient d'être modifié.`,
+        `Si ce n'est pas vous, réinitialisez votre mot de passe maintenant : ${resetUrl}`,
+        `Puis vérifiez vos sessions actives : ${sessionsUrl}`,
       ],
     },
   })
@@ -453,40 +584,52 @@ export function passwordChangedEmail({
   return { subject: c.subject, html, text: plainText(c.text) }
 }
 
-export function magicLinkEmail({
+/**
+ * Sign-in code. The code is the credential; the button only opens our page
+ * with it prefilled (in the URL fragment), where the person still has to press
+ * Confirm — so a mail scanner that follows links cannot spend the code.
+ */
+export function signInCodeEmail({
   locale,
+  code,
   url,
 }: {
   locale: EmailLocale
+  code: string
   url: string
 }) {
+  const codeHtml = `<span style="display:inline-block; font-size:28px; font-weight:700; letter-spacing:0.3em; font-variant-numeric:tabular-nums; padding:12px 16px; border:1px solid ${BORDER}; border-radius:8px;">${esc(code)}</span>`
   const c = pick(locale, {
     en: {
-      subject: `Your ${APP_NAME} sign-in link`,
-      heading: `Sign in to ${APP_NAME}`,
-      intro: `Click the button below to sign in. This link expires in 5 minutes.`,
-      footer: `If you didn't request this, you can safely ignore this email.`,
-      preheader: `Sign in to ${APP_NAME}.`,
-      cta: 'Sign in',
+      subject: `${code} is your ${APP_NAME} sign-in code`,
+      heading: `Your sign-in code`,
+      intro: `Enter this code on the ${APP_NAME} sign-in page:`,
+      expiry: `It expires in 10 minutes and works only once. Or open the sign-in page with the code already filled in:`,
+      footer: `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
+      preheader: `Your ${APP_NAME} sign-in code, valid for 10 minutes.`,
+      cta: 'Continue signing in',
       text: [
-        `Sign in to ${APP_NAME}.`,
-        `Open this link to sign in (expires in 5 minutes):`,
+        `Your ${APP_NAME} sign-in code: ${code}`,
+        `It expires in 10 minutes and works only once.`,
+        `Or open the sign-in page with the code already filled in:`,
         url,
-        `If you didn't request this, you can safely ignore this email.`,
+        `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
       ],
     },
     fr: {
-      subject: `Votre lien de connexion ${APP_NAME}`,
-      heading: `Connexion à ${APP_NAME}`,
-      intro: `Cliquez sur le bouton ci-dessous pour vous connecter. Ce lien expire dans 5 minutes.`,
-      footer: `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
-      preheader: `Connexion à ${APP_NAME}.`,
-      cta: 'Se connecter',
+      subject: `${code} est votre code de connexion ${APP_NAME}`,
+      heading: `Votre code de connexion`,
+      intro: `Saisissez ce code sur la page de connexion ${APP_NAME} :`,
+      expiry: `Il expire dans 10 minutes et ne sert qu’une fois. Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
+      footer: `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
+      preheader: `Votre code de connexion ${APP_NAME}, valable 10 minutes.`,
+      cta: 'Continuer la connexion',
       text: [
-        `Connexion à ${APP_NAME}.`,
-        `Ouvrez ce lien pour vous connecter (expire dans 5 minutes) :`,
+        `Votre code de connexion ${APP_NAME} : ${code}`,
+        `Il expire dans 10 minutes et ne sert qu’une fois.`,
+        `Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
         url,
-        `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
+        `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
       ],
     },
   })
@@ -495,9 +638,9 @@ export function magicLinkEmail({
     locale,
     preheader: c.preheader,
     heading: c.heading,
-    paragraphs: [c.intro, urlFallback(locale, url)],
+    paragraphs: [c.intro, codeHtml, c.expiry],
     cta: { label: c.cta, url },
-    footer: c.footer,
+    footer: `${urlFallback(locale, url)}<br><br>${c.footer}`,
   })
 
   return { subject: c.subject, html, text: plainText(c.text) }
@@ -763,6 +906,63 @@ export function reportReadyEmail({
     heading: c.heading,
     paragraphs: [c.intro, c.score, c.caveat],
     cta: { label: c.cta, url: reportUrl },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}
+
+/**
+ * Sent to every member when an owner deletes the organisation. It exists so
+ * that nobody loses their workspace without being told who removed it, and
+ * so it says what happens to the data — not where to go, since there is no
+ * longer anywhere to go.
+ */
+export function organizationDeletedEmail({
+  locale,
+  orgName,
+  deletedBy,
+}: {
+  locale: EmailLocale
+  orgName: string
+  deletedBy: string
+}) {
+  const safeOrg = esc(orgName)
+  const safeActor = esc(deletedBy)
+  const c = pick(locale, {
+    en: {
+      subject: `${orgName} was deleted on ${APP_NAME}`,
+      heading: `${safeOrg} was deleted`,
+      intro: `<strong>${safeActor}</strong> deleted the organization <strong>${safeOrg}</strong>.`,
+      followup: `Its roles, candidates, interview recordings and reports are being permanently erased, and nobody can access it any more. This cannot be undone.`,
+      footer: `You are receiving this because you were a member of ${safeOrg}. Your ${APP_NAME} account itself is unchanged.`,
+      preheader: `${safeActor} deleted ${safeOrg}.`,
+      text: [
+        `${deletedBy} deleted the organization ${orgName} on ${APP_NAME}.`,
+        `Its roles, candidates, interview recordings and reports are being permanently erased, and nobody can access it any more. This cannot be undone.`,
+        `You are receiving this because you were a member of ${orgName}. Your ${APP_NAME} account itself is unchanged.`,
+      ],
+    },
+    fr: {
+      subject: `${orgName} a été supprimée sur ${APP_NAME}`,
+      heading: `${safeOrg} a été supprimée`,
+      intro: `<strong>${safeActor}</strong> a supprimé l'organisation <strong>${safeOrg}</strong>.`,
+      followup: `Ses postes, candidats, enregistrements d'entretien et rapports sont en cours d'effacement définitif, et plus personne n'y a accès. Cette action est irréversible.`,
+      footer: `Vous recevez cet e-mail parce que vous étiez membre de ${safeOrg}. Votre compte ${APP_NAME} lui-même n'est pas modifié.`,
+      preheader: `${safeActor} a supprimé ${safeOrg}.`,
+      text: [
+        `${deletedBy} a supprimé l'organisation ${orgName} sur ${APP_NAME}.`,
+        `Ses postes, candidats, enregistrements d'entretien et rapports sont en cours d'effacement définitif, et plus personne n'y a accès. Cette action est irréversible.`,
+        `Vous recevez cet e-mail parce que vous étiez membre de ${orgName}. Votre compte ${APP_NAME} lui-même n'est pas modifié.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.followup],
     footer: c.footer,
   })
 

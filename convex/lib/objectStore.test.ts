@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   candidateDocumentKey,
   extensionForMimeType,
+  mimeTypeForKey,
+  playbackMedia,
   projectMediaKey,
   resolveTarget,
   segmentKey,
@@ -101,5 +103,47 @@ describe('extensionForMimeType', () => {
 
   it('falls back rather than trusting an unknown type', () => {
     expect(extensionForMimeType('text/html')).toBe('bin')
+  })
+})
+
+describe('mimeTypeForKey', () => {
+  it('reads back the type every accepted recording was stored under', () => {
+    for (const type of ['video/webm', 'video/mp4', 'audio/webm', 'audio/mp4']) {
+      const key = segmentKey('org', 'session', 0, extensionForMimeType(type))
+      expect(mimeTypeForKey(key)).toBe(type)
+    }
+  })
+
+  it('labels a Safari answer as MP4 audio, not WebM', () => {
+    expect(mimeTypeForKey('orgs/o/sessions/s/q2.m4a')).toBe('audio/mp4')
+  })
+
+  it('does not guess for an unknown extension', () => {
+    expect(mimeTypeForKey('orgs/o/sessions/s/q0.bin')).toBe(
+      'application/octet-stream',
+    )
+  })
+})
+
+describe('playbackMedia', () => {
+  it('keeps playing the video of answers recorded before the flag existed', () => {
+    expect(playbackMedia({ videoKey: 'q0.webm', audioKey: 'q0.weba' })).toEqual({
+      key: 'q0.webm',
+      kind: 'video',
+    })
+  })
+
+  it('falls back to the audio when the video never landed', () => {
+    expect(
+      playbackMedia({
+        videoKey: 'q0.mp4',
+        audioKey: 'q0.weba',
+        videoUploaded: false,
+      }),
+    ).toEqual({ key: 'q0.weba', kind: 'audio' })
+  })
+
+  it('has nothing to play without a key', () => {
+    expect(playbackMedia({})).toBeNull()
   })
 })

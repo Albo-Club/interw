@@ -10,6 +10,7 @@ import { AppHeader } from '~/components/app-shell/AppHeader'
 import { AppShellSkeleton } from '~/components/app-shell/AppShellSkeleton'
 import { AiPanelHost, useAiPanelOpen } from '~/components/ai/AiPanelHost'
 import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
+import { PendingInvitations } from '~/components/app-shell/PendingInvitations'
 
 export const Route = createFileRoute('/app/$orgSlug')({
   component: OrgLayout,
@@ -79,6 +80,7 @@ function OrgLayout() {
           orgId={org?._id}
           onToggleAiPanel={() => setAiPanelOpen(!aiOpen)}
         />
+        <PendingInvitations variant="banner" />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </div>

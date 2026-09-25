@@ -26,7 +26,7 @@ import { internalAction, internalMutation, internalQuery } from './_generated/se
 import { internal } from './_generated/api'
 import schema, { jobOutcomeValidator, jobStepValidator } from './schema'
 import { complete, transcribe  } from './lib/ai'
-import { getObjectStream } from './lib/objectStore'
+import { getObjectStream, mimeTypeForKey } from './lib/objectStore'
 import { reportPrompt } from './lib/prompts'
 import { buildReport } from './lib/reportBuilder'
 import { reportOutputSchema } from './lib/reportSchema'
@@ -302,7 +302,7 @@ export const transcribeSegment = internalAction({
       const result = await transcribe(stream, {
         language: context.language,
         fileName: key.split('/').pop() ?? 'answer',
-        contentType: context.audioKey ? 'audio/webm' : 'video/webm',
+        contentType: mimeTypeForKey(key),
       })
       await ctx.runMutation(internal.pipeline.saveTranscript, {
         segmentId,

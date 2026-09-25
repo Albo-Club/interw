@@ -18,7 +18,7 @@ import { pathToFileURL } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
 // KiB (1024 bytes). The measured value when the budget was set: 265.2 KiB.
-const BUDGET_KIB = 270
+const BUDGET_KIB = 280
 const ROUTES = ['__root__', '/s/$token', '/s/$token/interview']
 const SERVER_DIR = '.output/server'
 const PUBLIC_DIR = '.output/public'

@@ -1,4 +1,9 @@
 @import 'tailwindcss';
+/* Inter served from our own origin: the CSP's `font-src 'self' data:` blocks
+   Google Fonts, and a third-party font request would leak every visitor's IP.
+   Each subset carries a unicode-range, so a browser fetches only the ones
+   the page's characters need. */
+@import '@fontsource-variable/inter';
 @import 'tw-animate-css';
 @import './brand.css';
 
@@ -18,7 +23,23 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
-  .using-mouse * {
-    outline: none !important;
+}
+
+/* Honour reduced motion app-wide: dialogs, menus, skeleton pulses and the
+   sidebar all animate. Durations collapse to near zero rather than `none` so
+   Radix exit animations still fire `animationend` and unmount. A spinner keeps
+   turning: its rotation is the only sign that work is still in progress. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }

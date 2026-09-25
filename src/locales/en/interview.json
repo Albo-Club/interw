@@ -1,5 +1,27 @@
 {
   "metaTitle": "Your interview",
+  "screens": {
+    "welcome": {
+      "title": "Welcome — your interview",
+      "description": "Read how your video interview works, then agree to be recorded before you start."
+    },
+    "check": {
+      "title": "Camera and microphone check — your interview",
+      "description": "Check that your camera and microphone work before the interview starts."
+    },
+    "interview": {
+      "title": "Questions — your interview",
+      "description": "Answer each question on video, at your own pace. Every answer is saved as soon as you finish it."
+    },
+    "done": {
+      "title": "Thank you — your interview",
+      "description": "Your answers have been sent. Here is what happens next."
+    },
+    "privacy": {
+      "title": "Your data — your interview",
+      "description": "What is kept from your interview, for how long, and how to delete it."
+    }
+  },
   "shell": {
     "privacy": "Your data"
   },
@@ -89,6 +111,7 @@
     "noDevices": "No camera or microphone was found. Plug one in, then reload this page.",
     "busy": "Your camera or microphone is being used by another app, such as a video call. Close it, then try again.",
     "unsupported": "This browser can't record video interviews. Please open this link in the latest Chrome, Safari, Firefox or Edge — on a computer if you can.",
+    "insecureContext": "This page wasn't opened over a secure connection, so your browser keeps the camera and microphone switched off. Open the link exactly as it appears in your invitation email — it starts with https://.",
     "inAppBrowser": "You seem to be in an in-app browser. Recording often fails here. Open this link in Safari or Chrome instead.",
     "retry": "Check again",
     "continue": "Everything works — start the interview",
@@ -103,6 +126,7 @@
   },
   "run": {
     "progress": "Question {{index}} of {{total}}",
+    "leaveConfirm": "Your answer hasn't been sent yet. If you leave this page now, it will be lost. Leave anyway?",
     "intro": {
       "title": "A word before we begin",
       "continue": "I'm ready"

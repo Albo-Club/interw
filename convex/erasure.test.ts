@@ -180,6 +180,33 @@ describe('erasure', () => {
   })
 
   /**
+   * Product §3.6. The decision history names the candidate's session and who
+   * decided what about them; it goes with the session, like every other row.
+   */
+  it('takes the decision history too', async () => {
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const [user] = await ctx.db.query('users').take(1)
+      await ctx.db.insert('decisionEvents', {
+        orgId: s.orgId,
+        sessionId: s.sessionId,
+        decision: 'rejected',
+        actorId: user._id,
+        at: 1,
+      })
+    })
+    await erase(t, s.sessionId)
+
+    const remaining = await t.run(async (ctx) =>
+      ctx.db
+        .query('decisionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(remaining).toEqual([])
+  })
+
+  /**
    * `sessionEvents` is written by the candidate's own browser, so the number
    * of rows to delete was theirs to choose. One transaction over the limit and
    * erasure failed — after the recordings were already deleted, leaving a

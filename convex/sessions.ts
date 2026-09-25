@@ -22,7 +22,6 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
-import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
@@ -66,6 +65,10 @@ function toRecruiterRow(session: Doc<'sessions'>) {
     completedAt: session.completedAt ?? null,
     lastActivityAt: session.lastActivityAt ?? null,
     durationSeconds: session.durationSeconds ?? null,
+    // Denormalised by the queue when the report lands (see schema): reading
+    // `reports` per row here would make the table a reactive N+1.
+    overallScore: session.overallScore ?? null,
+    recommendation: session.recommendation ?? null,
     recruiterDecision: session.recruiterDecision ?? null,
     lastQuestionIndex: session.lastQuestionIndex,
   }
@@ -238,9 +241,8 @@ export const invitationLink = query({
   handler: async (ctx, { sessionId }) => {
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    // Owner or admin, not any member who can see the role: this destroys a
-    // candidate's recordings, their CV and their assessment, irreversibly.
-    // It used to be less protected than deleting an empty role.
+    // Owner, admin or the role's creator: the link is the candidate's
+    // interview, and whoever holds it can sit it in their name.
     await requireProjectOwnerOrAdmin(ctx, session.projectId)
     return { url: invitationUrl(session.accessToken) }
   },
@@ -252,9 +254,22 @@ export const resendInvitation = mutation({
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
     const { project, user } = await requireProjectAccess(ctx, session.projectId)
-    if (session.status === 'completed' || session.status === 'cancelled') {
+    if (session.status !== 'pending' && session.status !== 'in_progress') {
       throw new ConvexError('session_closed')
     }
+    // Pipe F9: an address that hard-bounced (or reported us as spam) does not
+    // get the same mail again. Every retry costs the sending domain
+    // reputation, and the fix is a corrected address — a new invitation.
+    const sent = await ctx.db
+      .query('emailLog')
+      .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+      .collect()
+    const undeliverable = sent.some(
+      (entry) =>
+        entry.recipient === session.candidateEmail &&
+        (entry.status === 'bounced' || entry.status === 'complained'),
+    )
+    if (undeliverable) throw new ConvexError('address_undeliverable')
     await consumeLimit(ctx, 'candidateInvite', user._id)
     const org = await ctx.db.get('organizations', session.orgId)
     if (!org) throw new ConvexError('not_found')
@@ -279,18 +294,6 @@ export const cancel = mutation({
   },
 })
 
-/** Whether a given session's link would work right now, for the recruiter. */
-export const linkStatus = query({
-  args: { sessionId: v.id('sessions'), now: v.number() },
-  handler: async (ctx, { sessionId, now }) => {
-    const session = await ctx.db.get('sessions', sessionId)
-    if (!session) throw new ConvexError('not_found')
-    const { project } = await requireProjectAccess(ctx, session.projectId)
-    // No org to read: the guard above already refused one being deleted.
-    return evaluateSessionGate({ session, project, org: {}, now })
-  },
-})
-
 /**
  * Send the invitations for a batch of sessions.
  *
@@ -308,6 +311,74 @@ export const sendInvitationBatch = internalMutation({
       const org = await ctx.db.get('organizations', session.orgId)
       if (!project || !org) continue
       await sendInvitation(ctx, { session, project, orgName: org.name })
+    }
+    return null
+  },
+})
+
+/**
+ * How long after a role's deadline its open sessions are closed for good.
+ *
+ * Not zero: `interview.finish` lets a candidate who recorded their answers
+ * finish after the deadline, and a recruiter who notices a deadline passed by
+ * mistake can still push it back and lose nobody.
+ */
+const EXPIRY_GRACE_MS = 24 * 60 * 60 * 1000
+/** Roles read per pass, and session writes per pass. */
+const EXPIRY_PROJECTS_PER_PASS = 25
+const EXPIRY_WRITES_PER_PASS = 200
+
+/**
+ * Close the sessions of a role whose deadline has passed (B6).
+ *
+ * `expired` was in the schema and written by nobody: an invitation nobody
+ * opened stayed `pending` forever, and the table and the dashboard counted it
+ * as still in flight. Only the role's deadline is a window — a role without
+ * one keeps its links open, and the retention clock set at invitation bounds
+ * what is kept.
+ *
+ * Bounded per pass, and it reschedules itself until the range is drained, so
+ * a backlog clears on its own without one transaction carrying all of it.
+ */
+export const expireOverdueSessions = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { cursor }) => {
+    const cutoff = Date.now() - EXPIRY_GRACE_MS
+    const page = await ctx.db
+      .query('projects')
+      .withIndex('by_expires_at', (q) =>
+        q.gte('expiresAt', 0).lt('expiresAt', cutoff),
+      )
+      .paginate({ numItems: EXPIRY_PROJECTS_PER_PASS, cursor })
+
+    let budget = EXPIRY_WRITES_PER_PASS
+    for (const project of page.page) {
+      for (const status of ['pending', 'in_progress'] as const) {
+        const open = await ctx.db
+          .query('sessions')
+          .withIndex('by_project_and_status', (q) =>
+            q.eq('projectId', project._id).eq('status', status),
+          )
+          .take(budget)
+        for (const session of open) {
+          await ctx.db.patch('sessions', session._id, { status: 'expired' })
+        }
+        budget -= open.length
+        if (budget === 0) {
+          // Same page again: this role may have more open sessions.
+          await ctx.scheduler.runAfter(
+            0,
+            internal.sessions.expireOverdueSessions,
+            { cursor },
+          )
+          return null
+        }
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.sessions.expireOverdueSessions, {
+        cursor: page.continueCursor,
+      })
     }
     return null
   },

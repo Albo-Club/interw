@@ -13,8 +13,8 @@ type Seed = {
   otherOrgId: Id<'organizations'>
   authorId: Id<'users'>
   memberId: Id<'users'>
-  openProject: Id<'projects'>
-  restrictedProject: Id<'projects'>
+  sharedProject: Id<'projects'>
+  confidentialProject: Id<'projects'>
 }
 
 function newTest() {
@@ -46,7 +46,7 @@ async function seed(t: ReturnType<typeof newTest>): Promise<Seed> {
       createdAt: 0,
     })
 
-    const mkProject = (title: string, restricted: boolean) =>
+    const mkProject = (title: string) =>
       ctx.db.insert('projects', {
         orgId,
         slug: title.toLowerCase(),
@@ -63,18 +63,25 @@ async function seed(t: ReturnType<typeof newTest>): Promise<Seed> {
         },
         createdBy: authorId,
         createdAt: 0,
-        restricted,
         sessionCount: 0,
         completedSessionCount: 0,
       })
 
+    const sharedProject = await mkProject('Shared')
+    await ctx.db.insert('projectShares', {
+      orgId,
+      projectId: sharedProject,
+      userId: memberId,
+      grantedBy: authorId,
+      grantedAt: 0,
+    })
     return {
       orgId,
       otherOrgId,
       authorId,
       memberId,
-      openProject: await mkProject('Open', false),
-      restrictedProject: await mkProject('Confidential', true),
+      sharedProject,
+      confidentialProject: await mkProject('Confidential'),
     }
   })
 }
@@ -88,67 +95,50 @@ describe('project visibility', () => {
     s = await seed(t)
   })
 
-  it('shows an unrestricted project to any member', async () => {
+  it('shows a role to a member of its team', async () => {
     await t.run(async (ctx) => {
-      const project = (await ctx.db.get('projects', s.openProject))!
+      const project = (await ctx.db.get('projects', s.sharedProject))!
       expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(true)
     })
   })
 
-  it('hides a restricted project from a member who was not named', async () => {
+  it('hides a role from a member who is not on its team', async () => {
     await t.run(async (ctx) => {
-      const project = (await ctx.db.get('projects', s.restrictedProject))!
+      const project = (await ctx.db.get('projects', s.confidentialProject))!
       expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(false)
     })
   })
 
-  it('still shows a restricted project to its creator', async () => {
+  it('shows a role to its creator, who is never a stored row', async () => {
     await t.run(async (ctx) => {
-      const project = (await ctx.db.get('projects', s.restrictedProject))!
+      const project = (await ctx.db.get('projects', s.confidentialProject))!
       expect(await canSeeProject(ctx, project, s.authorId, 'member')).toBe(true)
     })
   })
 
-  it('shows a restricted project to admins and owners', async () => {
+  it('shows every role to admins and owners', async () => {
     await t.run(async (ctx) => {
-      const project = (await ctx.db.get('projects', s.restrictedProject))!
+      const project = (await ctx.db.get('projects', s.confidentialProject))!
       expect(await canSeeProject(ctx, project, s.memberId, 'admin')).toBe(true)
       expect(await canSeeProject(ctx, project, s.memberId, 'owner')).toBe(true)
     })
   })
 
-  it('shows a restricted project once the member is named on it', async () => {
+  // Decision 3 of 2026-09-24: the open/restricted switch is gone. A row that
+  // still says `restricted: false` from before is visible to its team only.
+  it('ignores the legacy "open to everyone" flag', async () => {
     await t.run(async (ctx) => {
-      await ctx.db.insert('projectShares', {
-        orgId: s.orgId,
-        projectId: s.restrictedProject,
-        userId: s.memberId,
-        grantedBy: s.authorId,
-        grantedAt: 0,
+      await ctx.db.patch('projects', s.confidentialProject, {
+        restricted: false,
       })
-      const project = (await ctx.db.get('projects', s.restrictedProject))!
-      expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(true)
-    })
-  })
-
-  // A share on ANOTHER project must not unlock this one.
-  it('does not let a share on one project leak into another', async () => {
-    await t.run(async (ctx) => {
-      await ctx.db.insert('projectShares', {
-        orgId: s.orgId,
-        projectId: s.openProject,
-        userId: s.memberId,
-        grantedBy: s.authorId,
-        grantedAt: 0,
-      })
-      const project = (await ctx.db.get('projects', s.restrictedProject))!
+      const project = (await ctx.db.get('projects', s.confidentialProject))!
       expect(await canSeeProject(ctx, project, s.memberId, 'member')).toBe(false)
     })
   })
 })
 
 describe('filterVisibleProjects', () => {
-  it('drops restricted rows for a plain member, with one shares query', async () => {
+  it('keeps only the roles a plain member is on the team of', async () => {
     const t = newTest()
     const s = await seed(t)
     await t.run(async (ctx) => {
@@ -157,7 +147,7 @@ describe('filterVisibleProjects', () => {
         .withIndex('by_org', (q) => q.eq('orgId', s.orgId))
         .collect()
       const visible = await filterVisibleProjects(ctx, all, s.memberId, 'member')
-      expect(visible.map((p) => p.title)).toEqual(['Open'])
+      expect(visible.map((p) => p.title)).toEqual(['Shared'])
     })
   })
 

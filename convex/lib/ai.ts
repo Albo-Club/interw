@@ -141,9 +141,10 @@ export type TranscriptionResult = {
   audioSeconds: number | null
 }
 
+/** Mistral types segment times as `number | null`. */
 const mistralSegmentSchema = z.object({
-  start: z.number(),
-  end: z.number(),
+  start: z.number().nullable(),
+  end: z.number().nullable(),
   text: z.string(),
 })
 
@@ -151,7 +152,13 @@ const mistralTranscriptionSchema = z.object({
   text: z.string(),
   model: z.string().optional(),
   segments: z.array(mistralSegmentSchema).optional(),
-  usage: z.object({ total_seconds: z.number() }).optional(),
+  // Telemetry only: a usage block we cannot read must never fail the
+  // transcript it came with. See KNOWN_ISSUES.md § "Mistral's transcription
+  // response is not OpenAI's".
+  usage: z
+    .object({ prompt_audio_seconds: z.number().nullish() })
+    .nullish()
+    .catch(undefined),
 })
 
 export type TranscribeOptions = {
@@ -209,20 +216,21 @@ export async function transcribe(
   // "resolved" to 0:00 and arrived in the report indistinguishable from a
   // genuine anchor. An empty list is what we actually know, and it makes
   // those citations honestly unanchored.
-  const words: Array<TranscriptWord> =
-    parsed.data.segments && parsed.data.segments.length > 0
-      ? parsed.data.segments.map((s) => ({
-          start: s.start,
-          end: s.end,
-          text: s.text.trim(),
-        }))
-      : []
+  //
+  // A segment with no time is dropped for the same reason: it cannot anchor
+  // a quote, and the text survives in `text` anyway.
+  const words: Array<TranscriptWord> = (parsed.data.segments ?? []).flatMap(
+    (s) =>
+      s.start === null || s.end === null
+        ? []
+        : [{ start: s.start, end: s.end, text: s.text.trim() }],
+  )
 
   return {
     text,
     words,
     model: parsed.data.model ?? TRANSCRIPTION_MODEL,
-    audioSeconds: parsed.data.usage?.total_seconds ?? null,
+    audioSeconds: parsed.data.usage?.prompt_audio_seconds ?? null,
   }
 }
 

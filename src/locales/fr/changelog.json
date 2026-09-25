@@ -9,6 +9,14 @@
       "title": "Un entretien plus calme, centré sur la vidéo",
       "body": "Chaque question tient désormais sur un seul écran, comme un appel vidéo : votre question enregistrée se lance d'elle-même, avec la caméra du candidat en vignette pour vérifier son cadrage, puis sa caméra occupe tout l'écran quand il répond, la question restant affichée en sous-titre. Le temps restant est toujours visible, et votre logo apparaît en haut de chaque page candidat."
     },
+    "transcription-restored": {
+      "title": "Les entretiens sont de nouveau transcrits et évalués",
+      "body": "Les réponses enregistrées par les candidats sont de nouveau transcrites, avec le minutage de chaque passage, et le rapport suit dès la fin de l’entretien. Les entretiens restés sans rapport peuvent être relancés."
+    },
+    "quote-seek-reliable": {
+      "title": "Des citations qui tombent à la seconde, et la durée de chaque réponse",
+      "body": "Dans un rapport, chaque réponse affiche désormais sa durée dès l'ouverture. Un clic sur une citation montre le chargement de la réponse, puis la démarre au moment cité. Si le navigateur refuse de lancer la lecture tout seul, un bouton « Lire à partir de » apparaît au lieu d'un clic qui semble ne rien faire."
+    },
     "invitations-hardening": {
       "title": "Invitations d’équipe resserrées",
       "body": "Une invitation ne reste valable que tant que la personne qui l’a envoyée peut encore inviter : si elle quitte l’organisation ou n’est plus admin, l’invitation cesse de fonctionner et s’affiche « Plus valable », et vous pouvez inviter l’adresse de nouveau. S’inscrire depuis une invitation conserve l’adresse invitée, et nous avons renforcé l’affichage des noms dans l’application et dans les e-mails."
@@ -91,7 +99,7 @@
     },
     "recordings-play-everywhere": {
       "title": "Des réponses lisibles partout, et un téléphone qui reste allumé",
-      "body": "Les réponses enregistrées sous Chrome, Edge ou Safari utilisent désormais un format que tous les navigateurs lisent, iPhone compris : sauter à une citation dans un rapport tombe au bon endroit. Le téléphone ne verrouille plus son écran en pleine réponse, un micro pris par un appel termine proprement la réponse au lieu d’enregistrer du silence, et quand la vidéo d’une réponse n’a pas pu être envoyée, vous entendez quand même ce que le candidat a dit."
+      "body": "Les réponses enregistrées sous Chrome, Edge ou Safari utilisent désormais un format que tous les navigateurs lisent, iPhone compris. Le téléphone ne verrouille plus son écran en pleine réponse, un micro pris par un appel termine proprement la réponse au lieu d’enregistrer du silence, et quand la vidéo d’une réponse n’a pas pu être envoyée, vous entendez quand même ce que le candidat a dit."
     },
     "delete-organization": {
       "title": "Supprimer une organisation",

@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Play } from 'lucide-react'
 
-import { formatTimecode } from '~/components/report/AnswerPlayer'
-import { cn } from '~/lib/utils'
+import { cn, formatTimecode } from '~/lib/utils'
 
 export type Highlight = {
   segmentId: string

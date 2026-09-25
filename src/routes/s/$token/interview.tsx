@@ -39,10 +39,12 @@ import { Progress } from '~/components/ui/progress'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
+import { AnswerTimer } from '~/components/candidate/AnswerTimer'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
 import {
   QuestionPrompt,
   QuestionText,
+  QuestionVideo,
 } from '~/components/candidate/QuestionPrompt'
 import { Stage } from '~/components/candidate/Stage'
 import { RecordingMic } from '~/components/candidate/RecordingMic'
@@ -62,9 +64,6 @@ export const Route = createFileRoute('/s/$token/interview')({
   component: InterviewRunner,
   head: () => candidateHead('interview'),
 })
-
-/** The timer turns to a warning for the last 30 seconds. */
-const COUNTDOWN_THRESHOLD_SECONDS = 30
 
 const detail = (cause: unknown) =>
   cause instanceof Error ? cause.message : 'unknown'
@@ -536,6 +535,17 @@ function InterviewRunner() {
     organisationName: data.organisationName,
     logoUrl: data.organisationLogoUrl,
   }
+  const notices = (
+    <>
+      {!online && (
+        <Alert>
+          <WifiOff className="size-4" />
+          <AlertDescription>{t('interview:run.offline')}</AlertDescription>
+        </Alert>
+      )}
+      <LastAnswerNotice state={state} />
+    </>
+  )
 
   if (state.phase === 'intro') {
     return (
@@ -545,14 +555,12 @@ function InterviewRunner() {
         </h1>
         <Stage
           prompt={
-            media.intro && (
-              <QuestionPrompt
-                content={t('interview:run.intro.title')}
-                hint={null}
-                media={{ src: media.intro, kind: 'video' }}
+            media.intro ? (
+              <QuestionVideo
+                src={media.intro}
                 label={t('interview:run.intro.title')}
               />
-            )
+            ) : null
           }
           self={null}
         />
@@ -575,13 +583,7 @@ function InterviewRunner() {
       <CandidateShell {...brand}>
         <LiveStatus state={state} />
         <div className="space-y-6">
-          {!online && (
-            <Alert>
-              <WifiOff className="size-4" />
-              <AlertDescription>{t('interview:run.offline')}</AlertDescription>
-            </Alert>
-          )}
-          <LastAnswerNotice state={state} />
+          {notices}
           <ReviewScreen
             state={state}
             missing={answered.flatMap((done, index) => (done ? [] : [index]))}
@@ -593,26 +595,33 @@ function InterviewRunner() {
     )
   }
 
-  if (!current)
-    return (
-      <CandidateShell width="stage" {...brand}>
-        {null}
-      </CandidateShell>
-    )
+  if (!current) return <CandidateShell width="stage" {...brand} />
 
   const recording = state.phase === 'recording'
-  const remaining = Math.max(0, current.maxResponseSeconds - elapsed)
+  // The question has the stage until the candidate starts answering; from
+  // then on it is their camera, with the question kept as a caption.
+  const asking = state.phase === 'prompt'
   const promptUrl = current.hasMedia
     ? media.questions[current.questionId]
     : undefined
+  const questionMedia = promptUrl
+    ? { src: promptUrl, kind: current.mediaKind ?? 'video' }
+    : null
   const questionLabel = t('interview:run.progress', {
     index: state.index + 1,
     total: state.total,
   })
-  // The question has the stage until the candidate starts answering; from
-  // then on it is their camera, with the question kept as a caption.
-  const asking = state.phase === 'prompt'
-  const promptVideo = promptUrl !== undefined && current.mediaKind !== 'audio'
+  const overlay =
+    state.phase === 'saving' ? (
+      <Saving state={state} />
+    ) : state.phase === 'saveFailed' || state.phase === 'recordingLost' ? (
+      <SaveFailed
+        lost={state.phase === 'recordingLost'}
+        onRetry={retry}
+        onRerecord={() => dispatch({ type: 'rerecord' })}
+        onSkip={skip}
+      />
+    ) : null
 
   return (
     <CandidateShell width="stage" {...brand}>
@@ -637,14 +646,8 @@ function InterviewRunner() {
       </div>
 
       <div className="mb-4 space-y-3 empty:hidden">
-        {!online && (
-          <Alert>
-            <WifiOff className="size-4" />
-            <AlertDescription>{t('interview:run.offline')}</AlertDescription>
-          </Alert>
-        )}
-        <LastAnswerNotice state={state} />
-        {state.error && state.phase === 'prompt' && (
+        {notices}
+        {state.error && asking && (
           <Alert variant="destructive">
             <CircleAlert className="size-4" />
             <AlertDescription>
@@ -663,53 +666,30 @@ function InterviewRunner() {
               key={current.questionId}
               content={current.content}
               hint={current.hintText}
-              media={
-                promptUrl
-                  ? { src: promptUrl, kind: current.mediaKind ?? 'video' }
-                  : null
-              }
+              media={questionMedia}
               label={questionLabel}
             />
           ) : null
         }
         self={
-          // In a thumbnail, "audio only" is a line of text in a stamp.
-          audioOnly && asking ? null : (
-            <CameraPreview
-              ref={setPreview}
-              fill
-              audioOnly={audioOnly}
-              recording={recording}
-              timing={
-                recording
-                  ? {
-                      limit: current.maxResponseSeconds,
-                      left: remaining,
-                      urgent: remaining <= COUNTDOWN_THRESHOLD_SECONDS,
-                    }
-                  : null
-              }
-            />
-          )
+          <CameraPreview
+            ref={setPreview}
+            fill
+            audioOnly={audioOnly}
+            recording={recording}
+          />
         }
         caption={
-          (!asking || promptVideo) && (
+          (!asking || questionMedia?.kind === 'video') && (
             <QuestionText content={current.content} hint={current.hintText} />
           )
         }
-        overlay={
-          state.phase === 'saving' ? (
-            <Saving state={state} />
-          ) : state.phase === 'saveFailed' ||
-            state.phase === 'recordingLost' ? (
-            <SaveFailed
-              lost={state.phase === 'recordingLost'}
-              onRetry={retry}
-              onRerecord={() => dispatch({ type: 'rerecord' })}
-              onSkip={skip}
-            />
-          ) : null
+        status={
+          recording && (
+            <AnswerTimer limit={current.maxResponseSeconds} elapsed={elapsed} />
+          )
         }
+        overlay={overlay}
       />
 
       {recording && (
@@ -722,15 +702,7 @@ function InterviewRunner() {
           always in the same place and never below the fold. While a save
           covers the stage, its own actions are the way on: the bar keeps its
           room but steps aside. */}
-      <div
-        className={cn(
-          'flex justify-center pt-4',
-          (state.phase === 'saving' ||
-            state.phase === 'saveFailed' ||
-            state.phase === 'recordingLost') &&
-            'invisible',
-        )}
-      >
+      <div className={cn('flex justify-center pt-4', overlay && 'invisible')}>
         {recording ? (
           <Button size="lg" onClick={() => void stopAndSave('finished')}>
             <Square className="size-4" />
@@ -740,7 +712,7 @@ function InterviewRunner() {
           <Button
             size="lg"
             onClick={() => void beginRecording()}
-            disabled={state.phase !== 'prompt'}
+            disabled={!asking}
           >
             <Play className="size-4" />
             {t('interview:run.startAnswer')}

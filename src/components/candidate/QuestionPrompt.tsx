@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Play, RotateCcw } from 'lucide-react'
 
 import { fireAndForget } from '~/lib/fire-and-forget'
+import { cn } from '~/lib/utils'
 
 /**
  * A question as it fills the interview stage.
@@ -36,7 +37,6 @@ export function QuestionPrompt({
           src={media.src}
           controls
           autoPlay
-          preload="auto"
           aria-label={label}
           className="w-full max-w-md"
         />
@@ -59,11 +59,10 @@ export function QuestionText({
   return (
     <div className="max-w-2xl space-y-2">
       <h1
-        className={
-          large
-            ? 'text-2xl leading-snug font-medium text-balance sm:text-3xl'
-            : 'text-lg leading-snug font-medium text-balance sm:text-xl'
-        }
+        className={cn(
+          'leading-snug font-medium text-balance',
+          large ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl',
+        )}
       >
         {content}
       </h1>
@@ -76,23 +75,29 @@ export function QuestionText({
   )
 }
 
-function QuestionVideo({ src, label }: { src: string; label: string }) {
+const PLAYBACK_LABELS = {
+  playing: 'run.prompt.pause',
+  paused: 'run.prompt.play',
+  ended: 'run.prompt.replay',
+} as const
+
+/** A recorded question or intro, filling the stage. */
+export function QuestionVideo({ src, label }: { src: string; label: string }) {
   const { t } = useTranslation('interview')
-  const [video, setVideo] = useState<HTMLVideoElement | null>(null)
-  const [status, setStatus] = useState<'paused' | 'playing' | 'ended'>('paused')
+  const video = useRef<HTMLVideoElement>(null)
+  const [status, setStatus] = useState<keyof typeof PLAYBACK_LABELS>('paused')
   const toggle = () => {
-    if (!video) return
-    if (status === 'playing') video.pause()
-    else fireAndForget(video.play(), 'question playback')
+    if (!video.current) return
+    if (status === 'playing') video.current.pause()
+    else fireAndForget(video.current.play(), 'question playback')
   }
   return (
     <div className="relative size-full">
       <video
-        ref={setVideo}
+        ref={video}
         src={src}
         autoPlay
         playsInline
-        preload="auto"
         aria-label={label}
         onPlay={() => setStatus('playing')}
         onPause={() => setStatus((was) => (was === 'ended' ? was : 'paused'))}
@@ -104,13 +109,7 @@ function QuestionVideo({ src, label }: { src: string; label: string }) {
       <button
         type="button"
         onClick={toggle}
-        aria-label={
-          status === 'playing'
-            ? t('run.prompt.pause')
-            : status === 'ended'
-              ? t('run.prompt.replay')
-              : t('run.prompt.play')
-        }
+        aria-label={t(PLAYBACK_LABELS[status])}
         className="focus-visible:ring-ring absolute inset-0 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-inset"
       >
         {status !== 'playing' && (
@@ -120,7 +119,7 @@ function QuestionVideo({ src, label }: { src: string; label: string }) {
             ) : (
               <Play className="size-4" aria-hidden />
             )}
-            {status === 'ended' ? t('run.prompt.replay') : t('run.prompt.play')}
+            {t(PLAYBACK_LABELS[status])}
           </span>
         )}
       </button>

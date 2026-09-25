@@ -17,6 +17,7 @@ export function Stage({
   prompt,
   self,
   caption,
+  status,
   overlay,
 }: {
   /** The question, when it has the floor. Null once the candidate answers. */
@@ -25,6 +26,8 @@ export function Stage({
   self: ReactNode
   /** Laid along the bottom edge of whatever fills the stage. */
   caption?: ReactNode
+  /** Readouts pinned to the stage's edges, above the caption. */
+  status?: ReactNode
   /** Covers the stage, for a state that takes over from it. */
   overlay?: ReactNode
 }) {
@@ -47,6 +50,11 @@ export function Stage({
       {caption && (
         <div className="from-stage/90 absolute inset-x-0 bottom-0 z-20 max-h-[45%] overflow-y-auto bg-linear-to-t to-transparent px-5 pt-12 pb-5 sm:px-8 sm:pb-7">
           {caption}
+        </div>
+      )}
+      {status && (
+        <div className="pointer-events-none absolute inset-0 z-20">
+          {status}
         </div>
       )}
       {overlay && (

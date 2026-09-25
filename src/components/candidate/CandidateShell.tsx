@@ -31,12 +31,12 @@ export function CandidateShell({
 }: {
   organisationName?: string
   logoUrl?: string | null
-  children: ReactNode
+  children?: ReactNode
   /** Links the footer to this candidate's data page. */
   privacyToken?: string
   /** `stage` is the interview: exactly one screen tall, never scrolled, so
    *  the video and the one button that ends an answer are always in view. */
-  width?: 'narrow' | 'wide' | 'stage'
+  width?: 'narrow' | 'stage'
 }) {
   const { t } = useTranslation('interview')
   const column = width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl'

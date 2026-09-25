@@ -16,10 +16,10 @@ import { Progress } from '~/components/ui/progress'
 import { Card, CardContent } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
 import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
-import { AnswerPlayer, formatTimecode } from '~/components/report/AnswerPlayer'
+import { AnswerPlayer } from '~/components/report/AnswerPlayer'
 import { Highlights } from '~/components/report/Highlights'
 import { ScoreBadge } from '~/components/candidates/StatusBadge'
-import { cn } from '~/lib/utils'
+import { cn, formatTimecode } from '~/lib/utils'
 
 /**
  * A report shared outside the account.

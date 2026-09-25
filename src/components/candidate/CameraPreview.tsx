@@ -17,7 +17,6 @@ export function CameraPreview({
   audioOnly,
   fill = false,
   recording = false,
-  timing = null,
   children,
 }: {
   ref: Ref<HTMLVideoElement>
@@ -25,8 +24,6 @@ export function CameraPreview({
   /** Fill the parent instead of keeping its own aspect ratio. */
   fill?: boolean
   recording?: boolean
-  /** While recording: how long the answer may run, and how much is left. */
-  timing?: { limit: number; left: number; urgent: boolean } | null
   /** Overlaid on the preview, for a status line. */
   children?: ReactNode
 }) {
@@ -34,7 +31,7 @@ export function CameraPreview({
   return (
     <div
       className={cn(
-        'relative overflow-hidden',
+        '@container relative overflow-hidden',
         fill
           ? 'bg-stage size-full'
           : 'bg-muted aspect-[3/4] w-full rounded-lg sm:aspect-video',
@@ -48,7 +45,10 @@ export function CameraPreview({
           )}
         >
           <Mic className="size-8" />
-          <p className="max-w-sm leading-relaxed">{t('run.audioOnly')}</p>
+          {/* In the stage's thumbnail there is room for the icon only. */}
+          <p className="hidden max-w-sm leading-relaxed @xs:block">
+            {t('run.audioOnly')}
+          </p>
         </div>
       ) : (
         <video
@@ -73,41 +73,6 @@ export function CameraPreview({
           {t('run.recording')}
         </div>
       )}
-      {recording && timing && (
-        <>
-          <div
-            role="timer"
-            aria-label={t('run.timeLeft', { seconds: timing.left })}
-            className={cn(
-              'absolute top-3 right-3 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums',
-              timing.urgent
-                ? 'bg-warning text-warning-foreground'
-                : 'bg-stage/70 text-stage-foreground',
-            )}
-          >
-            {clock(timing.left)}
-          </div>
-          {/* Time used, as a bar along the bottom edge: how much of the answer
-              is left reads at a glance, long before the countdown starts.
-              Raised above the stage's caption, which covers the bottom. */}
-          <div className="bg-stage-foreground/20 absolute inset-x-0 bottom-0 z-30 h-1">
-            <div
-              className={cn(
-                'h-full origin-left transition-transform duration-1000 ease-linear motion-reduce:transition-none',
-                timing.urgent ? 'bg-warning' : 'bg-destructive',
-              )}
-              style={{
-                transform: `scaleX(${Math.min(1, 1 - timing.left / timing.limit)})`,
-              }}
-            />
-          </div>
-        </>
-      )}
     </div>
   )
-}
-
-/** `m:ss` — seconds are what a candidate counts down in, minutes the frame. */
-function clock(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }

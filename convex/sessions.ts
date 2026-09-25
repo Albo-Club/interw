@@ -22,6 +22,7 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
+import { singleLine } from './lib/singleLine'
 import { generateToken } from './lib/tokens'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
@@ -91,7 +92,7 @@ export const listByProject = query({
 })
 
 function normalizeCandidate(input: { name: string; email: string }) {
-  const name = input.name.trim()
+  const name = singleLine(input.name)
   const email = input.email.trim().toLowerCase()
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
   if (!EMAIL_RE.test(email)) throw new ConvexError('invalid_email')

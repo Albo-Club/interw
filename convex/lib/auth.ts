@@ -2,8 +2,12 @@ import { ConvexError } from 'convex/values'
 import { authComponent } from '../auth'
 import { RESEND_FROM, resend } from '../email'
 import { newUserSignupNotificationEmail } from '../emailTemplates'
+import { singleLine } from './singleLine'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from '../_generated/dataModel'
+
+/** Same cap as the profile form; enforced on every way a name comes in. */
+export const USER_NAME_MAX = 80
 
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 type MutCtx = GenericMutationCtx<DataModel>
@@ -69,7 +73,7 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
   const userId = await ctx.db.insert('users', {
     betterAuthId: baUser._id,
     email: baUser.email,
-    name: baUser.name,
+    name: singleLine(baUser.name).slice(0, USER_NAME_MAX),
     avatarUrl: baUser.image ?? undefined,
     superAdmin: isFirst,
     createdAt: Date.now(),

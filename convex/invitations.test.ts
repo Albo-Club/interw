@@ -444,6 +444,54 @@ describe('accepting by token', () => {
     })
     expect(again).toMatchObject({ orgSlug: 'acme', joined: false })
   })
+
+  // T12: the "already a member" branch stamped any token it was handed.
+  it("does not burn a colleague's invitation opened by another member", async () => {
+    const invitationId = await as(t, 'owner').mutation(
+      api.invitations.create,
+      { orgId: w.acmeOrgId, email: 'newcomer@example.test', role: 'member' },
+    )
+    const inv = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    const opened = await as(t, 'member').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(opened).toMatchObject({ joined: false })
+    const after = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    expect(after!.acceptedAt).toBeUndefined()
+    const joined = await as(t, 'newcomer').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(joined).toMatchObject({ joined: true })
+  })
+
+  // T12: an invitation acts for its admin. One sent by someone who has since
+  // left, or is no longer an admin, fails like one that does not exist.
+  it('refuses an invitation whose inviter is no longer an admin', async () => {
+    const token = 'from-a-demoted-admin'
+    await t.run(async (ctx) => {
+      const member = await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_member'))
+        .unique()
+      await ctx.db.insert('invitations', {
+        orgId: w.acmeOrgId,
+        email: 'newcomer@example.test',
+        role: 'admin',
+        token,
+        invitedBy: member!._id,
+        expiresAt: Date.now() + 60_000,
+      })
+    })
+    expect(await t.query(api.invitations.preview, { token })).toEqual({
+      kind: 'not_found',
+    })
+    expect(
+      await as(t, 'newcomer').query(api.invitations.listMine, {}),
+    ).toEqual([])
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.accept, { token }),
+    ).rejects.toThrow('not_found')
+  })
 })
 
 describe('creating a second organisation', () => {

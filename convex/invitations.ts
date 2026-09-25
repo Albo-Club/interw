@@ -242,6 +242,7 @@ export const preview = query({
       inviterName: await inviterName(ctx, inv),
     }
     if (inv.acceptedAt) return { kind: 'already_accepted' as const, ...context }
+    if (!(await issuerStillAdmin(ctx, inv))) return { kind: 'not_found' as const }
     if (inv.expiresAt < Date.now()) {
       return { kind: 'expired' as const, ...context }
     }
@@ -273,6 +274,25 @@ export const preview = query({
 })
 
 /**
+ * An invitation acts for the admin who sent it. Once they have left the
+ * organisation or lost admin rights, nobody accountable is behind it, and it
+ * fails like one that does not exist (T12). Another admin can resend it,
+ * which makes them the inviter.
+ */
+async function issuerStillAdmin(
+  ctx: QueryCtx,
+  inv: Doc<'invitations'>,
+): Promise<boolean> {
+  const issuer = await ctx.db
+    .query('organizationMembers')
+    .withIndex('by_org_and_user', (q) =>
+      q.eq('orgId', inv.orgId).eq('userId', inv.invitedBy),
+    )
+    .unique()
+  return issuer?.role === 'admin' || issuer?.role === 'owner'
+}
+
+/**
  * Shared by both ways of accepting. `joined` tells a first acceptance from an
  * existing member re-opening the link, so the page only welcomes the former.
  */
@@ -295,9 +315,11 @@ async function acceptInvitation(
   // whatever the invite's acceptedAt state. The accept effect can fire twice
   // (re-render, second tab) or the user can re-open the link — none of those
   // should surface an error. Reconcile acceptedAt if it never got stamped so
-  // the invite stops showing as pending.
+  // the invite stops showing as pending — only for the member it was
+  // addressed to: any member holding a colleague's link could otherwise
+  // burn it.
   if (alreadyMember) {
-    if (!inv.acceptedAt) {
+    if (!inv.acceptedAt && emailsMatch(inv.email, user.email)) {
       await ctx.db.patch('invitations', inv._id, { acceptedAt: Date.now() })
     }
     await setLastOrgSlug(ctx, user, org.slug)
@@ -316,6 +338,7 @@ async function acceptInvitation(
   if (!emailsMatch(inv.email, user.email)) {
     throw new ConvexError('email_mismatch')
   }
+  if (!(await issuerStillAdmin(ctx, inv))) throw new ConvexError('not_found')
 
   await ctx.db.insert('organizationMembers', {
     orgId: inv.orgId,
@@ -396,6 +419,7 @@ export const listMine = query({
       if (member) continue
       const org = await ctx.db.get('organizations', inv.orgId)
       if (!org || org.deletingAt !== undefined) continue
+      if (!(await issuerStillAdmin(ctx, inv))) continue
       mine.push({
         _id: inv._id,
         orgName: org.name,

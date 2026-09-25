@@ -20,6 +20,7 @@ import {
   sharedProjectIds,
 } from './lib/projectAccess'
 import { publishBlockers } from './lib/publishReadiness'
+import { singleLine } from './lib/singleLine'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
 import type { MutationCtx } from './_generated/server'
@@ -50,7 +51,7 @@ const DEFAULT_CANDIDATE_FIELDS = {
 } as const
 
 function requireText(value: string, max: number, code: string): string {
-  const trimmed = value.trim()
+  const trimmed = singleLine(value)
   if (!trimmed || trimmed.length > max) throw new ConvexError(code)
   return trimmed
 }
@@ -61,7 +62,7 @@ function optionalText(
   code: string,
 ): string | undefined {
   if (value === undefined) return undefined
-  const trimmed = value.trim()
+  const trimmed = singleLine(value)
   if (!trimmed) return undefined
   if (trimmed.length > max) throw new ConvexError(code)
   return trimmed

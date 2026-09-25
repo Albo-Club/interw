@@ -10,6 +10,7 @@ import {
   requireOrgRole,
   safeAppUser,
 } from './lib/auth'
+import { singleLine } from './lib/singleLine'
 import { setLastOrgSlug } from './lib/userPrefs'
 import { revokeMemberGrants } from './lib/projectAccess'
 import { resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
@@ -86,7 +87,7 @@ export const create = mutation({
     if (!SLUG_RE.test(normalizedSlug)) throw new ConvexError('invalid_slug')
     if (RESERVED_SLUGS.has(normalizedSlug))
       throw new ConvexError('slug_reserved')
-    const trimmedName = name.trim()
+    const trimmedName = singleLine(name)
     if (!trimmedName || trimmedName.length > MAX_NAME_LENGTH) {
       throw new ConvexError('invalid_name')
     }
@@ -164,7 +165,7 @@ export const updateGeneral = mutation({
   },
   handler: async (ctx, { orgId, name }) => {
     await requireOrgRole(ctx, orgId, 'admin')
-    const trimmedName = name.trim()
+    const trimmedName = singleLine(name)
     if (!trimmedName || trimmedName.length > MAX_NAME_LENGTH) {
       throw new ConvexError('invalid_name')
     }

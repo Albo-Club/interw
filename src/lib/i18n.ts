@@ -110,8 +110,18 @@ export function createI18n(locale: Locale): I18nInstance {
     ns: NAMESPACES,
     defaultNS,
     resources,
+    // React escapes text, so `t()` needs no escaping. `<Trans>` is the
+    // exception: it parses the interpolated string for tags, and a name or an
+    // address someone typed (`<strong>x</strong>`) became markup. Every
+    // `<Trans>` escapes its values, then unescapes its text nodes (T12).
     interpolation: { escapeValue: false },
-    react: { useSuspense: false },
+    react: {
+      useSuspense: false,
+      transDefaultProps: {
+        tOptions: { interpolation: { escapeValue: true } },
+        shouldUnescape: true,
+      },
+    },
   })
   return instance
 }

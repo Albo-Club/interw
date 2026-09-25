@@ -10,7 +10,13 @@ import {
 import { internal } from './_generated/api'
 import { authComponent, createAuth } from './auth'
 import { countOwners } from './organizations'
-import { provisionAppUser, requireAppUser, safeAppUser } from './lib/auth'
+import {
+  USER_NAME_MAX,
+  provisionAppUser,
+  requireAppUser,
+  safeAppUser,
+} from './lib/auth'
+import { singleLine } from './lib/singleLine'
 import { setPasswordWithFreshSession } from './lib/accountLifecycle'
 import { getLastOrgSlug, setEmailChange } from './lib/userPrefs'
 import { revokeMemberGrants } from './lib/projectAccess'
@@ -87,8 +93,10 @@ export const updateProfile = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
     const user = await requireAppUser(ctx)
-    const trimmed = name.trim()
-    if (!trimmed) throw new ConvexError('invalid_name')
+    const trimmed = singleLine(name)
+    if (!trimmed || trimmed.length > USER_NAME_MAX) {
+      throw new ConvexError('invalid_name')
+    }
     await ctx.db.patch("users", user._id, { name: trimmed })
     return null
   },
@@ -153,7 +161,12 @@ export const syncBetterAuthUser = internalMutation({
 
     const patch: { email?: string; name?: string } = {}
     if (email && email !== appUser.email) patch.email = email
-    if (name !== undefined && name !== appUser.name) patch.name = name
+    // Better Auth takes any name `updateUser` is handed; ours is a single line.
+    const cleanName =
+      name === undefined ? undefined : singleLine(name).slice(0, USER_NAME_MAX)
+    if (cleanName !== undefined && cleanName !== appUser.name) {
+      patch.name = cleanName
+    }
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch('users', appUser._id, patch)
     }

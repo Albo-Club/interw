@@ -98,17 +98,27 @@ export const disabledAuthPaths = [
   '/email-otp/change-email',
 ]
 
-export type EmailQuota = 'emailCodeSend' | 'verificationSend' | 'passwordResetSend'
+export type EmailQuota =
+  | 'emailCodeSend'
+  | 'verificationSend'
+  | 'passwordResetSend'
+  | 'signInAttempt'
 
 const QUOTA_BY_PATH: Partial<Record<string, EmailQuota>> = {
   '/email-otp/send-verification-otp': 'emailCodeSend',
   '/send-verification-email': 'verificationSend',
   '/request-password-reset': 'passwordResetSend',
+  // Password guesses against one account. The IP rule above does not stop a
+  // caller spreading them over addresses it rotates; this does. A person
+  // locked out of their password here can still sign in with a code.
+  '/sign-in/email': 'signInAttempt',
 }
 
 /**
- * Per-address quota on every endpoint that emails someone, charged before
- * Better Auth does anything. Two reasons it cannot live in the email senders:
+ * Per-address quota on every endpoint that emails someone, and on password
+ * sign-in, charged before Better Auth does anything. The refusal is the same
+ * whether or not the account exists. Two reasons it cannot live in the email
+ * senders:
  * a sender only runs for an address that has an account, so a quota refusal
  * there tells a stranger the account exists; and the code endpoint replaces
  * the pending code before calling its sender, so a refused send would still
@@ -137,7 +147,7 @@ export const perEmailQuota = (
             if (!(await withinQuota(quota, email.trim().toLowerCase())))
               throw new APIError('TOO_MANY_REQUESTS', {
                 code: 'RATE_LIMITED',
-                message: 'Too many emails to this address. Try again later.',
+                message: 'Too many requests for this address. Try again later.',
               })
           }),
         },

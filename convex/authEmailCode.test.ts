@@ -313,6 +313,27 @@ describe('per-address email quota', () => {
     ])
   })
 
+  // T12: password guesses were limited per IP only.
+  it('limits password sign-in per address, whether or not it exists', async () => {
+    const charged: Array<[EmailQuota, string]> = []
+    const t = buildAuth({
+      quota: (name, email) => {
+        charged.push([name, email])
+        return name !== 'signInAttempt'
+      },
+    })
+    await t.signUp(STRANGER, OWNER_PASSWORD)
+    for (const email of [VICTIM, STRANGER]) {
+      const res = await t.signIn(email, OWNER_PASSWORD)
+      expect(res.status).toBe(429)
+      expect(await errorCode(res)).toBe('RATE_LIMITED')
+    }
+    expect(charged.filter(([name]) => name === 'signInAttempt')).toEqual([
+      ['signInAttempt', VICTIM],
+      ['signInAttempt', STRANGER],
+    ])
+  })
+
   it('leaves the pending code valid when a send is refused', async () => {
     let allow = true
     const t = buildAuth({ quota: () => allow })

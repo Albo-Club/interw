@@ -176,7 +176,11 @@ object it read before updating it) — that is an accident of 1.6.30.
 
 `perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
 `verificationSend` in a before hook, for every address, and refuses with a
-real 429 (`code: 'RATE_LIMITED'`). It used to happen inside the email senders,
+real 429 (`code: 'RATE_LIMITED'`). Password sign-in is charged the same way
+(`signInAttempt`, 10 per hour per address): the per-IP rule does not stop a
+caller who rotates addresses or IPs, and the refusal must not depend on the
+account existing either. Someone locked out of their password this way can
+still sign in with a code. It used to happen inside the email senders,
 which was wrong three ways:
 
 1. A sender only runs for an address that has an account, so the quota
@@ -316,6 +320,15 @@ Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
 per-address email quotas, charged by the `perEmailQuota` hook). Do not
 confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
 key on Convex mutations/actions.
+
+**Which IP, nobody has checked yet.** No `advanced.ipAddress` is set, so BA
+reads its default headers, and the `/api/auth` proxy forwards the client's
+headers unchanged. What Convex ingress does with `X-Forwarded-For` (pass it
+through, append, overwrite with the proxy's address) decides whether a client
+can forge its IP, or whether every app user shares one bucket. Setting
+`ipAddressHeaders` blind could make the second case true, so it waits for a
+staging observation (audit 2026-09-25, V3). Until then, the per-address
+buckets above are the limit that holds whatever the IP is.
 
 ### Password policy (Phase 1)
 
@@ -1165,6 +1178,12 @@ auto-apply the UI language on device B until the user switches there too (the
 cookie is per-browser). The email locale is always correct regardless. Restore
 on login is a deliberate follow-up, not a bug.
 
+**`<Trans>` escapes its values.** `escapeValue` is off because React escapes
+text, but `<Trans>` parses the interpolated string for tags: an org name or
+an address like `<strong>x</strong>` rendered as markup. `createI18n` sets
+`react.transDefaultProps` so every `<Trans>` escapes its values and unescapes
+its text nodes; a new call site needs nothing (`src/lib/trans-escaping.test.ts`).
+
 **zxcvbn feedback strings** (password strength warnings) come from the zxcvbn
 English wordlist and are not translated — only our own labels around the meter
 are. Translating zxcvbn output would require loading its locale packs.
@@ -1277,7 +1296,7 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   on `blocked` for someone who became the last one meanwhile, and
   `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
 
-## A removed member keeps their credit — and their creator rights on return
+## A removed member keeps their credit, not their rights
 
 Removing someone from an organisation deletes their membership, their team
 rows and their report share links (`revokeMemberGrants`), never the ids that
@@ -1289,9 +1308,31 @@ a deleted account has no name left and reads "Former member". A new screen
 that credits someone goes through the same pair rather than reading `users`
 itself. Authorisation does not read that flag: a removed creator is
 locked out by `requireOrgMember` like anyone else. If they are re-invited,
-`createdBy` still names them, so they regain creator rights on their own roles
-(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
-their work — but it is the one thing removal does not reset.
+`createdBy` still names them, but the creator's seat belongs to the membership
+the role was created in (`isCreator`: `createdAt >= joinedAt`), so they get
+none of their roles back — nor candidate data or the candidates' links. An
+admin can put them back on a team, which stores a row like for anyone else.
+The invitations they sent and nobody accepted stop working too
+(`issuerStillAdmin`, also on demotion): an invitation acts for an admin, and
+another admin revives it by resending it.
+
+**Admins manage admins.** An admin can change the role of, or remove, any
+member or admin; only an owner can touch an owner, and the last owner can be
+neither demoted nor removed (`convex/organizations.ts`). Deliberate: two
+admins are peers, and an owner is the one who can settle a dispute.
+
+## Two audit asks left as they are (T12)
+
+- **The first account becomes super admin** (`provisionAppUser`, `isFirst`).
+  The audit asked for a configured address instead. It only fires on an empty
+  `users` table, and the last super admin cannot delete their account, so on
+  a running deployment it never fires again. A fresh deployment (or a project
+  forked from this template) should sign up its operator first.
+- **`normalizeEmail` folds Unicode case, not only ASCII.** Better Auth
+  lowercases addresses with the same `toLowerCase()`, so both sides agree on
+  which address an invitation names. Folding only ASCII on our side would
+  make them disagree for the rare non-ASCII address — a worse bug than the
+  one it closes.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 

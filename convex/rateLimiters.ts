@@ -30,6 +30,9 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 2,
   },
+  // Password sign-in attempts: per email, charged by `perEmailQuota` in
+  // convex/auth.ts, whether or not the account exists.
+  signInAttempt: { kind: 'token bucket', rate: 10, period: HOUR, capacity: 10 },
   // "Your password was changed" notices: per user. Only a real change sends
   // one (server-side hooks), but a burst of changes should not become a burst
   // of emails.

@@ -190,6 +190,50 @@ describe('pipeline idempotency', () => {
     expect(log[0].step).toBe('transcribe')
   })
 
+  /**
+   * Audit 2026-09-15, Back M8 / Pipe F3. `report` was `v.any()` and spread
+   * into the insert after `orgId`, so a report carrying its own `orgId` would
+   * have filed itself under another organisation.
+   */
+  it('refuses a report that carries a field it does not own', async () => {
+    const otherOrg = await t.run(async (ctx) =>
+      ctx.db.insert('organizations', {
+        slug: 'other',
+        name: 'Other',
+        createdBy: (await ctx.db.query('users').first())!._id,
+        createdAt: 0,
+      }),
+    )
+    await expect(
+      t.mutation(internal.pipeline.saveReport, {
+        sessionId: s.sessionId,
+        report: { ...REPORT, orgId: otherOrg } as typeof REPORT,
+        paraverbal: null,
+        partial: false,
+        model: 'test-model',
+      }),
+    ).rejects.toThrow(/orgId/)
+  })
+
+  /** Audit C6.2: the reasoning share of a completion is its own column. */
+  it('keeps the reasoning tokens a step spent', async () => {
+    await t.mutation(internal.pipeline.recordJob, {
+      sessionId: s.sessionId,
+      step: 'report',
+      outcome: 'succeeded',
+      promptTokens: 10,
+      completionTokens: 900,
+      reasoningTokens: 850,
+    })
+    const [row] = await t.run(async (ctx) =>
+      ctx.db
+        .query('jobLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(row.reasoningTokens).toBe(850)
+  })
+
   it('does not fail when the session it is logging against is gone', async () => {
     await t.run(async (ctx) => ctx.db.delete('sessions', s.sessionId))
     await expect(

@@ -307,9 +307,47 @@ describe('relaunching a session', () => {
 
     const relaunches = log.filter((entry) => entry.step === 'relaunch')
     expect(relaunches).toHaveLength(1)
-    expect(relaunches[0].error).toContain('admin@acme.test')
+    // Audit 2026-09-22, h09: who asked is an id. The address used to sit in
+    // `error`, which the recruiter's candidate page read back.
+    const admin = await t.run(async (ctx) =>
+      ctx.db
+        .query('users')
+        .withIndex('by_email', (q) => q.eq('email', 'admin@acme.test'))
+        .unique(),
+    )
+    expect(relaunches[0].actorId).toBe(admin?._id)
+    expect(JSON.stringify(relaunches[0])).not.toContain('admin@acme.test')
     // The answer that had failed for good gets another real attempt.
     expect(segments[0].transcriptionState).toBe('pending')
+  })
+
+  /**
+   * Audit 2026-09-22, h09. A relaunch reset the report claim even while a
+   * report job was running, so one click could queue a second paid
+   * completion beside the first.
+   */
+  it('refuses while a report job holds the claim', async () => {
+    const sessionId = await stuckSession()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('sessions', sessionId, {
+        reportJobEnqueuedAt: Date.now(),
+      })
+    })
+    await expect(
+      asAdmin(t).mutation(api.admin.relaunchSession, { sessionId }),
+    ).rejects.toThrow(/report_in_progress/)
+  })
+
+  it('accepts a claim too old to be a running job', async () => {
+    const sessionId = await stuckSession()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('sessions', sessionId, {
+        reportJobEnqueuedAt: Date.now() - 2 * 60 * 60 * 1000,
+      })
+    })
+    await expect(
+      asAdmin(t).mutation(api.admin.relaunchSession, { sessionId }),
+    ).resolves.toBeNull()
   })
 
   it('refuses a session that is not finished', async () => {

@@ -154,9 +154,13 @@ const mistralTranscriptionSchema = z.object({
   usage: z.object({ total_seconds: z.number() }).optional(),
 })
 
+/**
+ * No `language`: the provider detects it per answer, which is what lets one
+ * role ask a question in French and the next in English. The provider also
+ * documents `language` as incompatible with `timestamp_granularities`, and
+ * the timestamps are what anchor every quote in a report.
+ */
 export type TranscribeOptions = {
-  /** Interview language; improves accuracy noticeably on short answers. */
-  language: 'fr' | 'en'
   /** Used only for the multipart filename — the provider sniffs the format. */
   fileName: string
   contentType: string
@@ -182,7 +186,6 @@ export async function transcribe(
     new File([blob], options.fileName, { type: options.contentType }),
   )
   form.append('model', TRANSCRIPTION_MODEL)
-  form.append('language', options.language)
   form.append('timestamp_granularities', 'segment')
 
   const payload = await postWithRetry(

@@ -12,6 +12,7 @@
  *   purgeAfter, and anything from `reports`.
  */
 
+import { maxInterviewMinutes } from './interviewDuration'
 import type { Doc } from '../_generated/dataModel'
 import type { SessionGate } from './sessionState'
 
@@ -49,7 +50,7 @@ export type CandidateProjectView = {
   personaName: string | null
   introMode: 'none' | 'video'
   hasIntroMedia: boolean
-  maxDurationMinutes: number
+  maxInterviewMinutes: number
   candidateFields: Doc<'projects'>['candidateFields']
   questionCount: number
 }
@@ -67,7 +68,7 @@ export function effectiveIntroMode(
 
 export function toCandidateProjectView(
   project: Doc<'projects'>,
-  questionCount: number,
+  questions: ReadonlyArray<Pick<Doc<'questions'>, 'maxResponseSeconds'>>,
 ): CandidateProjectView {
   return {
     jobTitle: project.jobTitle ?? null,
@@ -75,9 +76,9 @@ export function toCandidateProjectView(
     personaName: project.personaName ?? null,
     introMode: effectiveIntroMode(project),
     hasIntroMedia: project.introMediaKey !== undefined,
-    maxDurationMinutes: project.maxDurationMinutes,
+    maxInterviewMinutes: maxInterviewMinutes(questions),
     candidateFields: project.candidateFields,
-    questionCount,
+    questionCount: questions.length,
   }
 }
 

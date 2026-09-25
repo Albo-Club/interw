@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "simpler-role-creation": {
+      "title": "Créer un poste, plus simplement",
+      "body": "Un poste se crée désormais avec un seul intitulé, celui que voit le candidat (un nom interne reste possible en option). Le parcours tient en quatre étapes guidées — Questions, Évaluation, Expérience candidat, Publier — qui indiquent ce qu’il reste à compléter. La durée de l’entretien n’est plus saisie à la main : elle est calculée à partir du temps de réponse de chaque question, et c’est elle qu’on annonce au candidat. Les réponses sont transcrites dans leur langue, même quand un poste mêle le français et l’anglais, et le candidat peut changer la langue de ses écrans."
+    },
     "invitations-hardening": {
       "title": "Invitations d’équipe resserrées",
       "body": "Une invitation ne reste valable que tant que la personne qui l’a envoyée peut encore inviter : si elle quitte l’organisation ou n’est plus admin, l’invitation cesse de fonctionner et s’affiche « Plus valable », et vous pouvez inviter l’adresse de nouveau. S’inscrire depuis une invitation conserve l’adresse invitée, et nous avons renforcé l’affichage des noms dans l’application et dans les e-mails."

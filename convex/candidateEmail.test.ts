@@ -147,6 +147,28 @@ describe('what a candidate is told about the role, by email', () => {
     vi.useRealTimers()
   })
 
+  // A role once announced "about 30 minutes" from a hand-typed field while its
+  // questions took longer. The invitation now says what the questions take.
+  it('announces the time the questions take, not the legacy field', async () => {
+    const projectId = await seed(t, 'Backend Engineer')
+    await t.run(async (ctx) => {
+      const project = await ctx.db.get('projects', projectId)
+      for (const [orderIndex, maxResponseSeconds] of [300, 300].entries()) {
+        await ctx.db.insert('questions', {
+          orgId: project!.orgId,
+          projectId,
+          orderIndex,
+          content: `Question ${orderIndex}`,
+          maxResponseSeconds,
+        })
+      }
+    })
+    const [invitation] = await everyCandidateEmail(t, projectId, 'en')
+    // 2 × (300 s + 30 s to read) = 11 min; the row still says 20.
+    expect(invitation.text).toContain('Allow up to 11 minutes.')
+    expect(invitation.text).not.toContain('20 minutes')
+  })
+
   for (const language of ['en', 'fr'] as const) {
     it(`never carries the internal title (${language})`, async () => {
       const projectId = await seed(t, undefined)

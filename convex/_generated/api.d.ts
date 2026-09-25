@@ -38,6 +38,7 @@ import type * as lib_clock from "../lib/clock.js";
 import type * as lib_evidence from "../lib/evidence.js";
 import type * as lib_htmlText from "../lib/htmlText.js";
 import type * as lib_instructions from "../lib/instructions.js";
+import type * as lib_interviewDuration from "../lib/interviewDuration.js";
 import type * as lib_invitations from "../lib/invitations.js";
 import type * as lib_locale from "../lib/locale.js";
 import type * as lib_memberName from "../lib/memberName.js";
@@ -112,6 +113,7 @@ declare const fullApi: ApiFromModules<{
   "lib/evidence": typeof lib_evidence;
   "lib/htmlText": typeof lib_htmlText;
   "lib/instructions": typeof lib_instructions;
+  "lib/interviewDuration": typeof lib_interviewDuration;
   "lib/invitations": typeof lib_invitations;
   "lib/locale": typeof lib_locale;
   "lib/memberName": typeof lib_memberName;

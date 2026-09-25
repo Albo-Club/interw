@@ -165,7 +165,7 @@ function CandidateWelcome() {
             </Point>
             <Point icon={<Clock className="size-4" />}>
               {t('interview:welcome.steps.duration', {
-                count: project.maxDurationMinutes,
+                count: project.maxInterviewMinutes,
               })}
             </Point>
             <Point icon={<Check className="size-4" />}>

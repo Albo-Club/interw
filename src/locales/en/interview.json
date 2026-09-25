@@ -23,7 +23,8 @@
     }
   },
   "shell": {
-    "privacy": "Your data"
+    "privacy": "Your data",
+    "language": "Change language"
   },
   "state": {
     "notFound": {
@@ -56,7 +57,7 @@
       "questions": "{{count}} question, asked on camera by the team",
       "questions_other": "{{count}} questions, asked on camera by the team",
       "record": "You record your answer to each one, in your own time",
-      "duration": "About {{count}} minutes in total",
+      "duration": "Up to {{count}} minutes",
       "alone": "No one is waiting — you choose when to start"
     },
     "whatYouNeed": "What you'll need",

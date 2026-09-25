@@ -27,8 +27,6 @@ import type { Doc, Id } from './_generated/dataModel'
 const TITLE_MAX = 120
 const JOB_TITLE_MAX = 120
 const PERSONA_NAME_MAX = 60
-const MIN_DURATION_MINUTES = 5
-const MAX_DURATION_MINUTES = 120
 
 /**
  * Listing cap. A single organisation realistically runs tens of open roles;
@@ -156,7 +154,6 @@ export const getBySlug = query({
         personaName: project.personaName ?? null,
         introMode: effectiveIntroMode(project),
         hasIntroMedia: project.introMediaKey !== undefined,
-        maxDurationMinutes: project.maxDurationMinutes,
         candidateFields: project.candidateFields,
       },
       questions: questions.map((q) => ({
@@ -215,7 +212,6 @@ export const create = mutation({
       status: 'draft',
       language,
       introMode: 'none',
-      maxDurationMinutes: 20,
       candidateFields: DEFAULT_CANDIDATE_FIELDS,
       createdBy: user._id,
       createdAt: now,
@@ -253,7 +249,6 @@ export const update = mutation({
     language: v.optional(languageValidator),
     personaName: v.optional(v.string()),
     introMode: v.optional(introModeValidator),
-    maxDurationMinutes: v.optional(v.number()),
     candidateFields: v.optional(candidateFieldsValidator),
     /** Epoch ms, or null to clear. */
     expiresAt: v.optional(v.union(v.number(), v.null())),
@@ -281,16 +276,6 @@ export const update = mutation({
       )
     }
     if (args.introMode !== undefined) patch.introMode = args.introMode
-    if (args.maxDurationMinutes !== undefined) {
-      if (
-        !Number.isInteger(args.maxDurationMinutes) ||
-        args.maxDurationMinutes < MIN_DURATION_MINUTES ||
-        args.maxDurationMinutes > MAX_DURATION_MINUTES
-      ) {
-        throw new ConvexError('invalid_duration')
-      }
-      patch.maxDurationMinutes = args.maxDurationMinutes
-    }
     if (args.candidateFields !== undefined) {
       patch.candidateFields = args.candidateFields
     }

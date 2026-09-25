@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-import { AiError, complete, parseModelJson } from './ai'
+import { AiError, complete, parseModelJson, transcribe } from './ai'
 
 const reportSchema = z.object({
   overallScore: z.number().min(0).max(100),
@@ -383,5 +383,37 @@ describe('the completion request', () => {
     )
 
     await expect(ask()).rejects.toThrow(/quota exhausted/)
+  })
+})
+
+describe('the transcription request', () => {
+  beforeEach(() => {
+    vi.stubEnv('MISTRAL_API_KEY', 'test-key')
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  // A role may ask one question in French and the next in English: the
+  // provider detects the language per answer rather than being told one.
+  it('lets the provider detect the language, and asks for timestamps', async () => {
+    const forms: Array<FormData> = []
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+      forms.push(init.body as FormData)
+      return Promise.resolve(
+        new Response(JSON.stringify({ text: 'Hello', segments: [] })),
+      )
+    })
+
+    await transcribe(new Blob(['audio']).stream(), {
+      fileName: 'answer.webm',
+      contentType: 'audio/webm',
+    })
+
+    expect(forms).toHaveLength(1)
+    expect(forms[0].has('language')).toBe(false)
+    expect(forms[0].get('timestamp_granularities')).toBe('segment')
   })
 })

@@ -23,7 +23,8 @@
     }
   },
   "shell": {
-    "privacy": "Vos données"
+    "privacy": "Vos données",
+    "language": "Changer de langue"
   },
   "state": {
     "notFound": {
@@ -56,7 +57,7 @@
       "questions": "{{count}} question, posée face caméra par l'équipe",
       "questions_other": "{{count}} questions, posées face caméra par l'équipe",
       "record": "Vous enregistrez votre réponse à chacune, à votre rythme",
-      "duration": "Environ {{count}} minutes au total",
+      "duration": "Jusqu'à {{count}} minutes",
       "alone": "Personne ne vous attend : vous choisissez quand commencer"
     },
     "whatYouNeed": "Ce qu'il vous faut",

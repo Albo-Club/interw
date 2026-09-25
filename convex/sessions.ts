@@ -23,6 +23,7 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { isPastDeadline } from './lib/sessionState'
+import { maxInterviewMinutes } from './lib/interviewDuration'
 import { generateToken } from './lib/tokens'
 import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
@@ -257,13 +258,17 @@ async function sendInvitation(
     orgName,
   }: { session: Doc<'sessions'>; project: Doc<'projects'>; orgName: string },
 ): Promise<void> {
+  const questions = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', project._id))
+    .collect()
   const { subject, html, text } = candidateInvitationEmail({
     locale: project.language,
     candidateName: session.candidateName,
     jobTitle: project.jobTitle ?? null,
     orgName,
     startUrl: invitationUrl(session.accessToken),
-    durationMinutes: project.maxDurationMinutes,
+    durationMinutes: maxInterviewMinutes(questions),
   })
   const providerId = await resend.sendEmail(ctx, {
     from: RESEND_FROM,

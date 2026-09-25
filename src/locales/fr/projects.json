@@ -38,17 +38,17 @@
   },
   "new": {
     "title": "Nouveau poste",
-    "subtitle": "Deux champs pour démarrer. Le reste vient juste après.",
+    "subtitle": "Commencez par l'intitulé. On vous guide ensuite, étape par étape.",
     "fields": {
-      "title": "Intitulé interne",
-      "titleHint": "Visible uniquement par votre équipe.",
-      "jobTitle": "Intitulé affiché au candidat",
-      "jobTitleHint": "C'est ce qui apparaît sur l'écran du candidat.",
-      "language": "Langue de l'entretien",
-      "languageHint": "Détermine la langue des écrans candidat et de l'évaluation IA."
+      "title": "Nom interne",
+      "titleHint": "Visible uniquement par votre équipe. Utile pour distinguer deux postes au même intitulé.",
+      "jobTitle": "Intitulé du poste",
+      "jobTitleHint": "C'est ce que voit le candidat, dans l'e-mail comme à l'écran.",
+      "jobTitlePlaceholder": "Développeur backend senior"
     },
     "submit": "Créer et continuer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "addInternalName": "Ajouter un nom interne"
   },
   "detail": {
     "edit": "Modifier",
@@ -83,23 +83,25 @@
   "wizard": {
     "title": "Modifier le poste",
     "steps": {
-      "basics": "Le poste",
       "questions": "Questions",
-      "criteria": "Critères",
-      "candidate": "Formulaire candidat",
-      "review": "Récapitulatif"
+      "criteria": "Évaluation",
+      "candidate": "Expérience candidat",
+      "publish": "Publier"
     },
     "back": "Retour",
-    "next": "Suivant",
+    "next": "Suivant : {{step}}",
     "saved": "Enregistré",
     "saveFailed": "Enregistrement impossible. Votre dernière modification n'a pas été prise en compte.",
-    "finish": "Terminer"
+    "finish": "Terminer",
+    "autosave": "Vos modifications sont enregistrées automatiquement.",
+    "stepDone": "terminé",
+    "stepTodo": "à compléter"
+  },
+  "experience": {
+    "title": "Expérience candidat",
+    "subtitle": "Tout ce que voit le candidat : l'intitulé du poste, qui l'accueille, et ce que vous lui demandez."
   },
   "basics": {
-    "title": "Le poste",
-    "subtitle": "Ce que le candidat voit avant de commencer.",
-    "duration": "Durée maximale de l'entretien",
-    "durationHint": "Entre 5 et 120 minutes. Le candidat la voit avant de démarrer.",
     "persona": "Nom de l'intervieweur",
     "personaHint": "Le nom affiché à côté de vos questions. Le vôtre fonctionne très bien.",
     "expiry": "Expiration des liens",
@@ -170,7 +172,17 @@
       "confirm": "Supprimer la question"
     },
     "moveUp": "Monter",
-    "moveDown": "Descendre"
+    "moveDown": "Descendre",
+    "duration": {
+      "label": "Durée maximale de l'entretien",
+      "value": "{{count}} min",
+      "hint": "La somme des temps de réponse, plus 30 s de lecture par question. C'est la durée annoncée au candidat."
+    },
+    "time": {
+      "seconds": "{{count}} s",
+      "minutes": "{{count}} min",
+      "minutesSeconds": "{{minutes}} min {{seconds}} s"
+    }
   },
   "criteria": {
     "title": "Critères d'évaluation",
@@ -209,7 +221,7 @@
   },
   "review": {
     "title": "Prêt à publier",
-    "subtitle": "Un dernier coup d'œil avant de pouvoir inviter des candidats.",
+    "subtitle": "Un dernier coup d'œil avant d'inviter des candidats. Cliquez sur un point à corriger pour y aller.",
     "readyTitle": "Ce poste est prêt",
     "readyBody": "Publiez-le, puis invitez votre premier candidat.",
     "blocked": "Pas encore prêt",
@@ -218,7 +230,8 @@
       "question_not_written": "La question {{position}} contient encore le texte d'exemple. Rédigez la question que vous voulez poser.",
       "no_criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer.",
       "criterion_not_named": "Le critère {{position}} porte encore son nom d'exemple. Nommez ce que vous voulez évaluer."
-    }
+    },
+    "options": "Options"
   },
   "team": {
     "title": "Équipe du poste",
@@ -226,9 +239,10 @@
     "creator": "Créateur du poste, toujours dans l'équipe",
     "createdBy": "Créé par <name></name>",
     "label": "Équipe",
-    "hint": "Qui suit ce poste avec vous. Modifiable ensuite.",
+    "hint": "Qui suit ce poste avec vous et reçoit un e-mail quand un rapport est prêt.",
     "save": "Enregistrer l'équipe",
-    "saved": "Équipe mise à jour"
+    "saved": "Équipe mise à jour",
+    "manage": "Choisir l'équipe…"
   },
   "import": {
     "title": "Importer depuis une offre d'emploi",
@@ -258,7 +272,6 @@
     "invalid_content": "Une question doit contenir du texte, 1000 caractères maximum.",
     "invalid_label": "Un critère doit avoir un libellé, 80 caractères maximum.",
     "invalid_weight": "Un poids doit être compris entre 0 et 100.",
-    "invalid_duration": "Choisissez une durée comprise entre 5 et 120 minutes.",
     "invalid_response_seconds": "Le temps de réponse doit être compris entre 15 et 600 secondes.",
     "no_questions": "Ajoutez au moins une question avant de publier.",
     "too_many_questions": "Un poste peut contenir au maximum 25 questions.",

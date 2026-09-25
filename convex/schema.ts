@@ -327,7 +327,11 @@ export default defineSchema({
      *  yet, named before the PUT so deletion can find them. At most one per
      *  accepted type. See `reserveIntroUpload`. */
     pendingMediaKeys: v.optional(v.array(v.string())),
-    maxDurationMinutes: v.number(),
+    /** Legacy, read by nothing: the time a candidate is told comes from the
+     *  questions (`lib/interviewDuration.ts`). A hand-typed figure could
+     *  disagree with them, and did. Optional only because existing rows
+     *  still carry it. */
+    maxDurationMinutes: v.optional(v.number()),
     candidateFields: candidateFieldsValidator,
     expiresAt: v.optional(v.number()),
     createdBy: v.id('users'),

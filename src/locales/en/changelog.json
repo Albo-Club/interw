@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "simpler-role-creation": {
+      "title": "Creating a role, simplified",
+      "body": "A role now starts with a single title, the one candidates see (an internal name is still available if you need one). The flow is four guided steps — Questions, Evaluation, Candidate experience, Publish — each showing what is left to complete. The interview length is no longer typed by hand: it is computed from each question's answer time, and that is what candidates are told. Answers are transcribed in their own language, even when a role mixes French and English, and candidates can switch the language of their screens."
+    },
     "invitations-hardening": {
       "title": "Team invitations tightened",
       "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."

@@ -313,6 +313,19 @@ describe('the invitations waiting for the signed-in user', () => {
     expect(theirs).toEqual([])
   })
 
+  it('hides, and refuses, an organisation being deleted', async () => {
+    const invitationId = await invite(w.acmeOrgId, 'newcomer@example.test')
+    await t.run((ctx) =>
+      ctx.db.patch('organizations', w.acmeOrgId, { deletingAt: Date.now() }),
+    )
+    expect(
+      await as(t, 'newcomer').query(api.invitations.listMine, {}),
+    ).toEqual([])
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.acceptById, { invitationId }),
+    ).rejects.toThrow('not_found')
+  })
+
   it('shows nothing to an unverified address', async () => {
     await invite(w.acmeOrgId, 'newcomer@example.test')
     const mine = await as(t, 'newcomer', false).query(

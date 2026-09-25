@@ -34,6 +34,10 @@ export type ProjectLike = {
   expiresAt?: number
 }
 
+export type OrgLike = {
+  deletingAt?: number
+}
+
 export type SessionGate = {
   state: SessionGateState
   /** True only when the candidate may record right now. */
@@ -45,10 +49,12 @@ export type SessionGate = {
 export function evaluateSessionGate({
   session,
   project,
+  org,
   now,
 }: {
   session: SessionLike
   project: ProjectLike
+  org: OrgLike
   now: number
 }): SessionGate {
   const needsConsent = session.consentAcceptedAt === undefined
@@ -65,6 +71,11 @@ export function evaluateSessionGate({
   if (session.status === 'completed') return blocked('completed')
   if (session.status === 'cancelled') return blocked('cancelled')
   if (session.status === 'expired') return blocked('expired')
+
+  // An organisation being deleted closes every link at once, and must: its
+  // erasure collects the keys to delete from the rows, so an upload reserved
+  // after that point would land in the bucket with nothing left to name it.
+  if (org.deletingAt !== undefined) return blocked('closed')
 
   // The role's own expiry closes every link at once — the usual reason is
   // "we have finished hiring", so it reads as expired, not as an error.

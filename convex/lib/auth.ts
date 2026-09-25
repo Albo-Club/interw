@@ -107,7 +107,11 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
 export async function requireOrgMember(
   ctx: Ctx,
   orgId: Id<'organizations'>,
-): Promise<{ user: Doc<'users'>; member: Doc<'organizationMembers'> }> {
+): Promise<{
+  user: Doc<'users'>
+  member: Doc<'organizationMembers'>
+  org: Doc<'organizations'>
+}> {
   const user = await requireAppUser(ctx)
   const member = await ctx.db
     .query('organizationMembers')
@@ -116,19 +120,30 @@ export async function requireOrgMember(
     )
     .unique()
   if (!member) throw new ConvexError('not_a_member')
-  return { user, member }
+  // An organisation being deleted is frozen for everyone, its owners
+  // included: nothing may be written into it while erasure collects what to
+  // delete. Checked after membership, so the code tells a non-member nothing.
+  const org = await ctx.db.get('organizations', orgId)
+  if (!org || org.deletingAt !== undefined) {
+    throw new ConvexError('org_deleting')
+  }
+  return { user, member, org }
 }
 
 export async function requireOrgRole(
   ctx: Ctx,
   orgId: Id<'organizations'>,
   minRole: AppRole,
-): Promise<{ user: Doc<'users'>; member: Doc<'organizationMembers'> }> {
-  const { user, member } = await requireOrgMember(ctx, orgId)
+): Promise<{
+  user: Doc<'users'>
+  member: Doc<'organizationMembers'>
+  org: Doc<'organizations'>
+}> {
+  const { user, member, org } = await requireOrgMember(ctx, orgId)
   if (roleRank[member.role] < roleRank[minRole]) {
     throw new ConvexError('insufficient_role')
   }
-  return { user, member }
+  return { user, member, org }
 }
 
 export async function requireSuperAdmin(ctx: Ctx): Promise<Doc<'users'>> {

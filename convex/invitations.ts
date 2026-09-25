@@ -231,7 +231,10 @@ export const preview = query({
       .unique()
     if (!inv) return { kind: 'not_found' as const }
     const org = await ctx.db.get('organizations', inv.orgId)
-    if (!org) return { kind: 'not_found' as const }
+    // A frozen org (deletion under way) is gone for invitations.
+    if (!org || org.deletingAt !== undefined) {
+      return { kind: 'not_found' as const }
+    }
 
     const context = {
       orgName: org.name,
@@ -278,7 +281,7 @@ async function acceptInvitation(
   inv: Doc<'invitations'>,
 ) {
   const org = await ctx.db.get('organizations', inv.orgId)
-  if (!org) throw new ConvexError('not_found')
+  if (!org || org.deletingAt !== undefined) throw new ConvexError('not_found')
 
   const alreadyMember = await ctx.db
     .query('organizationMembers')
@@ -391,7 +394,7 @@ export const listMine = query({
         .unique()
       if (member) continue
       const org = await ctx.db.get('organizations', inv.orgId)
-      if (!org) continue
+      if (!org || org.deletingAt !== undefined) continue
       mine.push({
         _id: inv._id,
         orgName: org.name,

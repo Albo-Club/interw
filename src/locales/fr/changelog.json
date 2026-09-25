@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "delete-organization": {
+      "title": "Supprimer une organisation",
+      "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."
+    },
     "clearer-account-settings": {
       "title": "Des réglages de compte plus clairs",
       "body": "Votre profil suit désormais un changement d’e-mail étape par étape, affiche vos vraies méthodes de connexion et vous permet de définir un mot de passe si votre compte n’en a pas. Un lien de suppression de compte ouvert sur un autre appareil mène maintenant à une page claire, et un compte ne peut plus laisser une organisation sans propriétaire. Nous avons aussi renforcé les avis de sécurité : un e-mail vous prévient désormais aussi après une réinitialisation de mot de passe."

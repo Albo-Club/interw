@@ -5,7 +5,7 @@ import {
   evaluateSessionGate,
   nextQuestionIndex,
 } from './sessionState'
-import type { ProjectLike, SessionLike } from './sessionState'
+import type { OrgLike, ProjectLike, SessionLike } from './sessionState'
 
 const NOW = 1_700_000_000_000
 
@@ -20,8 +20,8 @@ const project = (overrides: Partial<ProjectLike> = {}): ProjectLike => ({
   ...overrides,
 })
 
-const gate = (s: SessionLike, p: ProjectLike) =>
-  evaluateSessionGate({ session: s, project: p, now: NOW })
+const gate = (s: SessionLike, p: ProjectLike, o: OrgLike = {}) =>
+  evaluateSessionGate({ session: s, project: p, org: o, now: NOW })
 
 describe('evaluateSessionGate', () => {
   it('lets a consented, pending candidate record', () => {
@@ -42,6 +42,12 @@ describe('evaluateSessionGate', () => {
     expect(
       gate(session({ status: 'in_progress' }), project()),
     ).toMatchObject({ state: 'resumable', canRecord: true })
+  })
+
+  it('closes every link of an organisation being deleted', () => {
+    expect(
+      gate(session({ status: 'in_progress' }), project(), { deletingAt: NOW }),
+    ).toMatchObject({ state: 'closed', canRecord: false })
   })
 
   it('closes a link once the role expires', () => {

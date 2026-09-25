@@ -25,6 +25,25 @@
       "insufficient_role": "Admins or owners only",
       "invalid_name": "Invalid name",
       "default": "Could not save"
+    },
+    "danger": {
+      "title": "Delete organization",
+      "description": "Permanently delete {{name}} and everything in it. This cannot be undone.",
+      "roles_one": "{{count}} role, with its questions and recordings",
+      "roles_other": "{{count}} roles, with their questions and recordings",
+      "candidates_one": "{{count}} candidate: their interview recordings, CV, transcripts and report",
+      "candidates_other": "{{count}} candidates: their interview recordings, CVs, transcripts and reports",
+      "assistant": "Every assistant conversation held in this organization",
+      "invitations_one": "{{count}} pending invitation",
+      "invitations_other": "{{count}} pending invitations",
+      "members_one": "Access for {{count}} member, who will be notified by email",
+      "members_other": "Access for {{count}} members, who will be notified by email",
+      "action": "Delete organization…",
+      "dialogTitle": "Delete {{name}}?",
+      "dialogDescription": "Everyone loses access right away, and the data is erased for good within the hour. Candidate links and shared reports stop working. There is no undo.",
+      "confirmLabel": "Type <strong>{{name}}</strong> to confirm",
+      "confirm": "Delete permanently",
+      "deleted": "{{name}} is being deleted. Its members have been notified."
     }
   },
   "members": {
@@ -102,5 +121,10 @@
       "rate_limited": "Invitation limit reached: you can send about 20 per hour. Try again later.",
       "default": "Could not send the invitation"
     }
+  },
+  "errors": {
+    "confirm_mismatch": "The name you typed doesn't match the organization's.",
+    "org_deleting": "This organization is already being deleted.",
+    "insufficient_role": "Only an owner can delete the organization."
   }
 }

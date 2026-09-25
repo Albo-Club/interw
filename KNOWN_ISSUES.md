@@ -1213,9 +1213,9 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
 - **Deleting a sole owner orphaned the organisation.** `cascadeDelete` throws
   `sole_owner` (the last line of defence — it runs inside `beforeDelete`),
   `/delete-user` refuses with `SOLE_OWNER` before mailing, and `/app/me` lists
-  the organisations. There is no organisation deletion yet, so an owner who is
-  the only member cannot delete their account until another member is made
-  owner.
+  the organisations. The way out for a solo owner is to delete the
+  organisation first (§ "Deleting an organisation"): one being deleted no
+  longer counts as sole-owned.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -1754,6 +1754,55 @@ candidate data must record the same row, or its output survives erasure.
 Threads created before this change carry no row and are not covered.
 `chat.listMessages` answers an empty page for a thread that no longer exists,
 because erasure may delete a thread a recruiter has open.
+
+## Deleting an organisation: freeze, wait out the upload URLs, then erase
+
+`organizations.requestDeletion` erases nothing itself. It sets
+`organizations.deletingAt`, mails the members while the memberships still say
+who they are, and schedules `orgErasure.step` **`WRITE_URL_TTL_SECONDS`
+(15 min) later**. Both halves are load-bearing:
+
+- **Freeze before collecting.** From `deletingAt` on, `requireOrgMember`
+  throws `org_deleting` (so every recruiter function, the chat included),
+  `users.me` drops the organisation (the layout then renders "redirecting"
+  instead of children whose queries now throw), `evaluateSessionGate` reads
+  `closed` for every candidate link, `resolveShare` answers `not_found`, and
+  invitations stop resolving. Erasure collects keys from rows; anything that
+  could still add a row or a key while it runs would outlive it.
+- **The wait.** A PUT URL signed a second before the freeze still works for
+  its full TTL. The segment row naming it was written before the upload, so
+  once those URLs have expired the key set in the database is final — collect
+  earlier and a late answer lands in a bucket nothing points at.
+
+Then one bounded phase per invocation, rescheduling itself: sessions through
+the purge core (`purge.eraseSession`: objects, then
+rows via `purge.deleteSessionRecords`, reason `org_delete` — never a parallel path),
+project media then the role rows, assistant threads by `${orgId}:` scope
+prefix (a thread that never read a candidate has no `chatThreadSessions` row
+for the session core to find), invitations / report shares / email and job
+logs, and last the memberships, the logo (through `release`) and the
+organisation row. The row with `deletingAt` is the durable state: `step` on an
+organisation that is gone, or was never frozen, does nothing.
+
+What deliberately survives, or cannot be reached:
+
+- **`purgeLog` rows stay**, one per candidate, with an `orgId` that now points
+  at nothing. The register is the proof the erasure happened; it holds hashes,
+  not addresses.
+- **Resend's copies** of every email sent for the organisation, including the
+  deletion notice, go with the `cleanupResend` cron (§ "Components keep their
+  own copies of candidate data"), within 30 days.
+- **An upload whose attach was refused by the freeze.** Project media and CVs
+  record their key on attach, after the PUT; an attach refused by
+  `org_deleting` leaves an object no row names, as a failed attach always
+  has. The keys are deterministic (`orgs/<orgId>/…`), which is why the manual
+  check in `TESTING.md` L12 looks at the prefix rather than the rows.
+
+Convex never retries a scheduled action, so `step` catches, logs
+`[org-erasure] failed` and tries the same phase again five minutes later. An
+erasure that cannot finish shows up as that line repeating, with the
+organisation still frozen — never as a half-erased organisation somebody can
+still open.
 
 ## Candidate recordings are NOT in Convex file storage
 

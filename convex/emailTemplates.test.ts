@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   invitationEmail,
   newEmailVerificationEmail,
+  organizationDeletedEmail,
   verificationEmail,
 } from './emailTemplates'
 
@@ -46,6 +47,19 @@ describe('email templates', () => {
       expect(text).toContain('old@example.test')
       // Not the sign-up template: nothing about signing in with a password.
       expect(`${subject} ${text}`).not.toMatch(/password|mot de passe/i)
+    }
+  })
+
+  it('escape the organisation and its deleter in the deletion notice', () => {
+    for (const locale of ['en', 'fr'] as const) {
+      const { html, text } = organizationDeletedEmail({
+        locale,
+        orgName: '"><img src=x>',
+        deletedBy: '<a href="https://evil.test">Owner</a>',
+      })
+      expect(html).not.toContain('"><img')
+      expect(html).not.toContain('<a href="https://evil.test"')
+      expect(text).toContain('"><img src=x>')
     }
   })
 

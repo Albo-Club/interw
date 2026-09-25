@@ -686,6 +686,8 @@ verification is in `TESTING.md`.
   the database.
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
+- Organization deletion runs the same session core (`purge.ts`), never a
+  parallel path.
 - `purgeLog` stores a hash of the candidate's address, never the address.
 - A tool or component that receives candidate data must be reachable by
   erasure: record the link in the transaction that hands the data over

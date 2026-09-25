@@ -8,9 +8,9 @@ import { Label } from '~/components/ui/label'
 import { Skeleton } from '~/components/ui/skeleton'
 
 /**
- * The organisation's members, to tick onto a role's team. The creator is
- * always on it — the server never stores them — so their row is shown ticked
- * and locked rather than hidden, which would leave "am I on it?" unanswered.
+ * The organisation's members, to tick onto a role's team. The creator's seat
+ * cannot be unticked (`setTeam` keeps it), so their row is shown ticked and
+ * locked rather than hidden, which would leave "am I on it?" unanswered.
  */
 export function TeamPicker({
   orgId,

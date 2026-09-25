@@ -169,6 +169,14 @@ async function seed(t: TestConvex): Promise<Seed> {
       sessionCount: 1,
       completedSessionCount: 1,
     })
+    // The creator's seat on the team, as `projects.create` writes it.
+    await ctx.db.insert('projectShares', {
+      orgId,
+      projectId,
+      userId,
+      grantedBy: userId,
+      grantedAt: 0,
+    })
     await ctx.db.insert('criteria', {
       orgId,
       projectId,

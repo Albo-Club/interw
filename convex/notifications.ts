@@ -5,7 +5,6 @@ import { RESEND_FROM, resend } from './email'
 import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
 import { seesEverything } from './lib/projectAccess'
-import type { Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL!
 
@@ -91,21 +90,19 @@ export const sendReportReady = internalMutation({
     if (!project || !report) return false
     const org = await ctx.db.get('organizations', session.orgId)
 
-    // The role's team and nobody else: its creator plus the colleagues they
-    // chose. Admins and owners see every role but are only mailed about the
-    // ones they follow — an org of 40 used to get 40 emails per candidate.
-    const team = new Set<Id<'users'>>([project.createdBy])
-    const shares = await ctx.db
+    // The role's team and nobody else: its seats, the creator's included.
+    // Admins and owners see every role but are only mailed about the ones
+    // they follow — an org of 40 used to get 40 emails per candidate.
+    const team = await ctx.db
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
-    for (const row of shares) team.add(row.userId)
 
-    // Membership is checked here, at send time: `createdBy` and a team row are
-    // attributions inside the org, never a grant that outlives removal.
+    // Membership is checked here, at send time: a team row is an attribution
+    // inside the org, never a grant that outlives removal.
     let audience = (
       await Promise.all(
-        [...team].map((userId) =>
+        team.map(({ userId }) =>
           ctx.db
             .query('organizationMembers')
             .withIndex('by_org_and_user', (q) =>
@@ -115,8 +112,8 @@ export const sendReportReady = internalMutation({
         ),
       )
     ).filter((member) => member !== null)
-    // A creator who left alone on their role would leave its reports landing
-    // with nobody told. The admins, who can already see it, inherit it.
+    // A team whose members all left would leave its reports landing with
+    // nobody told. The admins, who can already see the role, inherit it.
     if (audience.length === 0) {
       audience = (
         await ctx.db

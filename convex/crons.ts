@@ -43,6 +43,17 @@ crons.interval(
   {},
 )
 
+/**
+ * One-off: gives the roles from before creator seats were stored their
+ * creator's `projectShares` row (convex/migrations.ts). Same removal rule.
+ */
+crons.interval(
+  'store the creator seat of existing roles',
+  { hours: 1 },
+  internal.migrations.backfillCreatorSeats,
+  {},
+)
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /**

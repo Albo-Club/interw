@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "role-access-tightened": {
+      "title": "Nous avons resserré qui garde l’accès à un poste",
+      "body": "Quitter l’équipe d’un poste, ou votre organisation, met désormais fin à tout ce qui venait avec cette place dans l’équipe. Une personne qui revient ne voit aucun poste tant qu’elle n’a pas été rajoutée à son équipe. Les nouveaux postes reçoivent aussi une courte terminaison aléatoire dans leur lien."
+    },
     "candidate-emails-job-title": {
       "title": "Les e-mails aux candidats ne nomment le poste que par son intitulé",
       "body": "L’invitation et la confirmation que reçoit un candidat ne désignent plus le poste que par l’intitulé affiché au candidat. Un poste sans intitulé est présenté comme un entretien avec votre organisation, jamais sous le nom que votre équipe lui donne. Nous avons aussi renforcé le suivi des fichiers envoyés, pour que supprimer un candidat, une question ou un poste supprime chacun des fichiers qui lui appartiennent, et renforcé la protection du lien d’entretien du candidat."

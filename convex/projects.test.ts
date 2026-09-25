@@ -85,13 +85,15 @@ async function seed(t: TestConvex) {
       sessionCount: 0,
       completedSessionCount: 0,
     })
-    await ctx.db.insert('projectShares', {
-      orgId,
-      projectId,
-      userId: users.teammate,
-      grantedBy: users.creator,
-      grantedAt: 0,
-    })
+    for (const userId of [users.creator, users.teammate]) {
+      await ctx.db.insert('projectShares', {
+        orgId,
+        projectId,
+        userId,
+        grantedBy: users.creator,
+        grantedAt: 0,
+      })
+    }
     const questionId = await ctx.db.insert('questions', {
       orgId,
       projectId,

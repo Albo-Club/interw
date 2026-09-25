@@ -115,10 +115,14 @@ export const getBySlug = query({
   args: { orgId: v.id('organizations'), slug: v.string() },
   handler: async (ctx, { orgId, slug }) => {
     const { user, member } = await requireOrgMember(ctx, orgId)
+    // `.first()`, not `.unique()` (Back M4): Convex has no unique constraint,
+    // and a duplicate slug written before `create` asked the index made
+    // `.unique()` throw — on the page of both roles, for good. A degraded page
+    // (the older role) beats an error on both.
     const project = await ctx.db
       .query('projects')
       .withIndex('by_org_and_slug', (q) => q.eq('orgId', orgId).eq('slug', slug))
-      .unique()
+      .first()
     if (!project) throw new ConvexError('not_found')
     const visible = await filterVisibleProjects(
       ctx,
@@ -182,11 +186,16 @@ export const create = mutation({
     const { user } = await requireOrgMember(ctx, orgId)
     const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
 
-    const existing = await ctx.db
-      .query('projects')
-      .withIndex('by_org', (q) => q.eq('orgId', orgId))
-      .take(LIST_CAP)
-    const slug = uniqueSlug(cleanTitle, new Set(existing.map((p) => p.slug)))
+    const slug = await uniqueSlug(
+      cleanTitle,
+      async (candidate) =>
+        (await ctx.db
+          .query('projects')
+          .withIndex('by_org_and_slug', (q) =>
+            q.eq('orgId', orgId).eq('slug', candidate),
+          )
+          .first()) !== null,
+    )
 
     const projectId = await ctx.db.insert('projects', {
       orgId,

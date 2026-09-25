@@ -219,7 +219,9 @@ export default defineSchema({
   })
     .index('by_betterAuthId', ['betterAuthId'])
     .index('by_email', ['email'])
-    .index('by_avatarStorageId', ['avatarStorageId']),
+    .index('by_avatarStorageId', ['avatarStorageId'])
+    // "Is anyone else a super-admin?" without reading every user (Back F8).
+    .index('by_superAdmin', ['superAdmin']),
 
   // Frequently-written per-user state, isolated from `users` on purpose:
   // every query reads the caller's `users` row (requireAppUser), so writes
@@ -306,6 +308,8 @@ export default defineSchema({
   })
     .index('by_org', ['orgId'])
     .index('by_org_and_status', ['orgId', 'status'])
+    // Read by the expiry cron (B6): the roles whose deadline has passed.
+    .index('by_expires_at', ['expiresAt'])
     // Slugs are unique per organisation, not globally: two customers may both
     // be hiring a "senior-backend-engineer".
     .index('by_org_and_slug', ['orgId', 'slug']),
@@ -399,6 +403,8 @@ export default defineSchema({
   })
     .index('by_token', ['accessToken'])
     .index('by_project', ['projectId'])
+    // The expiry cron (B6) reads a role's still-open sessions, not all of them.
+    .index('by_project_and_status', ['projectId', 'status'])
     .index('by_project_and_email', ['projectId', 'candidateEmail'])
     // Deployment-wide, for the super-admin health screen: "which interviews
     // finished and never produced a report?" is not a per-organisation
@@ -406,6 +412,9 @@ export default defineSchema({
     .index('by_status_and_completed', ['status', 'completedAt'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
+    // The dashboard's "invited in the last 30 days" (Back M3), read as a range
+    // that stops at the window's edge.
+    .index('by_org_and_invited', ['orgId', 'invitedAt'])
     // `mediaPurgedAt` leads so the range can exclude sessions already purged
     // without a JS filter. Filtering them afterwards would let them pile up in
     // the range and saturate the batch all over again — the shape of the bug

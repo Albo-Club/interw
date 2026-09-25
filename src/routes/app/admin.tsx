@@ -7,6 +7,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ConvexError } from 'convex/values'
+import { usePaginatedQuery } from 'convex/react'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 
 import { api } from '../../../convex/_generated/api'
@@ -20,6 +21,8 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
+
+const PAGE_SIZE = 25
 
 export const Route = createFileRoute('/app/admin')({
   component: AdminPage,
@@ -36,22 +39,19 @@ function AdminPage() {
   const navigate = useNavigate()
   const { t } = useTranslation('nav')
   const me = useConvexQuery(api.users.me)
-  const overview = useConvexQuery(
-    api.admin.overview,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
-  const orgs = useConvexQuery(
-    api.admin.listOrgs,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
-  const users = useConvexQuery(
-    api.admin.listUsers,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
+  const allowed = me?.kind === 'ready' && me.user.superAdmin
+  const overview = useConvexQuery(api.admin.overview, allowed ? {} : 'skip')
+  // Paginated (Back F8): both lists used to read their whole table.
+  const orgs = usePaginatedQuery(api.admin.listOrgs, allowed ? {} : 'skip', {
+    initialNumItems: PAGE_SIZE,
+  })
+  const users = usePaginatedQuery(api.admin.listUsers, allowed ? {} : 'skip', {
+    initialNumItems: PAGE_SIZE,
+  })
   const setSuperAdmin = useConvexMutation(api.admin.setSuperAdmin)
   const health = useConvexQuery(
     api.admin.pipelineHealth,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
+    allowed ? {} : 'skip',
   )
   const relaunch = useConvexMutation(api.admin.relaunchSession)
 
@@ -115,14 +115,14 @@ function AdminPage() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label={t('admin.stats.users')} value={overview?.userCount} />
+        <Stat label={t('admin.stats.users')} value={overview?.users} />
         <Stat
           label={t('admin.stats.organizations')}
-          value={overview?.orgCount}
+          value={overview?.orgs}
         />
         <Stat
           label={t('admin.stats.memberships')}
-          value={overview?.memberCount}
+          value={overview?.members}
         />
         <Stat
           label={t('admin.stats.pendingInvites')}
@@ -238,15 +238,15 @@ function AdminPage() {
           <CardDescription>{t('admin.orgs.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {!orgs ? (
+          {orgs.status === 'LoadingFirstPage' ? (
             <p className="text-muted-foreground text-sm">{t('loading')}</p>
-          ) : orgs.length === 0 ? (
+          ) : orgs.results.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t('admin.orgs.empty')}
             </p>
           ) : (
             <ul className="divide-border divide-y text-sm">
-              {orgs.map((o) => (
+              {orgs.results.map((o) => (
                 <li
                   key={o._id}
                   className="flex items-center justify-between py-3"
@@ -265,6 +265,10 @@ function AdminPage() {
               ))}
             </ul>
           )}
+          <LoadMore
+            status={orgs.status}
+            onLoad={() => orgs.loadMore(PAGE_SIZE)}
+          />
         </CardContent>
       </Card>
 
@@ -274,15 +278,15 @@ function AdminPage() {
           <CardDescription>{t('admin.users.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {!users ? (
+          {users.status === 'LoadingFirstPage' ? (
             <p className="text-muted-foreground text-sm">{t('loading')}</p>
-          ) : users.length === 0 ? (
+          ) : users.results.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t('admin.users.empty')}
             </p>
           ) : (
             <ul className="divide-border divide-y text-sm">
-              {users.map((u) => {
+              {users.results.map((u) => {
                 const isSelf = u._id === me.user._id
                 return (
                   <li
@@ -317,19 +321,46 @@ function AdminPage() {
               })}
             </ul>
           )}
+          <LoadMore
+            status={users.status}
+            onLoad={() => users.loadMore(PAGE_SIZE)}
+          />
         </CardContent>
       </Card>
     </main>
   )
 }
 
-function Stat({ label, value }: { label: string; value: number | undefined }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string
+  value: { count: number; capped: boolean } | undefined
+}) {
+  const { t } = useTranslation('nav')
   return (
     <Card>
       <CardContent className="py-4">
         <p className="text-muted-foreground text-xs">{label}</p>
-        <p className="text-2xl font-semibold tabular-nums">{value ?? '—'}</p>
+        <p className="text-2xl font-semibold tabular-nums">
+          {!value
+            ? '—'
+            : value.capped
+              ? t('admin.stats.atLeast', { value: value.count })
+              : value.count}
+        </p>
       </CardContent>
     </Card>
+  )
+}
+
+function LoadMore({ status, onLoad }: { status: string; onLoad: () => void }) {
+  const { t } = useTranslation('nav')
+  if (status !== 'CanLoadMore') return null
+  return (
+    <Button variant="outline" size="sm" className="mt-3" onClick={onLoad}>
+      {t('admin.loadMore')}
+    </Button>
   )
 }

@@ -845,7 +845,7 @@ describe('the super-admin boundary', () => {
 
   it('lets the super-admin have it', async () => {
     const overview = await as(t, 'superAdmin').query(api.admin.overview, {})
-    expect(overview.orgCount).toBe(2)
+    expect(overview.orgs).toEqual({ count: 2, capped: false })
   })
 
   /**

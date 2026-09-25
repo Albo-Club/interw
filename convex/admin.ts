@@ -1,4 +1,5 @@
 import { ConvexError, v } from 'convex/values'
+import { paginationOptsValidator } from 'convex/server'
 import { internalMutation, mutation, query } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { requireSuperAdmin } from './lib/auth'
@@ -87,69 +88,96 @@ export const purgeExcept = internalMutation({
   },
 })
 
+/**
+ * Rows one deployment-wide figure may read (Back F8). There is no count
+ * operator, and these used to be four whole-table `.collect()` calls — the
+ * screen would have stopped loading well before the product got big. A figure
+ * that hits the bound is reported as capped: "1000+" is a true statement.
+ */
+const OVERVIEW_CAP = 1000
+
 export const overview = query({
   args: {},
   handler: async (ctx) => {
     await requireSuperAdmin(ctx)
     const [users, orgs, members, invitations] = await Promise.all([
-      ctx.db.query('users').collect(),
-      ctx.db.query('organizations').collect(),
-      ctx.db.query('organizationMembers').collect(),
-      ctx.db.query('invitations').collect(),
+      ctx.db.query('users').take(OVERVIEW_CAP),
+      ctx.db.query('organizations').take(OVERVIEW_CAP),
+      ctx.db.query('organizationMembers').take(OVERVIEW_CAP),
+      ctx.db.query('invitations').take(OVERVIEW_CAP),
     ])
+    const counted = (rows: Array<unknown>, count = rows.length) => ({
+      count,
+      capped: rows.length === OVERVIEW_CAP,
+    })
     return {
-      userCount: users.length,
-      orgCount: orgs.length,
-      memberCount: members.length,
-      pendingInvitations: invitations.filter((i) => !i.acceptedAt).length,
+      users: counted(users),
+      orgs: counted(orgs),
+      members: counted(members),
+      pendingInvitations: counted(
+        invitations,
+        invitations.filter((i) => !i.acceptedAt).length,
+      ),
     }
   },
 })
 
 export const listOrgs = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireSuperAdmin(ctx)
-    const orgs = await ctx.db.query('organizations').collect()
-    return await Promise.all(
-      orgs.map(async (org) => {
-        const members = await ctx.db
-          .query('organizationMembers')
-          .withIndex('by_org', (q) => q.eq('orgId', org._id))
-          .collect()
-        return {
-          _id: org._id,
-          slug: org.slug,
-          name: org.name,
-          memberCount: members.length,
-          createdAt: org.createdAt,
-        }
-      }),
-    )
+    const page = await ctx.db
+      .query('organizations')
+      .order('desc')
+      .paginate(paginationOpts)
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (org) => {
+          const members = await ctx.db
+            .query('organizationMembers')
+            .withIndex('by_org', (q) => q.eq('orgId', org._id))
+            .collect()
+          return {
+            _id: org._id,
+            slug: org.slug,
+            name: org.name,
+            memberCount: members.length,
+            createdAt: org.createdAt,
+          }
+        }),
+      ),
+    }
   },
 })
 
 export const listUsers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireSuperAdmin(ctx)
-    const users = await ctx.db.query('users').collect()
-    return await Promise.all(
-      users.map(async (u) => {
-        const memberships = await ctx.db
-          .query('organizationMembers')
-          .withIndex('by_user', (q) => q.eq('userId', u._id))
-          .collect()
-        return {
-          _id: u._id,
-          email: u.email,
-          name: u.name ?? null,
-          superAdmin: u.superAdmin,
-          orgCount: memberships.length,
-          createdAt: u.createdAt,
-        }
-      }),
-    )
+    const page = await ctx.db
+      .query('users')
+      .order('desc')
+      .paginate(paginationOpts)
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (u) => {
+          const memberships = await ctx.db
+            .query('organizationMembers')
+            .withIndex('by_user', (q) => q.eq('userId', u._id))
+            .collect()
+          return {
+            _id: u._id,
+            email: u.email,
+            name: u.name ?? null,
+            superAdmin: u.superAdmin,
+            orgCount: memberships.length,
+            createdAt: u.createdAt,
+          }
+        }),
+      ),
+    }
   },
 })
 
@@ -158,9 +186,14 @@ export const setSuperAdmin = mutation({
   handler: async (ctx, { userId, value }) => {
     const me = await requireSuperAdmin(ctx)
     if (userId === me._id && !value) {
-      const all = await ctx.db.query('users').collect()
-      const remaining = all.filter((u) => u.superAdmin && u._id !== me._id)
-      if (remaining.length === 0) throw new ConvexError('last_super_admin')
+      // Two rows answer "is anyone else a super-admin?" — the caller is one.
+      const admins = await ctx.db
+        .query('users')
+        .withIndex('by_superAdmin', (q) => q.eq('superAdmin', true))
+        .take(2)
+      if (admins.every((u) => u._id === me._id)) {
+        throw new ConvexError('last_super_admin')
+      }
     }
     const target = await ctx.db.get("users", userId)
     if (!target) throw new ConvexError('not_found')

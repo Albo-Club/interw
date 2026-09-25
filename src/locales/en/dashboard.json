@@ -41,6 +41,7 @@
     "invitedHint": "Last {{count}} days",
     "completed": "Completed",
     "completionRate": "{{percent}}% completion",
+    "atLeast": "{{value}}+",
     "inFlight": "In flight",
     "inFlightHint": "{{pending}} not started · {{inProgress}} in progress",
     "recent": "Recently completed",

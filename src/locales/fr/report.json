@@ -81,6 +81,10 @@
     "title": "Pas encore commencé",
     "body": "{{name}} a été invité mais n'a encore rien enregistré."
   },
+  "expired": {
+    "title": "Délai de l'entretien écoulé",
+    "body": "La date limite du poste est passée avant que {{name}} ait terminé. Pour lui envoyer un nouveau lien, repoussez la date limite puis invitez-le de nouveau."
+  },
   "inProgress": {
     "title": "En cours",
     "body": "{{name}} est en cours d'entretien — {{answered}} réponses sur {{total}} enregistrées."

@@ -157,9 +157,11 @@ export function buildCandidateColumns({
       id: 'actions',
       enableSorting: false,
       cell: ({ row }) => {
+        // An expired link is closed like the other two: resending it would
+        // mail the candidate a page that says it has expired.
         const open =
-          row.original.status !== 'completed' &&
-          row.original.status !== 'cancelled'
+          row.original.status === 'pending' ||
+          row.original.status === 'in_progress'
         return (
           <div className="flex justify-end">
             <DropdownMenu>

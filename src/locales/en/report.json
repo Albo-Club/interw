@@ -81,6 +81,10 @@
     "title": "Not started yet",
     "body": "{{name}} has been invited but has not recorded anything yet."
   },
+  "expired": {
+    "title": "Interview window closed",
+    "body": "The role's deadline passed before {{name}} finished. To send them a new link, move the deadline back and invite them again."
+  },
   "inProgress": {
     "title": "In progress",
     "body": "{{name}} is part-way through — {{answered}} of {{total}} answers recorded."

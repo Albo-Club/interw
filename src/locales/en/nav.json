@@ -74,11 +74,13 @@
     "granted": "Granted super-admin",
     "revoked": "Revoked super-admin",
     "lastSuperAdmin": "You are the last super-admin",
+    "loadMore": "Load more",
     "actionFailed": "Action failed",
     "stats": {
       "users": "Users",
       "organizations": "Organizations",
       "memberships": "Memberships",
+      "atLeast": "{{value}}+",
       "pendingInvites": "Pending invites"
     },
     "orgs": {

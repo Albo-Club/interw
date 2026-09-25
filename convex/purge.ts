@@ -307,8 +307,3 @@ export const sessionsDueForPurge = internalQuery({
     return due.map((session) => session._id)
   },
 })
-
-export function assertSessionId(value: string): Id<'sessions'> {
-  if (!value) throw new ConvexError('not_found')
-  return value as Id<'sessions'>
-}

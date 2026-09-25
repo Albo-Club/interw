@@ -296,6 +296,13 @@ function CandidateReportPage() {
             })}
           </AlertDescription>
         </Alert>
+      ) : session.status === 'expired' ? (
+        <Alert>
+          <AlertTitle>{t('report:expired.title')}</AlertTitle>
+          <AlertDescription>
+            {t('report:expired.body', { name: session.candidateName })}
+          </AlertDescription>
+        </Alert>
       ) : (
         <Alert>
           <AlertTitle>{t('report:notStarted.title')}</AlertTitle>

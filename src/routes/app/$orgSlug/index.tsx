@@ -56,6 +56,9 @@ function OrgDashboard() {
   const totalDecisions = data
     ? Object.values(data.decisions).reduce((sum, value) => sum + value, 0)
     : 0
+  // A figure whose scan hit its bound is a floor, and reads as one (M3).
+  const figure = (value: number, capped: boolean) =>
+    capped ? t('dashboard:interw.atLeast', { value }) : String(value)
 
   return (
     <main className="flex-1 space-y-6 p-6">
@@ -95,13 +98,13 @@ function OrgDashboard() {
                 a recruiter needs to open the app today. */}
             <KpiCard
               label={t('dashboard:interw.awaitingReview')}
-              value={String(data.awaitingReview)}
+              value={figure(data.awaitingReview, data.capped.completed)}
               icon={ClipboardCheck}
               hint={t('dashboard:interw.awaitingReviewHint')}
             />
             <KpiCard
               label={t('dashboard:interw.activeRoles')}
-              value={String(data.activeRoles)}
+              value={figure(data.activeRoles, data.capped.roles)}
               icon={Briefcase}
               hint={t('dashboard:interw.draftRoles', {
                 count: data.draftRoles,
@@ -109,7 +112,7 @@ function OrgDashboard() {
             />
             <KpiCard
               label={t('dashboard:interw.invited')}
-              value={String(data.invitedInWindow)}
+              value={figure(data.invitedInWindow, data.capped.invited)}
               icon={Send}
               hint={t('dashboard:interw.invitedHint', {
                 count: data.windowDays,
@@ -117,7 +120,7 @@ function OrgDashboard() {
             />
             <KpiCard
               label={t('dashboard:interw.completed')}
-              value={String(data.completedInWindow)}
+              value={figure(data.completedInWindow, data.capped.invited)}
               icon={Users}
               hint={t('dashboard:interw.completionRate', {
                 percent: completionRate,
@@ -166,16 +169,7 @@ function OrgDashboard() {
                           {entry.score !== null && (
                             <ScoreBadge score={entry.score} />
                           )}
-                          <DecisionBadge
-                            decision={
-                              entry.decision as
-                                | 'rejected'
-                                | 'maybe'
-                                | 'shortlisted'
-                                | 'hired'
-                                | null
-                            }
-                          />
+                          <DecisionBadge decision={entry.decision} />
                         </div>
                       </li>
                     ))}
@@ -206,7 +200,7 @@ function OrgDashboard() {
                       >
                         <DecisionBadge decision={key} />
                         <span className="tabular-nums">
-                          {data.decisions[key]}
+                          {figure(data.decisions[key], data.capped.completed)}
                         </span>
                       </li>
                     ))}

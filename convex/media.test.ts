@@ -257,7 +257,7 @@ describe('the intro is a video or nothing', () => {
         token: w.token,
         now: Date.now(),
       })
-      expect(view.project.introMode).toBe('none')
+      expect(view.project.hasIntro).toBe(false)
     }
   })
 
@@ -281,6 +281,18 @@ describe('the intro is a video or nothing', () => {
         now: Date.now(),
       }),
     ).rejects.toThrow('consent_required')
+  })
+
+  it('does not play the intro again once the interview has started', async () => {
+    await t.run(async (ctx) => {
+      const [session] = await ctx.db.query('sessions').collect()
+      await ctx.db.patch('sessions', session._id, { status: 'in_progress' })
+    })
+    const intro = await t.query(internal.interview.resolveIntroMedia, {
+      token: w.token,
+      now: Date.now(),
+    })
+    expect(intro).toBeNull()
   })
 })
 

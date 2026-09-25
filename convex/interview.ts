@@ -249,14 +249,19 @@ export const start = mutation({
  * The recruiter's intro video, played on the welcome screen — before consent,
  * which covers recording the candidate: this is the recruiter's own recording,
  * and nothing of the candidate's is involved. The gate still applies, so a
- * closed or expired interview signs nothing.
+ * closed or expired interview signs nothing. A first visit only: a candidate
+ * whose interview has started has been past the welcome screen, and saw it.
  */
 export const resolveIntroMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
-    const { project } = await requireOpenSession(ctx, token, effectiveNow(now), {
-      consent: false,
-    })
+    const { session, project } = await requireOpenSession(
+      ctx,
+      token,
+      effectiveNow(now),
+      { consent: false },
+    )
+    if (session.status === 'in_progress') return null
     // A video kept while the intro is switched off is not the candidate's to
     // see.
     return effectiveIntroMode(project) === 'video'

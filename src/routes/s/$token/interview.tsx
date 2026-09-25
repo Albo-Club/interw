@@ -559,9 +559,7 @@ function InterviewRunner() {
   // The question has the stage until the candidate starts answering; from
   // then on it is their camera, with the question kept as a caption.
   const asking = state.phase === 'prompt'
-  const promptUrl = current.hasMedia
-    ? media[current.questionId]
-    : undefined
+  const promptUrl = media[current.questionId]
   const questionMedia = promptUrl
     ? { src: promptUrl, kind: current.mediaKind ?? 'video' }
     : null

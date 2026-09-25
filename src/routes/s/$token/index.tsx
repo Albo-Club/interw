@@ -21,7 +21,6 @@ import { CandidateNotice } from '~/components/candidate/CandidateNotice'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { DocumentUploadField } from '~/components/candidate/DocumentUploadField'
 import { QuestionVideo } from '~/components/candidate/QuestionPrompt'
-import { Stage } from '~/components/candidate/Stage'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { candidateHead } from '~/components/candidate/screenHead'
 
@@ -63,13 +62,10 @@ function CandidateWelcome() {
     return state === 'ready' || state === 'resumable' ? null : state
   }, [data])
 
-  // The recruiter's intro opens the page on a first visit: a face before the
-  // form. A candidate coming back to finish has seen it. Signed once; if it
-  // cannot be, the page simply goes without.
-  const wantsIntro =
-    data?.gate.state === 'ready' &&
-    data.project.introMode === 'video' &&
-    data.project.hasIntroMedia
+  // The recruiter's intro opens the page: a face before the form. The server
+  // decides whether this visit gets it (not a candidate coming back to
+  // finish). Signed once; if it cannot be, the page simply goes without.
+  const wantsIntro = blocked === null && data?.project.hasIntro === true
   const [introUrl, setIntroUrl] = useState<string | null>(null)
   useEffect(() => {
     if (!wantsIntro) return
@@ -147,17 +143,12 @@ function CandidateWelcome() {
     >
       <div className="space-y-10">
         {introUrl && (
-          <div className="flex aspect-video flex-col">
-            <Stage
-              prompt={
-                <QuestionVideo
-                  src={introUrl}
-                  label={t('interview:welcome.intro', {
-                    org: data.organisationName,
-                  })}
-                />
-              }
-              self={null}
+          <div className="bg-stage text-stage-foreground aspect-video overflow-hidden rounded-xl">
+            <QuestionVideo
+              src={introUrl}
+              label={t('interview:welcome.intro', {
+                org: data.organisationName,
+              })}
             />
           </div>
         )}

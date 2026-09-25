@@ -22,7 +22,6 @@ import { v } from 'convex/values'
 
 import {
   candidateFieldsValidator,
-  introModeValidator,
   languageValidator,
   mediaKindValidator,
   sessionStatusValidator,
@@ -46,8 +45,7 @@ export const candidateProjectReturns = v.object({
   jobTitle: v.union(v.string(), v.null()),
   language: languageValidator,
   personaName: v.union(v.string(), v.null()),
-  introMode: introModeValidator,
-  hasIntroMedia: v.boolean(),
+  hasIntro: v.boolean(),
   maxInterviewMinutes: v.number(),
   candidateFields: candidateFieldsValidator,
   questionCount: v.number(),

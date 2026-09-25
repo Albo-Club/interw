@@ -81,7 +81,11 @@ const PLAYBACK_LABELS = {
   ended: 'run.prompt.replay',
 } as const
 
-/** A recorded question or intro, filling the stage. */
+/**
+ * A recorded question, or the intro on the welcome screen. There no button
+ * has been pressed yet, so browsers usually refuse to start it with sound and
+ * the play button is how it starts — the same fallback as a refused question.
+ */
 export function QuestionVideo({ src, label }: { src: string; label: string }) {
   const { t } = useTranslation('interview')
   const video = useRef<HTMLVideoElement>(null)

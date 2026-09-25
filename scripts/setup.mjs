@@ -360,7 +360,7 @@ ${C.green}${C.bold}✓ Setup complete!${C.reset}
     ${C.cyan}pnpm dev${C.reset}    ${C.dim}# starts Vite + convex dev concurrently${C.reset}
 
   Then open ${C.bold}http://localhost:3000${C.reset} and create your first account.
-  ${C.dim}The first user across the deployment becomes superAdmin automatically.${C.reset}
+  ${C.dim}To be super-admin, first run: pnpm exec convex env set SUPER_ADMIN_EMAIL you@example.com${C.reset}
 `)
 }
 

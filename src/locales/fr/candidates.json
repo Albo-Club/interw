@@ -51,8 +51,7 @@
     "set": "Votre décision",
     "saved": "Décision enregistrée",
     "history": "Historique",
-    "cleared": "Décision retirée",
-    "formerMember": "Un ancien membre"
+    "cleared": "Décision retirée"
   },
   "invite": {
     "title": "Inviter des candidats",

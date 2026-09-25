@@ -199,7 +199,7 @@ describe('creating an invitation', () => {
       orgId: w.acmeOrgId,
     })
     expect(pending.deliveryStatus).toBe('sent')
-    expect(pending.invitedByName).toBe('Olivia Owner')
+    expect(pending.invitedBy).toEqual({ name: 'Olivia Owner', removed: false })
 
     // Resend's webhook, as the component delivers it.
     const now = new Date().toISOString()
@@ -226,6 +226,39 @@ describe('creating an invitation', () => {
       orgId: w.acmeOrgId,
     })
     expect(after.deliveryStatus).toBe('bounced')
+  })
+
+  it('still credits an inviter removed from the organisation since', async () => {
+    await t.run(async (ctx) => {
+      const member = await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_member'))
+        .unique()
+      await ctx.db.insert('invitations', {
+        orgId: w.acmeOrgId,
+        email: 'newcomer@example.test',
+        role: 'member',
+        token: 'invite-from-a-former-member',
+        invitedBy: member!._id,
+        expiresAt: Date.now() + 60_000,
+      })
+      const membership = await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', w.acmeOrgId).eq('userId', member!._id),
+        )
+        .unique()
+      await ctx.db.delete('organizationMembers', membership!._id)
+    })
+
+    const [pending] = await as(t, 'owner').query(api.invitations.listForOrg, {
+      orgId: w.acmeOrgId,
+    })
+    // The address stands in for a name, exactly as it did before removal.
+    expect(pending.invitedBy).toEqual({
+      name: 'member@example.test',
+      removed: true,
+    })
   })
 })
 
@@ -410,6 +443,26 @@ describe('accepting by token', () => {
       token: inv!.token,
     })
     expect(again).toMatchObject({ orgSlug: 'acme', joined: false })
+  })
+
+  it("never lets a member consume someone else's invitation", async () => {
+    const invitationId = await as(t, 'owner').mutation(
+      api.invitations.create,
+      { orgId: w.acmeOrgId, email: 'newcomer@example.test', role: 'member' },
+    )
+    const inv = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    // A member holding the link lands in the org, as for their own link...
+    const member = await as(t, 'member').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(member).toMatchObject({ orgSlug: 'acme', joined: false })
+    // ...but the invitation stays the invitee's.
+    const after = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    expect(after?.acceptedAt).toBeUndefined()
+    const invitee = await as(t, 'newcomer').mutation(api.invitations.accept, {
+      token: inv!.token,
+    })
+    expect(invitee).toMatchObject({ orgSlug: 'acme', joined: true })
   })
 })
 

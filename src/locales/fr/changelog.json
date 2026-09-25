@@ -9,6 +9,18 @@
       "title": "Extraits marquants sur les rapports partagés, plus d'invitations mortes",
       "body": "Un rapport partagé liste désormais les moments à regarder, comme le rapport dans l'application. Une invitation qui a rebondi est signalée sur son candidat, quel que soit le nombre d'e-mails envoyés depuis par l'organisation. Un poste archivé ou dont la date limite est passée n'envoie plus d'invitations ni de relances qui ouvriraient sur un entretien fermé, et quand le créateur d'un poste part sans personne d'autre dans son équipe, les admins sont prévenus quand un rapport est prêt."
     },
+    "assistant-history-purged": {
+      "title": "Anciennes conversations avec l’assistant supprimées",
+      "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
+    },
+    "auth-hardening-sep-25": {
+      "title": "Connexion renforcée",
+      "body": "Nous avons renforcé la connexion et les invitations d’équipe contre les usages abusifs, et réservé l’accès administrateur à l’adresse de l’opérateur. Valider un lien de vérification d’e-mail ne demande plus que le mot de passe que vous avez choisi, pour ne jamais le perdre en chemin."
+    },
+    "removed-members-credit": {
+      "title": "Les membres retirés gardent leur crédit",
+      "body": "Quand vous retirez quelqu'un de votre organisation, les décisions qu'il a prises, ses entrées dans l'historique des décisions d'un candidat, les invitations qu'il a envoyées et les postes qu'il a créés affichent toujours son nom, grisé et marqué « (retiré) », au lieu de disparaître. Un membre dont le compte a été supprimé apparaît comme « Ancien membre ». Le dernier super-administrateur de la plateforme ne peut plus supprimer son compte par erreur."
+    },
     "calmer-interface": {
       "title": "Une interface plus calme et plus cohérente",
       "body": "Interw utilise désormais sa propre police partout, respecte le réglage « réduire les animations » de votre système et montre la forme de la page pendant le chargement plutôt qu'une ligne de texte. La recherche de candidats (⌘K) s'ouvre en une liste parcourable aux flèches, et elle est accessible depuis un téléphone. Les dates suivent la langue de l'application, la liste des postes signale ceux dont vous êtes dans l'équipe, et l'import d'une offre ajoute tout ou rien."

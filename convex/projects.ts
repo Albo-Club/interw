@@ -10,6 +10,7 @@ import {
 } from './schema'
 import { requireOrgMember, requireOrgRole } from './lib/auth'
 import { effectiveIntroMode } from './lib/candidateView'
+import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
   requireProjectEditable,
@@ -469,6 +470,7 @@ export const team = query({
       .collect()
     return {
       createdBy: project.createdBy,
+      creator: await memberName(ctx, project.orgId, project.createdBy),
       members: rows.map((row) => row.userId),
     }
   },

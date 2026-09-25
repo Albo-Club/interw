@@ -261,7 +261,7 @@ describe('decision history', () => {
       sessionId: s.sessionId,
     })
     expect(
-      view.decisionHistory.map((event) => [event.decision, event.by?.name]),
+      view.decisionHistory.map((event) => [event.decision, event.by.name]),
     ).toEqual([
       [null, 'creator'],
       ['rejected', 'teammate'],

@@ -51,8 +51,7 @@
     "set": "Your decision",
     "saved": "Decision saved",
     "history": "History",
-    "cleared": "Decision cleared",
-    "formerMember": "A former member"
+    "cleared": "Decision cleared"
   },
   "invite": {
     "title": "Invite candidates",

@@ -56,7 +56,8 @@ undone later.
 
 B2–B3, B6, B6b, B7, B8, B9, B11 and B12 also run in CI on every PR (`.github/workflows/ci.yml`,
 B6 via the `skills-verify` job, B6b via `skills-drift`). B10 runs in the `e2e`
-job, on repository secrets. CI covers B0
+job, on repository secrets — after each merge to `main` and on demand, not on
+PRs (why: comment above the job). CI covers B0
 implicitly: `pnpm/action-setup` is given no `version:`, so it installs the
 `packageManager` version and cannot drift from local.
 B4–B5 remain local: they require a provisioned Convex deployment.

@@ -24,6 +24,7 @@ import {
 } from './lib/projectAccess'
 import { isPastDeadline } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
+import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
@@ -146,7 +147,7 @@ function assertAcceptsCandidates(project: Doc<'projects'>) {
 
 function normalizeCandidate(input: { name: string; email: string }) {
   const name = input.name.trim()
-  const email = input.email.trim().toLowerCase()
+  const email = normalizeEmail(input.email)
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
   if (!EMAIL_RE.test(email)) throw new ConvexError('invalid_email')
   return { name, email }
@@ -259,7 +260,7 @@ async function sendInvitation(
   const { subject, html, text } = candidateInvitationEmail({
     locale: project.language,
     candidateName: session.candidateName,
-    jobTitle: project.jobTitle ?? project.title,
+    jobTitle: project.jobTitle ?? null,
     orgName,
     startUrl: invitationUrl(session.accessToken),
     durationMinutes: project.maxDurationMinutes,

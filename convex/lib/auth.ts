@@ -3,6 +3,7 @@ import { authComponent } from '../auth'
 import { RESEND_FROM, resend } from '../email'
 import { newUserSignupNotificationEmail } from '../emailTemplates'
 import { normalizeEmail } from './invitations'
+import { NAME_MAX, clampLine } from './names'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from '../_generated/dataModel'
 
@@ -15,6 +16,10 @@ const roleRank: Record<AppRole, number> = {
   owner: 2,
   admin: 1,
   member: 0,
+}
+
+export function roleAtLeast(role: AppRole, minRole: AppRole): boolean {
+  return roleRank[role] >= roleRank[minRole]
 }
 
 export async function safeAppUser(ctx: Ctx): Promise<Doc<'users'> | null> {
@@ -71,7 +76,7 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
   const userId = await ctx.db.insert('users', {
     betterAuthId: baUser._id,
     email: baUser.email,
-    name: baUser.name,
+    name: clampLine(baUser.name, NAME_MAX),
     avatarUrl: baUser.image ?? undefined,
     superAdmin: isOperator(baUser),
     createdAt: Date.now(),
@@ -158,7 +163,7 @@ export async function requireOrgRole(
   org: Doc<'organizations'>
 }> {
   const { user, member, org } = await requireOrgMember(ctx, orgId)
-  if (roleRank[member.role] < roleRank[minRole]) {
+  if (!roleAtLeast(member.role, minRole)) {
     throw new ConvexError('insufficient_role')
   }
   return { user, member, org }

@@ -1,9 +1,10 @@
 import { query } from './_generated/server'
 
-// Tells the frontend which social providers are wired so it can render (or
-// hide) the matching buttons. The booleans are derived from env presence —
-// not the secrets themselves — so this is safe to expose publicly. Keep in
-// sync with the `socialProviders` block in `convex/auth.ts`.
+// Keep in sync with the `socialProviders` block in `convex/auth.ts`.
+
+// access: public by design — the sign-in page asks which social providers are
+// wired before anyone is signed in. Returns booleans derived from env
+// presence, never the secrets themselves.
 export const enabledSocialProviders = query({
   args: {},
   handler: () => ({

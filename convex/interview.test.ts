@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, internal } from './_generated/api'
 import { playbackMedia, segmentKey } from './lib/objectStore'
+import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Doc, Id } from './_generated/dataModel'
 
@@ -797,5 +798,66 @@ describe('an answer abandoned on the page', () => {
       kind: 'recording_abandoned',
       detail: 'unsent',
     })
+  })
+})
+
+// Fingerprint: convex/candidate.ts:consumeWriteLimit:limiter-key-before-token-check
+// Three actions spent the limiter on the raw token before resolving it, and
+// the component keeps one row per key for good: anyone could write rows under
+// keys of their choosing. The 31st call answered `rate_limited` instead of
+// `not_found`, which also told that token apart from every other unknown one.
+describe('the candidate write limiter', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('is never reached by a token that does not resolve', async () => {
+    const t = newTest()
+    await seedStarted(t)
+    const limit = vi.spyOn(rateLimiter, 'limit')
+    const token = 'z'.repeat(43)
+    const calls = [
+      () => t.action(api.interview.promptMediaUrls, { token }),
+      () =>
+        t.action(api.candidate.requestDocumentUpload, {
+          token,
+          kind: 'cv',
+          mimeType: 'application/pdf',
+          contentLength: 1_000,
+        }),
+      () => t.action(api.candidate.deleteMyData, { token }),
+      () => t.mutation(api.candidate.acceptConsent, { token }),
+      () => t.mutation(api.interview.start, { token }),
+      () =>
+        t.mutation(api.interview.logEvent, {
+          token,
+          kind: 'recording_abandoned',
+        }),
+      () => t.mutation(api.interview.finish, { token }),
+    ]
+    for (const call of calls) {
+      // Past the bucket's capacity of 30: a limiter keyed on the argument
+      // would start answering `rate_limited` here.
+      for (let i = 0; i < 32; i++) {
+        await expect(call()).rejects.toThrow('not_found')
+      }
+    }
+    expect(limit).not.toHaveBeenCalled()
+  })
+
+  it('is keyed on the resolved session, never on the token', async () => {
+    const t = newTest()
+    const s = await seedStarted(t)
+    const limit = vi.spyOn(rateLimiter, 'limit')
+    await t.action(api.interview.promptMediaUrls, { token: s.token })
+    await t.mutation(api.interview.logEvent, {
+      token: s.token,
+      kind: 'recording_abandoned',
+    })
+    expect(limit).toHaveBeenCalledTimes(2)
+    for (const [, name, options] of limit.mock.calls) {
+      expect(name).toBe('candidateWrite')
+      expect(options).toEqual({ key: s.sessionId })
+    }
   })
 })

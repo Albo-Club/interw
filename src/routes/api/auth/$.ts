@@ -36,7 +36,12 @@ export const Route = createFileRoute('/api/auth/$')({
         } catch (err) {
           // Log fields on separate lines: Vercel's UI truncates a single
           // long line, which hid the actual cause during the first round.
-          console.error('[ts-auth-handler] url=', request.url)
+          // The path only: the query string of a sign-in, verification or
+          // reset link carries its token.
+          console.error(
+            '[ts-auth-handler] path=',
+            new URL(request.url).pathname,
+          )
           console.error('[ts-auth-handler] method=', request.method)
           console.error(
             '[ts-auth-handler] name=',

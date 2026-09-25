@@ -51,7 +51,7 @@ function newTest() {
 /**
  * Two organisations, and inside the first one every role that matters:
  *
- *   acmeOwner    owner of Acme, creator of both roles
+ *   acmeOwner    owner of Acme, creator of both roles, seated on both
  *   acmeAdmin    admin of Acme, on neither team
  *   acmeMember   plain member of Acme, on the Backend team only
  *   acmeShared   plain member of Acme, on the Chief of Staff team only
@@ -143,6 +143,8 @@ async function seed(t: ReturnType<typeof newTest>): Promise<World> {
       completedSessionCount: 0,
     })
     for (const [projectId, userId] of [
+      [backendProjectId, users.acmeOwner],
+      [chiefProjectId, users.acmeOwner],
       [backendProjectId, users.acmeMember],
       [chiefProjectId, users.acmeShared],
     ] as const) {
@@ -542,7 +544,10 @@ describe("the role's team", () => {
     const team = await as(t, 'acmeOwner').query(api.projects.team, {
       projectId: w.chiefProjectId,
     })
-    expect(team.members).toEqual([await userId(t, 'acmeShared')])
+    expect(team.members).toEqual([
+      await userId(t, 'acmeOwner'),
+      await userId(t, 'acmeShared'),
+    ])
     expect(team.creator).toEqual({
       name: 'acmeOwner@example.test',
       removed: false,
@@ -644,16 +649,19 @@ describe("the role's team", () => {
       }),
     ).rejects.toThrow('insufficient_role')
     expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
       await userId(t, 'acmeMember'),
     ])
   })
 
-  it('keeps the creator on the team without storing them', async () => {
-    await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
+  it("keeps the creator's seat through a team that leaves them out", async () => {
+    await as(t, 'acmeAdmin').mutation(api.projects.setTeam, {
       projectId: w.backendProjectId,
-      userIds: [await userId(t, 'acmeOwner')],
+      userIds: [],
     })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
     expect(await completeInterviewOn(t, w, w.backendProjectId)).toEqual([
       'acmeOwner@example.test',
     ])
@@ -674,7 +682,10 @@ describe("the role's team", () => {
       api.projects.create,
       { orgId: w.acmeOrgId, title: 'Designer', language: 'en', team: [shared] },
     )
-    expect(await teamRowsOf(t, projectId)).toEqual([shared])
+    expect(await teamRowsOf(t, projectId)).toEqual([
+      await userId(t, 'acmeMember'),
+      shared,
+    ])
     const detail = await as(t, 'acmeShared').query(api.projects.getBySlug, {
       orgId: w.acmeOrgId,
       slug,
@@ -745,7 +756,9 @@ describe('leaving revokes team places and report links', () => {
       [member]: true,
       [await userId(t, 'acmeOwner')]: false,
     })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
   })
 
   it('clears team places and revokes links when the account is deleted', async () => {
@@ -755,7 +768,9 @@ describe('leaving revokes team places and report links', () => {
       betterAuthId: 'ba_acmeMember',
     })
     expect(await linkStates()).toEqual({ [member]: true })
-    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([])
+    expect(await teamRowsOf(t, w.backendProjectId)).toEqual([
+      await userId(t, 'acmeOwner'),
+    ])
   })
 })
 

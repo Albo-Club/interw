@@ -86,6 +86,14 @@ async function seed(t: ReturnType<typeof newTest>): Promise<Fixture> {
       sessionCount: 0,
       completedSessionCount: 0,
     })
+    // The creator's seat on the team, as `projects.create` writes it.
+    await ctx.db.insert('projectShares', {
+      orgId,
+      projectId,
+      userId,
+      grantedBy: userId,
+      grantedAt: 0,
+    })
     return { orgId, projectId, userId }
   })
 }

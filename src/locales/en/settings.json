@@ -94,6 +94,8 @@
     "expiresOn": "Expires on {{date}}",
     "expiredOn": "Expired on {{date}}",
     "expired": "Expired",
+    "invalidated": "No longer valid",
+    "invalidatedHint": "Whoever sent it can no longer invite. Invite this address again to send a new one.",
     "delivery": {
       "bounced": "The email bounced. Check the address, then revoke and invite again.",
       "complained": "The recipient marked the email as spam.",

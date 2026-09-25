@@ -267,8 +267,8 @@ guessing.
 `admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
 code flow creates accounts for any address. Now a **new** row is super-admin
 only when Better Auth reports its address verified and it equals
-`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
-promoted: fail closed.
+`SUPER_ADMIN_EMAIL`, both through `normalizeEmail` (trimmed, ASCII case
+folded). Unset or empty, nobody is promoted: fail closed.
 
 - Existing rows are never touched: the flag is set on insert only. Deployments
   that already have their super-admins keep them, with or without the
@@ -297,6 +297,85 @@ was removed. Two things from that era still matter:
   (and keeps the form on screen) until the form calls `onDone`
   (`onBusyChange` in `src/components/auth/email-sign-in.tsx`). `/login` holds
   its "already signed in" redirect the same way.
+- **`/login` locks the address too when it is on the way to an invitation.**
+  `/register?redirect=/accept-invite/<token>` lands on `/login`, which reads
+  the token out of `redirect` (`invitationTokenOf`), previews the invitation
+  and fixes the field to its address — the same `lockedEmail` the accept page
+  passes. A signed-up address that differs from the invited one could only
+  end on the accept page's "wrong account" card.
+
+## An invitation lives only as long as its sender may invite
+
+A pending invitation speaks for the admin who sent it. Once that person is
+removed from the organisation, demoted below admin, or deletes their account,
+the invitation is dead: `preview` answers `not_found`, `accept` and
+`acceptById` throw `not_found` — exactly what an unknown token gets — and
+`listMine` drops it. The settings list keeps it, flagged `invalidated`
+("No longer valid"), without Resend or Copy link: a resend would mail the
+invitee a link its sender no longer stands behind. Inviting the address again
+replaces it, like an expired one.
+
+It is decided where the invitation is **used** (`invalidated` in
+`convex/invitations.ts`), not by deleting rows where memberships change. Three
+paths end or lower a membership today (`removeMember`, `updateMemberRole`,
+`cascadeDelete`) and a fourth would have to remember to clean up; a check at
+use cannot be forgotten, and it also covers invitations sent before the rule
+existed. The price: an admin demoted and later promoted again finds their
+still-unexpired invitations working again. They are once more entitled to
+send them, so that is accepted. An accepted invitation is history and is never
+re-judged.
+
+## Who can change whose role
+
+Documented as the code behaves (`convex/organizations.ts`); no product
+decision has changed it.
+
+- `updateMemberRole` and `removeMember` need **admin** or above.
+- Anything that touches an owner — changing an owner's role, making someone
+  owner, removing an owner — needs **owner**.
+- The last owner can be neither demoted nor removed, by anyone, themselves
+  included (`last_owner`).
+- Otherwise **admins are peers**: an admin can make a member admin, demote
+  another admin (or themself) to member, and remove another admin. Nothing
+  stops two admins from demoting each other; an owner is the tie-breaker.
+- Demoting or removing an admin voids the invitations they sent (above).
+
+## Addresses fold ASCII case only
+
+`normalizeEmail` (`convex/lib/invitations.ts`) is the one normalisation for
+an address this app compares or stores itself: invitations, the operator's
+`SUPER_ADMIN_EMAIL`, candidate addresses and their erasure hash. It trims and
+lowercases **ASCII letters only**. `toLowerCase()` folds all of Unicode: the
+Kelvin sign U+212A becomes `k` and a dotted capital `İ` becomes `i` plus a
+combining dot, so two different mailboxes compared equal and an invitation
+for one could be accepted by the other.
+
+- **Better Auth's own fold stays where a value must equal what Better Auth
+  keys on.** It stores `email.toLowerCase()`. The per-address quota key in
+  `convex/auth.ts`, the account-lifecycle hooks, and the client checks
+  against the signed-in address mirror that fold on purpose: an ASCII-only key
+  there would give a Unicode case variant of an address a second quota for
+  the same mailbox.
+- **The consequence.** An invitation typed with a non-ASCII capital
+  (`ÉLODIE@…`) is stored as typed, while Better Auth stores the account as
+  `élodie@…`: the two no longer match, and the invitee sees the "wrong
+  account" card. Invite the address in lower case.
+- Erasure hashes (`purgeLog`) written before this change used the Unicode
+  fold; for an address with a non-ASCII capital, asking for it now computes a
+  different hash. Pre-launch, no such row is expected.
+
+## Typed names are one line, and bounded
+
+A display name and an organisation name are typed by users and end up in
+email subjects and one-line UI. `convex/lib/names.ts` turns every run of
+control characters and line or paragraph separators into one space
+(`singleLine`) and caps the length at `NAME_MAX` (80, the forms' cap). Our
+own mutations (`users.updateProfile`, `organizations.create` /
+`updateGeneral`) refuse a name still too long (`typedName`); the Better Auth paths
+(`provisionAppUser`, `syncBetterAuthUser`) cannot refuse, so they cut it
+(`clampLine`). Email subjects clamp every user-supplied value again at render
+(`inSubject` in `convex/emailTemplates.ts`), which also covers role titles,
+candidate names and rows written before the rule.
 
 ## Google OAuth (template — opt-in)
 
@@ -1244,6 +1323,16 @@ auto-apply the UI language on device B until the user switches there too (the
 cookie is per-browser). The email locale is always correct regardless. Restore
 on login is a deliberate follow-up, not a bug.
 
+**`<Trans>` escapes its values; `t()` does not.** `interpolation.escapeValue`
+is `false` because `t()` returns text React escapes when it renders it —
+escaping there would print `&amp;`. `<Trans>` is different: it parses the
+interpolated string for tags (`<strong>`, `<0>`, `<br/>`), so a value holding
+one became markup. `react.transDefaultProps` in `src/lib/i18n.ts` sets
+`escapeValue: true` for `<Trans>` only, with `shouldUnescape` to decode each
+value once after the parse. Never pass a per-call `tOptions.interpolation` to
+`<Trans>` without keeping `escapeValue: true`, and never write an HTML entity
+into a locale string: `shouldUnescape` would decode it.
+
 **zxcvbn feedback strings** (password strength warnings) come from the zxcvbn
 English wordlist and are not translated — only our own labels around the meter
 are. Translating zxcvbn output would require loading its locale packs.
@@ -1356,7 +1445,7 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   on `blocked` for someone who became the last one meanwhile, and
   `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
 
-## A removed member keeps their credit — and their creator rights on return
+## A removed member keeps their credit, not their creator rights
 
 Removing someone from an organisation deletes their membership, their team
 rows and their report share links (`revokeMemberGrants`), never the ids that
@@ -1366,11 +1455,11 @@ ids through `memberName` (`convex/lib/memberName.ts`), which keeps the name
 and flags `removed`, and render them with `src/components/MemberName.tsx`;
 a deleted account has no name left and reads "Former member". A new screen
 that credits someone goes through the same pair rather than reading `users`
-itself. Authorisation does not read that flag: a removed creator is
-locked out by `requireOrgMember` like anyone else. If they are re-invited,
-`createdBy` still names them, so they regain creator rights on their own roles
-(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
-their work — but it is the one thing removal does not reset.
+itself. Authorisation does not read that flag, nor `createdBy` itself: the
+creator's seat on the team is a `projectShares` row (audit T17-2), deleted
+with the others, so a creator re-invited as a plain member gets `not_found` on
+their own roles until someone puts them back on the team. Credit survives
+removal; rights do not.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -2178,10 +2267,15 @@ organisation:
 
 Traps:
 
-- **The creator is never a row.** They are on the team by construction
-  (`project.createdBy`), so they cannot be unticked and the person who opened
-  the search hears about it for as long as they are a member. `setTeam` silently drops their id. Code
-  that lists "the team" must add `createdBy` to the `projectShares` rows.
+- **The creator is a row, and `createdBy` grants nothing.** `projects.create`
+  writes the creator's seat; `setTeam` never drops it, so the person who
+  opened the search cannot be unticked, but removal from the org takes it like
+  any other (T17-2 — `createdBy` used to be the seat, and survived removal).
+  Owner tier (`requireProjectOwnerOrAdmin`) is an admin/owner, or the
+  `createdBy` member *while seated*: it runs after `requireProjectAccess`, so
+  an unseated creator never reaches the comparison. Roles from before carry
+  their seat from the one-off `migrations.backfillCreatorSeats`; until it has
+  run on a deployment, plain-member creators do not see those roles.
 - **The table is still called `projectShares`.** Renaming a Convex table is a
   copy migration. The rows of the former "restricted" roles already meant
   exactly "named colleagues", and a former "open" role had none — so the
@@ -2201,6 +2295,17 @@ Traps:
   report share links they created there; `users.cascadeDelete` does the same in
   every org. A share link acts for whoever made it, so it must not outlive
   their membership (h03).
+- **Leaving one team is a smaller leaving** (`leaveTeam`, used by both
+  `setTeam` and `revokeMemberGrants`): the person's report links on that role
+  are revoked, and `purge.eraseRoleThreads` erases their assistant threads
+  that read its candidates, found through `chatThreadSessions` like erasure
+  finds them. An admin or owner still sees the role by rank and keeps both.
+  Threads that never read a candidate carry no row and stay: `listRoles`
+  output (titles and counts) is not tracked.
+- **New slugs end in six random characters** (`uniqueSlug`, T17-3). Slugs are
+  unique across the org, hidden roles included, so a counter (`-2`) told a
+  member that a hidden role of that title existed. Never derive a suffix from
+  what else is taken.
 
 ## A role's intro is a video, or nothing
 

@@ -90,6 +90,14 @@ export const seedE2eSession = internalMutation({
         sessionCount: 0,
         completedSessionCount: 0,
       })
+      // The creator's seat, as `projects.create` writes it.
+      await ctx.db.insert('projectShares', {
+        orgId,
+        projectId,
+        userId,
+        grantedBy: userId,
+        grantedAt: now,
+      })
       for (const [orderIndex, content] of [
         'Introduce yourself in one sentence.',
         'Name one thing you are proud of.',

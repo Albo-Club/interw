@@ -212,6 +212,51 @@ describe('shares.view', () => {
   })
 })
 
+describe('shared answers', () => {
+  it('carry the length the server measured', async () => {
+    const t = newTest()
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const share = await ctx.db.get('reportShares', s.shareId)
+      const report = await ctx.db.get('reports', share!.reportId)
+      const session = await ctx.db.get('sessions', report!.sessionId)
+      const questionId = await ctx.db.insert('questions', {
+        orgId: session!.orgId,
+        projectId: session!.projectId,
+        orderIndex: 0,
+        content: 'Tell me about a migration you led.',
+        maxResponseSeconds: 120,
+      })
+      await ctx.db.insert('segments', {
+        orgId: session!.orgId,
+        sessionId: session!._id,
+        questionId,
+        questionIndex: 0,
+        audioKey: 'orgs/o/sessions/s/q0.weba',
+        durationSeconds: 60,
+        measuredSeconds: 9.5,
+        uploadState: 'uploaded',
+        uploadAttempts: 1,
+        recordedAt: 0,
+      })
+    })
+
+    const result = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(result.report?.answers[0].durationSeconds).toBe(9.5)
+
+    // Never the candidate's own duration hint: unmeasured is unknown.
+    await t.run(async (ctx) => {
+      const segment = await ctx.db.query('segments').first()
+      await ctx.db.patch('segments', segment!._id, { measuredSeconds: undefined })
+    })
+    const unmeasured = await t.query(api.shares.view, {
+      token: s.token,
+      now: NOW,
+    })
+    expect(unmeasured.report?.answers[0].durationSeconds).toBeNull()
+  })
+})
+
 describe('shares.recordView', () => {
   let t: ReturnType<typeof newTest>
   let s: Seed

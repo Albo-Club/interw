@@ -108,6 +108,9 @@ function SharedReport() {
       t('report:answers.question', { index: answer.questionIndex + 1 }),
     ]),
   )
+  const answerLengths = Object.fromEntries(
+    report.answers.map((a) => [a.segmentId, a.durationSeconds]),
+  )
 
   const jump = (segmentId: string, seconds: number) => {
     setActiveSegment(segmentId)
@@ -170,6 +173,7 @@ function SharedReport() {
             activeSegmentId={activeSegment}
             onSelect={setActiveSegment}
             questionLabels={questionLabels}
+            answerLengths={answerLengths}
             onError={onPlaybackError}
           />
         )}

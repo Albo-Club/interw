@@ -130,12 +130,16 @@ export type CandidateLandingView = {
  *
  * `mediaKind` says which element plays it: an answer recorded without a
  * camera is audio, and a `<video>` over an audio file is a black box.
+ *
+ * `durationSeconds` is the length the server measured at transcription, or
+ * null: a MediaRecorder file does not know its own, so the player shows this.
  */
 export type SharedAnswerView = {
   segmentId: Doc<'segments'>['_id']
   questionIndex: number
   question: string
   mediaKind: 'audio' | 'video' | null
+  durationSeconds: number | null
 }
 
 export function toSharedAnswerView(
@@ -151,5 +155,6 @@ export function toSharedAnswerView(
       : segment.audioKey
         ? 'audio'
         : null,
+    durationSeconds: segment.measuredSeconds ?? null,
   }
 }

@@ -386,7 +386,60 @@ describe('the completion request', () => {
   })
 })
 
-describe('the transcription request', () => {
+describe('transcribe', () => {
+  /** Shape copied from Mistral's docs — refresh it from there, never from
+   *  another provider's. */
+  const mistralResponse = (overrides: Record<string, unknown> = {}) => ({
+    model: 'voxtral-mini-2602',
+    text: 'Bonjour, je suis développeuse depuis six ans.',
+    language: 'fr',
+    segments: [
+      {
+        text: ' Bonjour,',
+        start: 0.0,
+        end: 1.2,
+        speaker_id: null,
+        type: 'transcription_segment',
+      },
+      {
+        text: ' je suis développeuse depuis six ans.',
+        start: 1.2,
+        end: 4.8,
+        speaker_id: null,
+        type: 'transcription_segment',
+      },
+    ],
+    usage: {
+      prompt_audio_seconds: 5,
+      prompt_tokens: 4,
+      total_tokens: 120,
+      completion_tokens: 40,
+    },
+    ...overrides,
+  })
+
+  type FormCall = { url: string; form: FormData }
+
+  const stubTranscription = (payload: unknown) => {
+    const calls: Array<FormCall> = []
+    vi.stubGlobal('fetch', (url: string, init: RequestInit) => {
+      calls.push({ url, form: init.body as FormData })
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    })
+    return calls
+  }
+
+  const run = () =>
+    transcribe(new Blob(['audio']).stream(), {
+      fileName: 'answer.m4a',
+      contentType: 'audio/mp4',
+    })
+
   beforeEach(() => {
     vi.stubEnv('MISTRAL_API_KEY', 'test-key')
   })
@@ -396,24 +449,72 @@ describe('the transcription request', () => {
     vi.unstubAllEnvs()
   })
 
+  it('reads the response Mistral actually sends', async () => {
+    stubTranscription(mistralResponse())
+
+    const result = await run()
+
+    expect(result).toEqual({
+      text: 'Bonjour, je suis développeuse depuis six ans.',
+      words: [
+        { start: 0, end: 1.2, text: 'Bonjour,' },
+        { start: 1.2, end: 4.8, text: 'je suis développeuse depuis six ans.' },
+      ],
+      model: 'voxtral-mini-2602',
+      audioSeconds: 5,
+    })
+  })
+
+  it('asks Voxtral for segment timestamps', async () => {
+    const calls = stubTranscription(mistralResponse())
+
+    await run()
+
+    expect(calls[0].url).toBe('https://api.mistral.ai/v1/audio/transcriptions')
+    expect(calls[0].form.get('model')).toBe('voxtral-mini-latest')
+    expect(calls[0].form.get('timestamp_granularities')).toBe('segment')
+  })
+
   // A role may ask one question in French and the next in English: the
   // provider detects the language per answer rather than being told one.
-  it('lets the provider detect the language, and asks for timestamps', async () => {
-    const forms: Array<FormData> = []
-    vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
-      forms.push(init.body as FormData)
-      return Promise.resolve(
-        new Response(JSON.stringify({ text: 'Hello', segments: [] })),
-      )
-    })
+  it('lets the provider detect the language', async () => {
+    const calls = stubTranscription(mistralResponse())
 
-    await transcribe(new Blob(['audio']).stream(), {
-      fileName: 'answer.webm',
-      contentType: 'audio/webm',
-    })
+    await run()
 
-    expect(forms).toHaveLength(1)
-    expect(forms[0].has('language')).toBe(false)
-    expect(forms[0].get('timestamp_granularities')).toBe('segment')
+    expect(calls[0].form.has('language')).toBe(false)
+  })
+
+  it('drops a segment with no time instead of failing the answer', async () => {
+    stubTranscription(
+      mistralResponse({
+        segments: [
+          { text: 'Bonjour,', start: null, end: null },
+          { text: 'je suis là.', start: 1.2, end: 2.0 },
+        ],
+      }),
+    )
+
+    const result = await run()
+
+    expect(result.words).toEqual([{ start: 1.2, end: 2.0, text: 'je suis là.' }])
+  })
+
+  it('keeps the text and no timings when no segments come back', async () => {
+    stubTranscription(mistralResponse({ segments: [], usage: undefined }))
+
+    const result = await run()
+
+    expect(result.words).toEqual([])
+    expect(result.audioSeconds).toBeNull()
+  })
+
+  it('never fails a transcript over a usage block it cannot read', async () => {
+    stubTranscription(mistralResponse({ usage: { prompt_audio_seconds: '5' } }))
+
+    const result = await run()
+
+    expect(result.text).toBe('Bonjour, je suis développeuse depuis six ans.')
+    expect(result.audioSeconds).toBeNull()
   })
 })

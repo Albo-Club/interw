@@ -81,6 +81,7 @@
     "password_too_long": "Utilisez au plus 128 caractères.",
     "password_too_short": "Utilisez au moins 12 caractères.",
     "project_archived": "Ce poste est archivé. Restaurez-le pour le modifier.",
+    "project_expired": "La date limite de ce poste est passée. Repoussez-la pour inviter des candidats.",
     "project_has_sessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt.",
     "project_not_active": "Publiez d'abord le poste.",
     "prompt_too_long": "Ce message est trop long.",

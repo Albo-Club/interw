@@ -174,9 +174,11 @@ object it read before updating it) — that is an accident of 1.6.30.
 
 ### Per-address quotas are charged before Better Auth runs
 
-`perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
-`verificationSend` in a before hook, for every address, and refuses with a
-real 429 (`code: 'RATE_LIMITED'`). It used to happen inside the email senders,
+`perEmailQuota` charges `emailCodeSend`, `passwordResetSend`,
+`verificationSend` or `passwordSignIn` in a before hook, for every address,
+and refuses with a real 429 (`code: 'RATE_LIMITED'`). The bucket key is an
+HMAC of the normalised address under `BETTER_AUTH_SECRET` (`makeSignature`),
+so the rate limiter's table — which nothing erases — never holds addresses. It used to happen inside the email senders,
 which was wrong three ways:
 
 1. A sender only runs for an address that has an account, so the quota
@@ -202,6 +204,80 @@ a Better Auth sender.
   returns a verified email — and (2) `accountLinking.enabled` is unchanged.
   Legacy unverified password accounts still complete their old verification
   link through `verificationRequiresCredential`.
+
+## Brute force: the IP is a claim, the account is not
+
+Better Auth's `rateLimit` is per IP, and it takes the IP from a request
+header (`@better-auth/core/dist/utils/ip.mjs:201-217`). Whoever sets the
+header chooses the bucket. Two ways that went wrong (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 3):
+
+- The Convex adapter's proxy (`@convex-dev/better-auth/dist/react-start/index.js:38`)
+  copies every inbound header, so our `/api/auth/*` forwarded whatever the
+  client and the platform left in `X-Forwarded-For`.
+- `<deployment>.convex.site/api/auth/*` is public. A request sent straight
+  there carries any header its sender likes: a new `X-Forwarded-For` per
+  guess meant a new bucket per guess, and unlimited password guesses.
+
+**The per-account limit is what makes it safe.** `/sign-in/email` is charged
+in `perEmailQuota` (bucket `passwordSignIn`: 5 at once, then 10 an hour),
+keyed on the address, before Better Auth looks anything up. No header moves
+it. It counts every attempt, not only failures — a before hook cannot know
+the outcome, and a guesser's attempts are failures anyway. The cost: someone
+can keep one address's bucket empty and block its **password** sign-in. The
+email code is untouched by it, so the owner still gets in.
+
+**The per-IP key now comes from the platform, not the client.**
+`src/routes/api/auth/$.ts` drops `X-Forwarded-For`, `X-Real-IP` and
+`x-interw-client-ip` from the client and sends the address Vercel's edge
+wrote into `X-Forwarded-For` as `x-interw-client-ip`
+(`convex/lib/clientIp.ts`); `advanced.ipAddress.ipAddressHeaders` reads only
+that header. A name no platform sets, so legitimate traffic lands in its own
+bucket whatever Convex's ingress does with `X-Forwarded-For`. Custom headers
+do reach Convex HTTP actions unchanged — the Resend webhook's `svix-*`
+signature headers depend on it.
+
+**What stays unknown offline**, and why it no longer matters for passwords:
+
+- What Convex's ingress does with a client-supplied `X-Forwarded-For` on a
+  direct `.convex.site` request (pass through, append, overwrite). Better
+  Auth no longer reads that header at all.
+- A direct request can still name any `x-interw-client-ip`, so the per-IP
+  rules (sign-in, code sends, reset) remain bypassable from outside the web
+  domain. Every endpoint that matters for guessing — password sign-in, code
+  sends, reset and verification emails — also has its per-address bucket; the
+  code itself allows five tries per code.
+- A direct request with **no** client-IP header lands in Better Auth's shared
+  `no-trusted-ip` bucket per path. Only direct callers share it: every
+  browser request goes through the proxy and carries its own address.
+- On a host other than Vercel, whether its proxy overwrites
+  `X-Forwarded-For` is that host's contract. Check it before trusting the
+  per-IP key there.
+
+Closing the direct path for good means the proxy proving itself to Convex
+(a shared secret on both sides, or refusing `/api/auth/*` on `.convex.site`
+unless it carries one). Not done: it needs a secret set on both the Vercel
+project and the Convex deployment, and the per-account bucket already bounds
+guessing.
+
+## Super-admin is the operator's address, not the first sign-up
+
+`provisionAppUser` (`convex/lib/auth.ts`) used to make the first row in
+`users` a super-admin. On an empty deployment — a fresh one, or right after
+`admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
+code flow creates accounts for any address. Now a **new** row is super-admin
+only when Better Auth reports its address verified and it equals
+`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
+promoted: fail closed.
+
+- Existing rows are never touched: the flag is set on insert only. Deployments
+  that already have their super-admins keep them, with or without the
+  variable, and `/app/admin` still promotes others.
+- An operator who signed up **before** setting the variable is not promoted
+  retroactively: a flag that changes on a later sign-in would be a flag an
+  env edit can grant silently. Promote from `/app/admin`, or the dashboard on
+  a deployment with no super-admin at all.
+- `pnpm run setup:prod` mirrors `SUPER_ADMIN_EMAIL` from dev.
 
 ## Invitations no longer pre-verify anything
 
@@ -308,12 +384,15 @@ applies — same trap as the `SITE_URL` guard below.
 BA's built-in `rateLimit` block with `storage: 'database'` is wired
 into the Convex adapter — no separate component to install. BA writes
 to an auto-created `rateLimit` table on the BA-side schema. We rely
-on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP.
-Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
+on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP — an IP
+a direct caller can claim, see "Brute force: the IP is a claim, the account
+is not". Keys must be real endpoint paths — `convex/authEmailCode.test.ts`
+asserts it.
 
 `convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
 *separate* — it covers application-level limits (invitations, chat, and the
-per-address email quotas, charged by the `perEmailQuota` hook). Do not
+per-address quotas on emails and password sign-in, charged by the
+`perEmailQuota` hook). Do not
 confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
 key on Convex mutations/actions.
 

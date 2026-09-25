@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth/minimal'
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api'
-import { verifyJWT } from 'better-auth/crypto'
+import { makeSignature, verifyJWT } from 'better-auth/crypto'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import { createClient } from '@convex-dev/better-auth'
 import { convex } from '@convex-dev/better-auth/plugins'
@@ -17,6 +17,7 @@ import {
   verificationEmail,
 } from './emailTemplates'
 import { accountLifecycle } from './lib/accountLifecycle'
+import { CLIENT_IP_HEADER } from './lib/clientIp'
 import { localeFromHeaders } from './lib/locale'
 import { rateLimiter } from './rateLimiters'
 import type { AccountLifecycleEffects } from './lib/accountLifecycle'
@@ -98,25 +99,37 @@ export const disabledAuthPaths = [
   '/email-otp/change-email',
 ]
 
-export type EmailQuota = 'emailCodeSend' | 'verificationSend' | 'passwordResetSend'
+export type EmailQuota =
+  | 'emailCodeSend'
+  | 'verificationSend'
+  | 'passwordResetSend'
+  | 'passwordSignIn'
 
 const QUOTA_BY_PATH: Partial<Record<string, EmailQuota>> = {
   '/email-otp/send-verification-otp': 'emailCodeSend',
   '/send-verification-email': 'verificationSend',
   '/request-password-reset': 'passwordResetSend',
+  // Password guesses against one account. Better Auth's own limit is per IP,
+  // and the IP is whatever header the request carries: a guesser posting
+  // straight to the deployment's `.convex.site` can name a new one each time.
+  // See KNOWN_ISSUES.md § "Brute force: the IP is a claim, the account is not".
+  '/sign-in/email': 'passwordSignIn',
 }
 
 /**
- * Per-address quota on every endpoint that emails someone, charged before
- * Better Auth does anything. Two reasons it cannot live in the email senders:
+ * Per-address quota on every endpoint that emails someone, and on password
+ * sign-in, charged before Better Auth does anything. Two reasons it cannot
+ * live in the email senders:
  * a sender only runs for an address that has an account, so a quota refusal
  * there tells a stranger the account exists; and the code endpoint replaces
  * the pending code before calling its sender, so a refused send would still
  * rotate the victim's code — an unlimited stream of fresh codes to guess at.
  * A refusal is a real 429, not a 500 the page would read as "sent".
+ * The bucket key is an HMAC of the address under the auth secret, so the
+ * limiter's table never holds the address itself.
  */
 export const perEmailQuota = (
-  withinQuota: (quota: EmailQuota, email: string) => Promise<boolean>,
+  withinQuota: (quota: EmailQuota, key: string) => Promise<boolean>,
 ) =>
   ({
     id: 'per-email-quota',
@@ -134,10 +147,14 @@ export const perEmailQuota = (
             // A missing or malformed address is Better Auth's to reject.
             if (typeof email !== 'string') return
             const quota = QUOTA_BY_PATH[ctx.path]!
-            if (!(await withinQuota(quota, email.trim().toLowerCase())))
+            const key = await makeSignature(
+              email.trim().toLowerCase(),
+              ctx.context.secret,
+            )
+            if (!(await withinQuota(quota, key)))
               throw new APIError('TOO_MANY_REQUESTS', {
                 code: 'RATE_LIMITED',
-                message: 'Too many emails to this address. Try again later.',
+                message: 'Too many requests for this address. Try again later.',
               })
           }),
         },
@@ -339,6 +356,10 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         secure: isProd,
         httpOnly: true,
       },
+      // Per-IP limits key on the address the web server's proxy observed, in
+      // a header of its own. A request sent straight to `.convex.site` can
+      // still claim any address here; `perEmailQuota` is what bounds it.
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     onAPIError: {
       // Where an OAuth callback lands when it fails before its own error URL
@@ -560,9 +581,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
           })
         },
       }),
-      perEmailQuota(async (quota, email) => {
+      perEmailQuota(async (quota, key) => {
         const { ok } = await rateLimiter.limit(requireRunMutationCtx(ctx), quota, {
-          key: email,
+          key,
         })
         return ok
       }),

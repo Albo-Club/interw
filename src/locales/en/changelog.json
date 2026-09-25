@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "auth-hardening-sep-25": {
+      "title": "Sign-in hardened",
+      "body": "We hardened sign-in and team invitations against misuse, and reserved administrator access to the operator's own address. Completing an email verification link now only asks for the password you chose, so you never lose it along the way."
+    },
     "removed-members-credit": {
       "title": "Removed teammates keep their credit",
       "body": "When you remove someone from your organization, the decisions they made, their entries in a candidate's decision history, the invitations they sent and the roles they created still show their name, greyed out and marked \"(removed)\", instead of disappearing. A teammate whose account was deleted shows as \"Former member\". The platform's last super admin can no longer delete their account by mistake."

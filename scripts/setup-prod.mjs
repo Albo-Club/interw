@@ -12,7 +12,8 @@
  *      never mirrored: a prod bucket reachable with the dev key is not a
  *      separate environment.
  *   4. Mirrors what is safe to share (RESEND_*, MISTRAL_API_KEY, the object
- *      store endpoint/region, optional SENTRY_DSN and Google OAuth), sets
+ *      store endpoint/region, optional SENTRY_DSN, Google OAuth and
+ *      SUPER_ADMIN_EMAIL), sets
  *      APP_ENV=production and SITE_URL to the chosen domain,
  *      forces RESEND_TEST_MODE=false, and generates a FRESH
  *      BETTER_AUTH_SECRET and PURGE_HASH_SALT.
@@ -162,7 +163,12 @@ async function main() {
     OBJECT_STORE_ACCESS_KEY_ID: accessKeyId,
     OBJECT_STORE_SECRET_ACCESS_KEY: secretAccessKey,
   }
-  for (const k of ['SENTRY_DSN', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']) {
+  for (const k of [
+    'SENTRY_DSN',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
+    'SUPER_ADMIN_EMAIL',
+  ]) {
     const v = dev.get(k)
     if (v) plan[k] = v
   }

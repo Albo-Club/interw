@@ -1941,6 +1941,19 @@ await new Promise((resolve) => setTimeout(resolve, 0))
 await t.finishInProgressScheduledFunctions()
 ```
 
+### The job never learns its own attempt number
+
+`@convex-dev/workpool` (0.4.x) tracks attempts in its own `work` table and
+passes the number to its internal wrapper, but not to the action it runs: the
+action receives exactly the args it was enqueued with, and not its `workId`
+either. So `jobLog.attempt` cannot be "the pool's number". It is counted from
+the log instead (`attemptNumber` in `convex/pipeline.ts`): one per `started`
+row for that session, step and — for transcription — answer, read through the
+`jobLog.by_attempt` index so sibling answers do not conflict. Relaunches keep
+counting, so an attempt above the pool's `maxAttempts` means an operator
+relaunched it. Do not add an `attempt` argument to the job: it is fixed at
+enqueue time and would read 1 on every retry, which is the bug this replaced.
+
 ### `@convex-dev/workpool/test` breaks `pnpm typecheck` for the whole repo
 
 The `./test` subpath export points at the package's raw `src/test.ts`, not at

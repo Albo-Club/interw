@@ -345,7 +345,7 @@ describe('the fan-in', () => {
     })
     await drain(t)
 
-    const { reports, failures, emails } = await t.run(async (ctx) => {
+    const { reports, failures, emails, session } = await t.run(async (ctx) => {
       const jobs = await ctx.db
         .query('jobLog')
         .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
@@ -358,6 +358,7 @@ describe('the fan-in', () => {
         failures: jobs.filter(
           (job) => job.step === 'report' && job.outcome === 'failed',
         ),
+        session: await ctx.db.get('sessions', s.sessionId),
         emails: await ctx.db
           .query('emailLog')
           .withIndex('by_org_and_created', (q) => q.eq('orgId', s.orgId))
@@ -371,5 +372,49 @@ describe('the fan-in', () => {
     expect(failures.length).toBeGreaterThanOrEqual(1)
     expect(failures[0].error).toBe('no_transcribed_answers')
     expect(emails).toHaveLength(0)
+    // The job ended without a report, so it lets the claim go: an operator
+    // relaunch is refused only while a job actually holds it.
+    expect(session?.reportJobEnqueuedAt).toBeUndefined()
+  })
+
+  /**
+   * Audit 2026-09-15, Pipe M14. `attempt` was 1 on every row, so a first try
+   * and a fourth could not be told apart and no retry rate could be read.
+   */
+  it('numbers each real attempt at an answer', async () => {
+    failingKeys.add(`q${DOOMED_INDEX}.weba`)
+
+    await t.mutation(internal.pipeline.onSessionCompleted, {
+      sessionId: s.sessionId,
+    })
+    await drain(t)
+
+    const { doomed, rows } = await t.run(async (ctx) => ({
+      doomed: (
+        await ctx.db
+          .query('segments')
+          .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+          .collect()
+      ).find((seg) => seg.questionIndex === DOOMED_INDEX),
+      rows: await ctx.db
+        .query('jobLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    }))
+    const attempts = rows
+      .filter(
+        (row) =>
+          row.segmentId === doomed?._id &&
+          row.step === 'transcribe' &&
+          row.outcome === 'started',
+      )
+      .map((row) => row.attempt)
+    // The pool's own budget, visible as four distinct attempts.
+    expect(attempts).toEqual([1, 2, 3, 4])
+    const terminal = rows.find(
+      (row) =>
+        row.segmentId === doomed?._id && row.error?.startsWith('terminal:'),
+    )
+    expect(terminal?.attempt).toBe(4)
   })
 })

@@ -62,10 +62,16 @@ jobs:
   # staging with unmerged code. It runs after every merge to `main` and on
   # demand (Actions → CI → Run workflow, on any branch). Once real candidates
   # depend on it, drop the `if:` to gate every PR again.
+  #
+  # On macOS, not Linux: Playwright's Linux WebKit ships without MediaRecorder,
+  # so it cannot record at all and the candidate page says the browser is
+  # unsupported. One job runs both browsers, so a run deploys once and holds a
+  # single place in the `e2e-staging` queue. See KNOWN_ISSUES.md
+  # § "Playwright's Linux WebKit cannot record: the e2e runs on macOS".
   e2e:
     needs: check
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 30
     concurrency:
       group: e2e-staging

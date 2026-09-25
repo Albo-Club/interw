@@ -423,6 +423,11 @@ export const remove = mutation({
   per-address quotas in a before hook and refuse with an `APIError` 429 —
   `perEmailQuota` in `convex/auth.ts`. See `KNOWN_ISSUES.md` § "Email
   sign-in: one code, typed or confirmed".
+- ❌ A limit on guessing a secret (password, code) keyed on the client IP
+  alone. Better Auth's IP is a request header, and `<deployment>.convex.site`
+  takes requests with any header. Give the endpoint a per-address bucket in
+  `perEmailQuota` too. See `KNOWN_ISSUES.md` § "Brute force: the IP is a
+  claim, the account is not".
 - ❌ Dedup users by `betterAuthId` only in any new code path. Always
   also fall back to email via `withIndex('by_email', ...)` — pattern in
   `convex/lib/auth.ts:provisionAppUser`.

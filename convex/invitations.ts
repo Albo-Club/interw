@@ -320,9 +320,8 @@ async function acceptInvitation(
   // whatever the invite's acceptedAt state. The accept effect can fire twice
   // (re-render, second tab) or the user can re-open the link — none of those
   // should surface an error. Reconcile acceptedAt if it never got stamped so
-  // the invite stops showing as pending — only for the member it was
-  // addressed to: any member holding a colleague's link could otherwise
-  // burn it.
+  // the invite stops showing as pending — only on the member's own
+  // invitation: a member holding a colleague's link must not consume it.
   if (alreadyMember) {
     if (!inv.acceptedAt && emailsMatch(inv.email, user.email)) {
       await ctx.db.patch('invitations', inv._id, { acceptedAt: Date.now() })

@@ -174,13 +174,11 @@ object it read before updating it) — that is an accident of 1.6.30.
 
 ### Per-address quotas are charged before Better Auth runs
 
-`perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
-`verificationSend` in a before hook, for every address, and refuses with a
-real 429 (`code: 'RATE_LIMITED'`). Password sign-in is charged the same way
-(`signInAttempt`, 10 per hour per address): the per-IP rule does not stop a
-caller who rotates addresses or IPs, and the refusal must not depend on the
-account existing either. Someone locked out of their password this way can
-still sign in with a code. It used to happen inside the email senders,
+`perEmailQuota` charges `emailCodeSend`, `passwordResetSend`,
+`verificationSend` or `passwordSignIn` in a before hook, for every address,
+and refuses with a real 429 (`code: 'RATE_LIMITED'`). The bucket key is an
+HMAC of the normalised address under `BETTER_AUTH_SECRET` (`makeSignature`),
+so the rate limiter's table — which nothing erases — never holds addresses. It used to happen inside the email senders,
 which was wrong three ways:
 
 1. A sender only runs for an address that has an account, so the quota
@@ -206,6 +204,80 @@ a Better Auth sender.
   returns a verified email — and (2) `accountLinking.enabled` is unchanged.
   Legacy unverified password accounts still complete their old verification
   link through `verificationRequiresCredential`.
+
+## Brute force: the IP is a claim, the account is not
+
+Better Auth's `rateLimit` is per IP, and it takes the IP from a request
+header (`@better-auth/core/dist/utils/ip.mjs:201-217`). Whoever sets the
+header chooses the bucket. Two ways that went wrong (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 3):
+
+- The Convex adapter's proxy (`@convex-dev/better-auth/dist/react-start/index.js:38`)
+  copies every inbound header, so our `/api/auth/*` forwarded whatever the
+  client and the platform left in `X-Forwarded-For`.
+- `<deployment>.convex.site/api/auth/*` is public. A request sent straight
+  there carries any header its sender likes: a new `X-Forwarded-For` per
+  guess meant a new bucket per guess, and unlimited password guesses.
+
+**The per-account limit is what makes it safe.** `/sign-in/email` is charged
+in `perEmailQuota` (bucket `passwordSignIn`: 5 at once, then 10 an hour),
+keyed on the address, before Better Auth looks anything up. No header moves
+it. It counts every attempt, not only failures — a before hook cannot know
+the outcome, and a guesser's attempts are failures anyway. The cost: someone
+can keep one address's bucket empty and block its **password** sign-in. The
+email code is untouched by it, so the owner still gets in.
+
+**The per-IP key now comes from the platform, not the client.**
+`src/routes/api/auth/$.ts` drops `X-Forwarded-For`, `X-Real-IP` and
+`x-interw-client-ip` from the client and sends the address Vercel's edge
+wrote into `X-Forwarded-For` as `x-interw-client-ip`
+(`convex/lib/clientIp.ts`); `advanced.ipAddress.ipAddressHeaders` reads only
+that header. A name no platform sets, so legitimate traffic lands in its own
+bucket whatever Convex's ingress does with `X-Forwarded-For`. Custom headers
+do reach Convex HTTP actions unchanged — the Resend webhook's `svix-*`
+signature headers depend on it.
+
+**What stays unknown offline**, and why it no longer matters for passwords:
+
+- What Convex's ingress does with a client-supplied `X-Forwarded-For` on a
+  direct `.convex.site` request (pass through, append, overwrite). Better
+  Auth no longer reads that header at all.
+- A direct request can still name any `x-interw-client-ip`, so the per-IP
+  rules (sign-in, code sends, reset) remain bypassable from outside the web
+  domain. Every endpoint that matters for guessing — password sign-in, code
+  sends, reset and verification emails — also has its per-address bucket; the
+  code itself allows five tries per code.
+- A direct request with **no** client-IP header lands in Better Auth's shared
+  `no-trusted-ip` bucket per path. Only direct callers share it: every
+  browser request goes through the proxy and carries its own address.
+- On a host other than Vercel, whether its proxy overwrites
+  `X-Forwarded-For` is that host's contract. Check it before trusting the
+  per-IP key there.
+
+Closing the direct path for good means the proxy proving itself to Convex
+(a shared secret on both sides, or refusing `/api/auth/*` on `.convex.site`
+unless it carries one). Not done: it needs a secret set on both the Vercel
+project and the Convex deployment, and the per-account bucket already bounds
+guessing.
+
+## Super-admin is the operator's address, not the first sign-up
+
+`provisionAppUser` (`convex/lib/auth.ts`) used to make the first row in
+`users` a super-admin. On an empty deployment — a fresh one, or right after
+`admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
+code flow creates accounts for any address. Now a **new** row is super-admin
+only when Better Auth reports its address verified and it equals
+`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
+promoted: fail closed.
+
+- Existing rows are never touched: the flag is set on insert only. Deployments
+  that already have their super-admins keep them, with or without the
+  variable, and `/app/admin` still promotes others.
+- An operator who signed up **before** setting the variable is not promoted
+  retroactively: a flag that changes on a later sign-in would be a flag an
+  env edit can grant silently. Promote from `/app/admin`, or the dashboard on
+  a deployment with no super-admin at all.
+- `pnpm run setup:prod` mirrors `SUPER_ADMIN_EMAIL` from dev.
 
 ## Invitations no longer pre-verify anything
 
@@ -312,23 +384,17 @@ applies — same trap as the `SITE_URL` guard below.
 BA's built-in `rateLimit` block with `storage: 'database'` is wired
 into the Convex adapter — no separate component to install. BA writes
 to an auto-created `rateLimit` table on the BA-side schema. We rely
-on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP.
-Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
+on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP — an IP
+a direct caller can claim, see "Brute force: the IP is a claim, the account
+is not". Keys must be real endpoint paths — `convex/authEmailCode.test.ts`
+asserts it.
 
 `convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
 *separate* — it covers application-level limits (invitations, chat, and the
-per-address email quotas, charged by the `perEmailQuota` hook). Do not
+per-address quotas on emails and password sign-in, charged by the
+`perEmailQuota` hook). Do not
 confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
 key on Convex mutations/actions.
-
-**Which IP, nobody has checked yet.** No `advanced.ipAddress` is set, so BA
-reads its default headers, and the `/api/auth` proxy forwards the client's
-headers unchanged. What Convex ingress does with `X-Forwarded-For` (pass it
-through, append, overwrite with the proxy's address) decides whether a client
-can forge its IP, or whether every app user shares one bucket. Setting
-`ipAddressHeaders` blind could make the second case true, so it waits for a
-staging observation (audit 2026-09-25, V3). Until then, the per-address
-buckets above are the limit that holds whatever the IP is.
 
 ### Password policy (Phase 1)
 
@@ -1321,18 +1387,12 @@ member or admin; only an owner can touch an owner, and the last owner can be
 neither demoted nor removed (`convex/organizations.ts`). Deliberate: two
 admins are peers, and an owner is the one who can settle a dispute.
 
-## Two audit asks left as they are (T12)
+## `normalizeEmail` folds Unicode case, on purpose (T12)
 
-- **The first account becomes super admin** (`provisionAppUser`, `isFirst`).
-  The audit asked for a configured address instead. It only fires on an empty
-  `users` table, and the last super admin cannot delete their account, so on
-  a running deployment it never fires again. A fresh deployment (or a project
-  forked from this template) should sign up its operator first.
-- **`normalizeEmail` folds Unicode case, not only ASCII.** Better Auth
-  lowercases addresses with the same `toLowerCase()`, so both sides agree on
-  which address an invitation names. Folding only ASCII on our side would
-  make them disagree for the rare non-ASCII address — a worse bug than the
-  one it closes.
+The audit asked for ASCII-only folding. Better Auth lowercases addresses with
+the same `toLowerCase()`, so both sides agree on which address an invitation
+names. Folding only ASCII on our side would make them disagree for the rare
+non-ASCII address — a worse bug than the one it closes.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -1748,7 +1808,18 @@ them — where the app cannot search. So the candidate-reading tools record a
 `chatThreadSessions` row in the same transaction as the read, and
 `purge.deleteChildRows` deletes those whole threads. Any new tool that returns
 candidate data must record the same row, or its output survives erasure.
-Threads created before this change carry no row and are not covered.
+Threads created before this change carry no row, so erasure cannot find them;
+they are purged once by `migrations.purgeLegacyAssistantThreads`, an hourly
+cron that fixes its cutoff at its first run on each deployment (on staging,
+that also takes the threads created between the two changes — deliberately),
+deletes every thread older than it with its `chatThreadSessions` rows, and
+sets `doneAt` after a full pass finds none left. The component lists no
+threads globally: the pass walks `users.listUsersWithThreads`, which reads the
+component's own table, so a removed member's scope is reached too; only a
+thread with no `userId` is invisible to it, and the app never creates one.
+This is the owner's one-off retention decision, not a pipeline catch-up
+script: it repairs no lost step, and once `doneAt` is set on every deployment
+the function, its cron and the `migrations` table can be deleted.
 `chat.listMessages` answers an empty page for a thread that no longer exists,
 because erasure may delete a thread a recruiter has open.
 
@@ -1984,6 +2055,31 @@ a real deployment, and neither is in this repo:
 Do not spend the afternoon on it: run the candidate e2e in CI, where the
 runner reaches the deployment directly. Locally, `pnpm test` covers the
 reducer, the recorder and the server; the browser path needs CI or a phone.
+
+## Playwright's Linux WebKit cannot record: the e2e runs on macOS
+
+Playwright's WebKit for Linux (WebKit 26.6, Playwright webkit v2359 on
+`ubuntu-latest`) has **no `MediaRecorder` at all**: `page.evaluate` throws
+`ReferenceError: Can't find variable: MediaRecorder` (measured on CI,
+2026-09-25). The candidate page then detects no recording format and shows
+"This browser can't record video interviews", so no `<video>` is ever
+rendered and `e2e/interview.spec.ts` fails at its first preview check with
+"element(s) not found". No fake device, `getUserMedia` stub or audio-only
+path can help: nothing can be recorded. Safari has had `MediaRecorder` since
+14.1, so this is the Linux build, not the product.
+
+The CI `e2e` job therefore runs on `macos-latest`, where Playwright's WebKit
+records, and both browsers run in that one job: split into a Linux and a macOS
+job, the two took two places in the `e2e-staging` concurrency group and a run
+queued on `main` cancelled the waiting one. Running `--project=webkit` on a
+Linux machine reproduces the failure; it does not prove a regression.
+
+Only two branches of the device check render no `<video>`: a browser that
+encodes no format (above), and a camera that failed as busy or missing while
+the microphone worked ("Audio only — your camera isn't available"). A refused
+permission keeps the `<video>` on screen, so "not found" never means "no
+permission". To tell them apart, read the page snapshot in the report's
+`error-context.md`.
 
 ## The candidate surface switches the shared i18n instance
 

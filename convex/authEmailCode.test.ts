@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { betterAuth } from 'better-auth/minimal'
 import { memoryAdapter } from 'better-auth/adapters/memory'
+import { makeSignature } from 'better-auth/crypto'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import {
   disabledAuthPaths,
@@ -26,6 +27,9 @@ const VICTIM = 'victim@example.com'
 const STRANGER = 'stranger@example.com'
 const SQUATTER_PASSWORD = 'squatter-password-123'
 const OWNER_PASSWORD = 'owner-password-456'
+const SECRET = 'test-secret-test-secret-test-secret-000'
+/** The bucket key for an address: keyed on the secret, never the address. */
+const keyOf = (email: string) => makeSignature(email, SECRET)
 
 function buildAuth({
   quota = () => true,
@@ -34,7 +38,7 @@ function buildAuth({
   const links: Array<{ to: string; url: string }> = []
   const auth = betterAuth({
     baseURL: BASE,
-    secret: 'test-secret-test-secret-test-secret-000',
+    secret: SECRET,
     trustedOrigins: [BASE],
     database: memoryAdapter({
       user: [],
@@ -98,6 +102,7 @@ function buildAuth({
     )
 
   return {
+    context: auth.$context,
     codes,
     links,
     post,
@@ -277,8 +282,8 @@ describe('endpoints the app does not serve', () => {
 
 describe('per-address email quota', () => {
   it('refuses with a 429 once spent, whether or not the account exists', async () => {
-    const spent = new Set([VICTIM, STRANGER])
-    const t = buildAuth({ quota: (_, email) => !spent.has(email) })
+    const spent = new Set([await keyOf(VICTIM), await keyOf(STRANGER)])
+    const t = buildAuth({ quota: (_, key) => !spent.has(key) })
     await t.signUp(STRANGER, OWNER_PASSWORD)
 
     for (const email of [VICTIM, STRANGER]) {
@@ -295,43 +300,60 @@ describe('per-address email quota', () => {
     }
   })
 
-  it('charges the right bucket, keyed by the normalised address', async () => {
+  it('charges the right bucket, keyed by a hash of the normalised address', async () => {
     const charged: Array<[EmailQuota, string]> = []
     const t = buildAuth({
-      quota: (name, email) => {
-        charged.push([name, email])
+      quota: (name, key) => {
+        charged.push([name, key])
         return true
       },
     })
     await t.sendCode('  Victim@Example.com ')
     await t.post('/request-password-reset', { email: VICTIM })
     await t.post('/send-verification-email', { email: VICTIM })
+    await t.signIn('VICTIM@example.com', OWNER_PASSWORD)
+    const key = await keyOf(VICTIM)
     expect(charged).toEqual([
-      ['emailCodeSend', VICTIM],
-      ['passwordResetSend', VICTIM],
-      ['verificationSend', VICTIM],
+      ['emailCodeSend', key],
+      ['passwordResetSend', key],
+      ['verificationSend', key],
+      ['passwordSignIn', key],
     ])
+    // The limiter's table never holds the address itself.
+    expect(key).not.toContain('victim')
   })
 
-  // T12: password guesses were limited per IP only.
-  it('limits password sign-in per address, whether or not it exists', async () => {
-    const charged: Array<[EmailQuota, string]> = []
+  it('refuses a password sign-in once the account quota is spent, right password or not', async () => {
+    let left = 2
     const t = buildAuth({
-      quota: (name, email) => {
-        charged.push([name, email])
-        return name !== 'signInAttempt'
-      },
+      quota: (name) => name !== 'passwordSignIn' || left-- > 0,
     })
-    await t.signUp(STRANGER, OWNER_PASSWORD)
-    for (const email of [VICTIM, STRANGER]) {
-      const res = await t.signIn(email, OWNER_PASSWORD)
+    await t.sendCode(VICTIM)
+    await t.signInWithCode(VICTIM, t.lastCode(VICTIM))
+    await t.post('/request-password-reset', { email: VICTIM })
+    // A verified account with a password: the one a guesser is after.
+    const found = await t.findUser(VICTIM)
+    const ctx = await t.context
+    await ctx.internalAdapter.linkAccount({
+      userId: found!.user.id,
+      providerId: 'credential',
+      accountId: found!.user.id,
+      password: await ctx.password.hash(OWNER_PASSWORD),
+    })
+
+    expect((await t.signIn(VICTIM, 'wrong-password-000')).status).toBe(401)
+    expect((await t.signIn(VICTIM, OWNER_PASSWORD)).status).toBe(200)
+    for (const password of ['wrong-password-000', OWNER_PASSWORD]) {
+      const res = await t.signIn(VICTIM, password)
       expect(res.status).toBe(429)
       expect(await errorCode(res)).toBe('RATE_LIMITED')
     }
-    expect(charged.filter(([name]) => name === 'signInAttempt')).toEqual([
-      ['signInAttempt', VICTIM],
-      ['signInAttempt', STRANGER],
-    ])
+    // Charged before Better Auth looks the address up: an unknown address
+    // is refused the same way, so the refusal says nothing about accounts.
+    left = 0
+    const unknown = await t.signIn(STRANGER, OWNER_PASSWORD)
+    expect(unknown.status).toBe(429)
+    expect(await errorCode(unknown)).toBe('RATE_LIMITED')
   })
 
   it('leaves the pending code valid when a send is refused', async () => {

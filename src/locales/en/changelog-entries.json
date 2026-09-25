@@ -1,7 +1,15 @@
 {
-  "auth-and-erasure-hardening": {
-    "title": "Sign-in and invitations, hardened",
-    "body": "We hardened password sign-in, team invitations and the way names are displayed, and made sure a candidate's deletion request also reaches documents that were uploaded but never attached. The interview screen also loads a little faster."
+  "invitations-and-erasure-hardening": {
+    "title": "Invitations and deletion, hardened",
+    "body": "A team invitation now stops working if the admin who sent it leaves or loses admin rights; another admin can resend it. We also hardened how names are displayed; a candidate's deletion request also reaches documents that were uploaded but never attached, and the interview screen loads a little faster."
+  },
+  "assistant-history-purged": {
+    "title": "Older assistant conversations deleted",
+    "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."
+  },
+  "auth-hardening-sep-25": {
+    "title": "Sign-in hardened",
+    "body": "We hardened sign-in and team invitations against misuse, and reserved administrator access to the operator's own address. Completing an email verification link now only asks for the password you chose, so you never lose it along the way."
   },
   "removed-members-credit": {
     "title": "Removed teammates keep their credit",

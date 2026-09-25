@@ -1,7 +1,15 @@
 {
-  "auth-and-erasure-hardening": {
-    "title": "Connexion et invitations renforcées",
-    "body": "Nous avons renforcé la connexion par mot de passe, les invitations d'équipe et l'affichage des noms, et la demande de suppression d'un candidat atteint désormais aussi les documents envoyés mais jamais rattachés. L'écran d'entretien se charge aussi un peu plus vite."
+  "invitations-and-erasure-hardening": {
+    "title": "Invitations et suppression renforcées",
+    "body": "Une invitation d'équipe cesse de fonctionner si l'admin qui l'a envoyée quitte l'organisation ou perd ses droits d'admin ; un autre admin peut la renvoyer. Nous avons aussi renforcé l'affichage des noms ; la demande de suppression d'un candidat atteint aussi les documents envoyés mais jamais rattachés, et l'écran d'entretien se charge un peu plus vite."
+  },
+  "assistant-history-purged": {
+    "title": "Anciennes conversations avec l’assistant supprimées",
+    "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
+  },
+  "auth-hardening-sep-25": {
+    "title": "Connexion renforcée",
+    "body": "Nous avons renforcé la connexion et les invitations d’équipe contre les usages abusifs, et réservé l’accès administrateur à l’adresse de l’opérateur. Valider un lien de vérification d’e-mail ne demande plus que le mot de passe que vous avez choisi, pour ne jamais le perdre en chemin."
   },
   "removed-members-credit": {
     "title": "Les membres retirés gardent leur crédit",

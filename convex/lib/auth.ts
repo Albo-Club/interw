@@ -2,6 +2,7 @@ import { ConvexError } from 'convex/values'
 import { authComponent } from '../auth'
 import { RESEND_FROM, resend } from '../email'
 import { newUserSignupNotificationEmail } from '../emailTemplates'
+import { normalizeEmail } from './invitations'
 import { singleLine } from './singleLine'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from '../_generated/dataModel'
@@ -48,7 +49,8 @@ export async function requireAppUser(ctx: Ctx): Promise<Doc<'users'>> {
 /**
  * Mutation-only: return the current app user, creating the row on first call
  * if Better Auth has the user but our Convex `users` table doesn't yet.
- * First user across the deployment becomes `superAdmin: true`.
+ * A new row is `superAdmin` only for the operator's verified address
+ * (`isOperator`); an existing row keeps whatever flag it has.
  *
  * Dedup strategy (anti-doublon):
  *   1. Lookup by `betterAuthId` — happy path for returning users.
@@ -85,7 +87,7 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
     email: baUser.email,
     name: cleanUserName(baUser.name),
     avatarUrl: baUser.image ?? undefined,
-    superAdmin: isFirst,
+    superAdmin: isOperator(baUser),
     createdAt: Date.now(),
   })
   const created = await ctx.db.get("users", userId)
@@ -116,6 +118,22 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
   }
 
   return created
+}
+
+/**
+ * Super-admin is pinned to one operator address, `SUPER_ADMIN_EMAIL`, never
+ * to "whoever registers first": on an empty deployment (a fresh one, or after
+ * `admin.purgeExcept`) that was anyone who got there before the operator.
+ * Unset means nobody is promoted. See KNOWN_ISSUES.md § "Super-admin is the
+ * operator's address, not the first sign-up".
+ */
+function isOperator(baUser: { email: string; emailVerified: boolean }) {
+  const operator = normalizeEmail(process.env.SUPER_ADMIN_EMAIL ?? '')
+  return (
+    !!operator &&
+    baUser.emailVerified &&
+    normalizeEmail(baUser.email) === operator
+  )
 }
 
 export async function requireOrgMember(

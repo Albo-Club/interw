@@ -445,23 +445,24 @@ describe('accepting by token', () => {
     expect(again).toMatchObject({ orgSlug: 'acme', joined: false })
   })
 
-  // T12: the "already a member" branch stamped any token it was handed.
-  it("does not burn a colleague's invitation opened by another member", async () => {
+  it("never lets a member consume someone else's invitation", async () => {
     const invitationId = await as(t, 'owner').mutation(
       api.invitations.create,
       { orgId: w.acmeOrgId, email: 'newcomer@example.test', role: 'member' },
     )
     const inv = await t.run((ctx) => ctx.db.get('invitations', invitationId))
-    const opened = await as(t, 'member').mutation(api.invitations.accept, {
+    // A member holding the link lands in the org, as for their own link...
+    const member = await as(t, 'member').mutation(api.invitations.accept, {
       token: inv!.token,
     })
-    expect(opened).toMatchObject({ joined: false })
+    expect(member).toMatchObject({ orgSlug: 'acme', joined: false })
+    // ...but the invitation stays the invitee's.
     const after = await t.run((ctx) => ctx.db.get('invitations', invitationId))
-    expect(after!.acceptedAt).toBeUndefined()
-    const joined = await as(t, 'newcomer').mutation(api.invitations.accept, {
+    expect(after?.acceptedAt).toBeUndefined()
+    const invitee = await as(t, 'newcomer').mutation(api.invitations.accept, {
       token: inv!.token,
     })
-    expect(joined).toMatchObject({ joined: true })
+    expect(invitee).toMatchObject({ orgSlug: 'acme', joined: true })
   })
 
   // T12: an invitation acts for its admin. One sent by someone who has since

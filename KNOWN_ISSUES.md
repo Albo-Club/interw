@@ -1961,8 +1961,10 @@ v2359, `ubuntu-latest`) throws `ReferenceError: Can't find variable:
 MediaRecorder`. The page then takes the "unsupported browser" branch below,
 and no fake device or audio-only path can help: nothing can be recorded.
 Safari has had `MediaRecorder` since 14.1, so this is the Linux build, not the
-product. That is why the CI `e2e` job runs its WebKit leg on `macos-latest`
-(`.github/workflows/ci.yml`), and Chromium stays on Ubuntu. Running
+product. That is why the CI `e2e` job runs on `macos-latest`
+(`.github/workflows/ci.yml`), both browsers in one job: split into a Linux and
+a macOS leg, the two jobs took two places in the `e2e-staging` concurrency
+group, and a run queued on `main` cancelled the waiting one. Running
 `--project=webkit` on a Linux machine reproduces the failure; it does not
 prove a regression.
 

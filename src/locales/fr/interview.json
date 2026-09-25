@@ -65,6 +65,7 @@
     "expired": "La date limite de ce poste est passée."
   },
   "welcome": {
+    "intro": "Un mot de {{org}}",
     "greeting": "Bonjour {{name}}",
     "invitedBy": "{{org}} vous invite à enregistrer un court entretien pour le poste de {{jobTitle}}.",
     "invitedByNoRole": "{{org}} vous invite à enregistrer un court entretien.",
@@ -144,10 +145,6 @@
   "run": {
     "progress": "Question {{index}} sur {{total}}",
     "leaveConfirm": "Votre réponse n'est pas encore envoyée. Si vous quittez cette page maintenant, elle sera perdue. Quitter quand même ?",
-    "intro": {
-      "title": "Un mot avant de commencer",
-      "continue": "Je suis prêt"
-    },
     "hint": "Un conseil",
     "prompt": {
       "play": "Lire la question",

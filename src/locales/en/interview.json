@@ -65,6 +65,7 @@
     "expired": "The deadline for this role has passed."
   },
   "welcome": {
+    "intro": "A word from {{org}}",
     "greeting": "Hello {{name}}",
     "invitedBy": "{{org}} has invited you to record a short interview for the {{jobTitle}} role.",
     "invitedByNoRole": "{{org}} has invited you to record a short interview.",
@@ -144,10 +145,6 @@
   "run": {
     "progress": "Question {{index}} of {{total}}",
     "leaveConfirm": "Your answer hasn't been sent yet. If you leave this page now, it will be lost. Leave anyway?",
-    "intro": {
-      "title": "A word before we begin",
-      "continue": "I'm ready"
-    },
     "hint": "A tip",
     "prompt": {
       "play": "Play the question",

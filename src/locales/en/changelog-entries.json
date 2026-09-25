@@ -1,4 +1,8 @@
 {
+  "welcome-intro": {
+    "title": "Your intro video greets candidates first",
+    "body": "Your recorded introduction now opens the candidate's welcome page, before anything else is asked of them, and the interview goes straight to the first question. The welcome and thank-you pages are also lighter to read."
+  },
   "interview-stage": {
     "title": "A calmer, video-first interview for your candidates",
     "body": "Each question now fills one screen, like a video call: your recorded question plays on its own, with the candidate's camera in the corner to check their framing, and once they answer their camera takes the whole screen with the question kept as a caption. Time left is always visible, and your logo now appears at the top of every candidate page."

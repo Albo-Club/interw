@@ -18,7 +18,6 @@
 
 export type Phase =
   | 'loading'
-  | 'intro'
   /** A question on screen, not recording. */
   | 'prompt'
   | 'recording'
@@ -58,9 +57,7 @@ export type InterviewEvent =
       /** From the server. Never computed on the client. */
       resumeAt: number
       total: number
-      showIntro: boolean
     }
-  | { type: 'introDone' }
   /** The camera or microphone could not be opened, or the recorder not started. */
   | { type: 'deviceFailed'; error: string }
   | { type: 'recordingStarted' }
@@ -114,23 +111,6 @@ export function nextOpenQuestion(
   return answered.length
 }
 
-/**
- * Whether the interview opens on the recruiter's intro: a video that can be
- * played, on a first visit. Anything else — no intro, a mode since retired, a
- * URL that could not be signed — goes straight to the first question, and the
- * candidate never sees an intro screen. One with nothing on it is a dead end.
- */
-export function opensOnIntro(
-  intro: { mode: 'none' | 'video'; url: string | null },
-  answered: ReadonlyArray<boolean>,
-): boolean {
-  return (
-    intro.mode === 'video' &&
-    intro.url !== null &&
-    answered.every((done) => !done)
-  )
-}
-
 function moveTo(state: InterviewState, index: number): InterviewState {
   return {
     ...state,
@@ -150,24 +130,16 @@ export function interviewReducer(
   switch (event.type) {
     case 'booted': {
       if (state.phase !== 'loading') return state
-      const booted = moveTo(
+      return moveTo(
         { ...state, total: event.total },
         Math.min(event.resumeAt, event.total),
       )
-      return event.showIntro && booted.phase === 'prompt'
-        ? { ...booted, phase: 'intro' }
-        : booted
     }
-
-    case 'introDone':
-      return state.phase === 'intro' ? { ...state, phase: 'prompt' } : state
 
     // Shown on the question screen, and "Start my answer" tries again; a
     // camera that could not be opened is not a reason to leave the page.
     case 'deviceFailed':
-      return state.phase === 'intro' || state.phase === 'prompt'
-        ? { ...state, error: event.error }
-        : state
+      return state.phase === 'prompt' ? { ...state, error: event.error } : state
 
     case 'recordingStarted':
       return state.phase === 'prompt'
@@ -177,7 +149,7 @@ export function interviewReducer(
     // The same attempt, carried over a reload: it goes straight to saving,
     // and the screen says what happened once it lands.
     case 'recovered':
-      return state.phase === 'intro' || state.phase === 'prompt'
+      return state.phase === 'prompt'
         ? { ...state, ...cleared, phase: 'saving', stopReason: 'recovered' }
         : state
 

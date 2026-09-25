@@ -19,11 +19,7 @@ import {
   query,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import {
-  introModeValidator,
-  languageValidator,
-  sessionEventKindValidator,
-} from './schema'
+import { languageValidator, sessionEventKindValidator } from './schema'
 import { candidateQuestionReturns } from './lib/candidateReturns'
 import {
   effectiveIntroMode,
@@ -106,11 +102,16 @@ async function resolveSessionByToken(
   return session
 }
 
-/** The same, plus "and this interview is actually open right now". */
+/**
+ * The same, plus "and this interview is actually open right now". Consent is
+ * required unless `consent: false`, for the one thing shown before it: the
+ * recruiter's intro video.
+ */
 async function requireOpenSession(
   ctx: GenericQueryCtx<DataModel>,
   token: string,
   now: number,
+  { consent = true }: { consent?: boolean } = {},
 ): Promise<{
   session: Doc<'sessions'>
   project: Doc<'projects'>
@@ -126,7 +127,7 @@ async function requireOpenSession(
   if (gate.state !== 'ready' && gate.state !== 'resumable') {
     throw new ConvexError(gate.state)
   }
-  if (gate.needsConsent) throw new ConvexError('consent_required')
+  if (consent && gate.needsConsent) throw new ConvexError('consent_required')
   return { session, project, org }
 }
 
@@ -194,8 +195,6 @@ export const questions = query({
     nextQuestionIndex: v.number(),
     /** The role's language, which the whole candidate surface speaks. */
     language: languageValidator,
-    introMode: introModeValidator,
-    hasIntroMedia: v.boolean(),
     /** Who the candidate is talking to, for the interview's header. */
     organisationName: v.string(),
     organisationLogoUrl: v.union(v.string(), v.null()),
@@ -217,8 +216,6 @@ export const questions = query({
       })),
       nextQuestionIndex: progress.nextQuestionIndex,
       language: project.language,
-      introMode: effectiveIntroMode(project),
-      hasIntroMedia: project.introMediaKey !== undefined,
       organisationName: org.name,
       organisationLogoUrl: await resolveLogoUrl(ctx, org),
     }
@@ -248,7 +245,40 @@ export const start = mutation({
   },
 })
 
-/** Signed playback URLs for the intro and each recorded question prompt. */
+/**
+ * The recruiter's intro video, played on the welcome screen — before consent,
+ * which covers recording the candidate: this is the recruiter's own recording,
+ * and nothing of the candidate's is involved. The gate still applies, so a
+ * closed or expired interview signs nothing.
+ */
+export const resolveIntroMedia = internalQuery({
+  args: { token: v.string(), now: v.number() },
+  handler: async (ctx, { token, now }) => {
+    const { project } = await requireOpenSession(ctx, token, effectiveNow(now), {
+      consent: false,
+    })
+    // A video kept while the intro is switched off is not the candidate's to
+    // see.
+    return effectiveIntroMode(project) === 'video'
+      ? (project.introMediaKey ?? null)
+      : null
+  },
+})
+
+/** Signed playback URL for the intro; null when the role has none. */
+export const introMediaUrl = action({
+  args: { token: v.string() },
+  handler: async (ctx, { token }): Promise<string | null> => {
+    await ctx.runMutation(internal.candidate.consumeWriteLimit, { token })
+    const key = await ctx.runQuery(internal.interview.resolveIntroMedia, {
+      token,
+      now: Date.now(),
+    })
+    return key ? await presignGet(key) : null
+  },
+})
+
+/** Signed playback URLs for each recorded question prompt. */
 export const resolvePromptMedia = internalQuery({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
@@ -258,12 +288,6 @@ export const resolvePromptMedia = internalQuery({
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
     return {
-      // A video kept while the intro is switched off is not the candidate's
-      // to see.
-      introKey:
-        effectiveIntroMode(project) === 'video'
-          ? (project.introMediaKey ?? null)
-          : null,
       questionKeys: rows.flatMap((question) =>
         question.mediaKey
           ? [{ questionId: question._id, key: question.mediaKey }]
@@ -284,7 +308,6 @@ export const promptMediaUrls = action({
     ctx,
     { token },
   ): Promise<{
-    intro: string | null
     questions: Array<{ questionId: Id<'questions'>; url: string }>
   }> => {
     await ctx.runMutation(internal.candidate.consumeWriteLimit, { token })
@@ -293,7 +316,6 @@ export const promptMediaUrls = action({
       now: Date.now(),
     })
     return {
-      intro: target.introKey ? await presignGet(target.introKey) : null,
       questions: await Promise.all(
         target.questionKeys.map(async (question) => ({
           questionId: question.questionId,

@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
+import {
+  useConvexAction,
+  useConvexMutation,
+  useConvexQuery,
+} from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, Clock, MessageSquare, Mic, Monitor, Video } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
 import { errorMessageKey } from '~/lib/convex-errors'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
@@ -15,6 +20,8 @@ import { Alert, AlertDescription } from '~/components/ui/alert'
 import { CandidateNotice } from '~/components/candidate/CandidateNotice'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { DocumentUploadField } from '~/components/candidate/DocumentUploadField'
+import { QuestionVideo } from '~/components/candidate/QuestionPrompt'
+import { Stage } from '~/components/candidate/Stage'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { candidateHead } from '~/components/candidate/screenHead'
 
@@ -42,6 +49,7 @@ function CandidateWelcome() {
   const languageReady = useCandidateLanguage(data?.project.language)
   const updateProfile = useConvexMutation(api.candidate.updateProfile)
   const acceptConsent = useConvexMutation(api.candidate.acceptConsent)
+  const introMedia = useConvexAction(api.interview.introMediaUrl)
 
   const [phone, setPhone] = useState('')
   const [linkedin, setLinkedin] = useState('')
@@ -54,6 +62,19 @@ function CandidateWelcome() {
     const { state } = data.gate
     return state === 'ready' || state === 'resumable' ? null : state
   }, [data])
+
+  // The recruiter's intro opens the page on a first visit: a face before the
+  // form. A candidate coming back to finish has seen it. Signed once; if it
+  // cannot be, the page simply goes without.
+  const wantsIntro =
+    data?.gate.state === 'ready' &&
+    data.project.introMode === 'video' &&
+    data.project.hasIntroMedia
+  const [introUrl, setIntroUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!wantsIntro) return
+    fireAndForget(introMedia({ token }).then(setIntroUrl), 'intro signing')
+  }, [wantsIntro, introMedia, token])
 
   if (data === undefined || !languageReady) {
     return (
@@ -125,6 +146,22 @@ function CandidateWelcome() {
       privacyToken={token}
     >
       <div className="space-y-10">
+        {introUrl && (
+          <div className="flex aspect-video flex-col">
+            <Stage
+              prompt={
+                <QuestionVideo
+                  src={introUrl}
+                  label={t('interview:welcome.intro', {
+                    org: data.organisationName,
+                  })}
+                />
+              }
+              self={null}
+            />
+          </div>
+        )}
+
         <header className="space-y-3">
           <h1 className="text-3xl font-semibold tracking-tight">
             {t('interview:welcome.greeting', { name: session.candidateName })}
@@ -151,54 +188,56 @@ function CandidateWelcome() {
           </Alert>
         )}
 
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">
-            {t('interview:welcome.howItWorks')}
-          </h2>
-          <ul className="space-y-3">
-            <Point icon={<MessageSquare className="size-4" />}>
-              {t('interview:welcome.steps.questions', {
-                count: project.questionCount,
-              })}
-            </Point>
-            <Point icon={<Video className="size-4" />}>
-              {t('interview:welcome.steps.record')}
-            </Point>
-            <Point icon={<Clock className="size-4" />}>
-              {t('interview:welcome.steps.duration', {
-                count: project.maxInterviewMinutes,
-              })}
-            </Point>
-            <Point icon={<Check className="size-4" />}>
-              {t('interview:welcome.steps.alone')}
-            </Point>
-          </ul>
-        </section>
+        <div className="grid gap-8 sm:grid-cols-2">
+          <section className="space-y-4">
+            <h2 className="font-semibold">
+              {t('interview:welcome.howItWorks')}
+            </h2>
+            <ul className="space-y-3">
+              <Point icon={<MessageSquare className="size-4" />}>
+                {t('interview:welcome.steps.questions', {
+                  count: project.questionCount,
+                })}
+              </Point>
+              <Point icon={<Video className="size-4" />}>
+                {t('interview:welcome.steps.record')}
+              </Point>
+              <Point icon={<Clock className="size-4" />}>
+                {t('interview:welcome.steps.duration', {
+                  count: project.maxInterviewMinutes,
+                })}
+              </Point>
+              <Point icon={<Check className="size-4" />}>
+                {t('interview:welcome.steps.alone')}
+              </Point>
+            </ul>
+          </section>
 
-        <section className="space-y-4">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">
-            {t('interview:welcome.whatYouNeed')}
-          </h2>
-          <ul className="space-y-3">
-            <Point icon={<Video className="size-4" />}>
-              {t('interview:welcome.needs.camera')}
-            </Point>
-            <Point icon={<Mic className="size-4" />}>
-              {t('interview:welcome.needs.quiet')}
-            </Point>
-            <Point icon={<Monitor className="size-4" />}>
-              {t('interview:welcome.needs.browser')}
-            </Point>
-          </ul>
-        </section>
+          <section className="space-y-4">
+            <h2 className="font-semibold">
+              {t('interview:welcome.whatYouNeed')}
+            </h2>
+            <ul className="space-y-3">
+              <Point icon={<Video className="size-4" />}>
+                {t('interview:welcome.needs.camera')}
+              </Point>
+              <Point icon={<Mic className="size-4" />}>
+                {t('interview:welcome.needs.quiet')}
+              </Point>
+              <Point icon={<Monitor className="size-4" />}>
+                {t('interview:welcome.needs.browser')}
+              </Point>
+            </ul>
+          </section>
+        </div>
 
         {(fields.phone.enabled ||
           fields.linkedin.enabled ||
           fields.cv.enabled ||
           fields.coverLetter.enabled) && (
-          <section className="space-y-4">
+          <section className="space-y-4 rounded-lg border p-5">
             <div>
-              <h2 className="text-sm font-semibold tracking-wide uppercase">
+              <h2 className="font-semibold">
                 {t('interview:welcome.yourDetails')}
               </h2>
               <p className="text-muted-foreground mt-1 text-sm">

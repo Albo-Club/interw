@@ -31,7 +31,6 @@ import {
   answerAtRisk,
   initialInterviewState,
   interviewReducer,
-  opensOnIntro,
 } from '~/lib/interview-machine'
 import { cn } from '~/lib/utils'
 import { Button } from '~/components/ui/button'
@@ -44,7 +43,6 @@ import { CameraPreview } from '~/components/candidate/CameraPreview'
 import {
   QuestionPrompt,
   QuestionText,
-  QuestionVideo,
 } from '~/components/candidate/QuestionPrompt'
 import { Stage } from '~/components/candidate/Stage'
 import { RecordingMic } from '~/components/candidate/RecordingMic'
@@ -92,10 +90,7 @@ function InterviewRunner() {
   const [fatal, setFatal] = useState<unknown>(null)
   const [elapsed, setElapsed] = useState(0)
   const [online, setOnline] = useState(true)
-  const [media, setMedia] = useState<{
-    intro: string | null
-    questions: Record<string, string>
-  }>({ intro: null, questions: {} })
+  const [media, setMedia] = useState<Record<string, string>>({})
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [audioOnly, setAudioOnly] = useState(false)
   const [preview, setPreview] = useState<HTMLVideoElement | null>(null)
@@ -238,29 +233,22 @@ function InterviewRunner() {
   useEffect(() => {
     if (!data || bootedRef.current) return
     bootedRef.current = true
-    const needsMedia =
-      (data.introMode === 'video' && data.hasIntroMedia) ||
-      data.questions.some((question) => question.hasMedia)
+    const needsMedia = data.questions.some((question) => question.hasMedia)
     // Reported once booted, into a phase that shows it.
     const deviceFailure = openStream().then(
       () => null,
       (cause: unknown) => cause,
     )
     void (async () => {
-      let introUrl: string | null = null
       try {
         const [, urls] = await Promise.all([
           start({ token }),
           needsMedia ? promptMedia({ token }) : null,
         ])
         if (urls) {
-          introUrl = urls.intro
-          setMedia({
-            intro: urls.intro,
-            questions: Object.fromEntries(
-              urls.questions.map((q) => [q.questionId, q.url]),
-            ),
-          })
+          setMedia(
+            Object.fromEntries(urls.questions.map((q) => [q.questionId, q.url])),
+          )
         }
       } catch (cause) {
         setFatal(cause)
@@ -270,10 +258,6 @@ function InterviewRunner() {
         type: 'booted',
         resumeAt: data.nextQuestionIndex,
         total: data.questions.length,
-        showIntro: opensOnIntro(
-          { mode: data.introMode, url: introUrl },
-          data.questions.map((q) => q.answered),
-        ),
       })
       const failure = await deviceFailure
       if (failure) {
@@ -547,32 +531,6 @@ function InterviewRunner() {
     </>
   )
 
-  if (state.phase === 'intro') {
-    return (
-      <CandidateShell width="stage" {...brand}>
-        <h1 className="mb-4 text-lg font-semibold tracking-tight">
-          {t('interview:run.intro.title')}
-        </h1>
-        <Stage
-          prompt={
-            media.intro ? (
-              <QuestionVideo
-                src={media.intro}
-                label={t('interview:run.intro.title')}
-              />
-            ) : null
-          }
-          self={null}
-        />
-        <div className="flex justify-center pt-4">
-          <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
-            {t('interview:run.intro.continue')}
-          </Button>
-        </div>
-      </CandidateShell>
-    )
-  }
-
   const inReview =
     state.phase === 'review' ||
     state.phase === 'finishing' ||
@@ -602,7 +560,7 @@ function InterviewRunner() {
   // then on it is their camera, with the question kept as a caption.
   const asking = state.phase === 'prompt'
   const promptUrl = current.hasMedia
-    ? media.questions[current.questionId]
+    ? media[current.questionId]
     : undefined
   const questionMedia = promptUrl
     ? { src: promptUrl, kind: current.mediaKind ?? 'video' }

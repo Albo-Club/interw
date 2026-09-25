@@ -76,6 +76,9 @@ function toRecruiterRow(
     recommendation: session.recommendation ?? null,
     recruiterDecision: session.recruiterDecision ?? null,
     lastQuestionIndex: session.lastQuestionIndex,
+    // False for a candidate who came through the role's public link: their
+    // link is not ours to mail (see `resendInvitation`).
+    invited: session.invitedBy !== undefined,
     deliveryIssue,
   }
 }
@@ -228,7 +231,15 @@ export const invite = mutation({
             q.eq('projectId', projectId).eq('candidateEmail', candidate.email),
           )
           .collect()
-      ).find((s) => s.status === 'pending' || s.status === 'in_progress')
+      ).find(
+        (s) =>
+          (s.status === 'pending' || s.status === 'in_progress') &&
+          // Only a session we invited is reused. One opened through the
+          // public link was typed in by whoever held that link, and so is
+          // its address: mailing its token to the real owner of the address
+          // would hand them a session somebody else already holds.
+          s.invitedBy !== undefined,
+      )
       if (already) {
         results.push({ sessionId: already._id, created: false })
         toNotify.push(already._id)
@@ -329,6 +340,9 @@ export const resendInvitation = mutation({
     if (session.status !== 'pending' && session.status !== 'in_progress') {
       throw new ConvexError('session_closed')
     }
+    // Same reason as the reuse rule in `invite`: a self-applied session's
+    // token is held by whoever typed the address. Invite the address instead.
+    if (session.invitedBy === undefined) throw new ConvexError('not_invited')
     assertAcceptsCandidates(project)
     // Pipe F9: an address that hard-bounced (or reported us as spam) does not
     // get the same mail again. Every retry costs the sending domain

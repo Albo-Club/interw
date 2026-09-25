@@ -182,7 +182,7 @@ export function buildCandidateColumns({
                     {t('candidates:actions.open')}
                   </Link>
                 </DropdownMenuItem>
-                {open && canInvite && (
+                {open && canInvite && row.original.invited && (
                   <DropdownMenuItem onSelect={() => onResend(row.original)}>
                     {t('candidates:actions.resend')}
                   </DropdownMenuItem>

@@ -183,6 +183,32 @@ describe("a role's public link", () => {
     expect(scheduled).toHaveLength(0)
   })
 
+  // The other direction: an address planted through the link must not be
+  // what a later invitation mails to the real owner of that address.
+  it('is never what an invitation reuses or resends', async () => {
+    const token = await applyToken(t, f)
+    const planted = await t.mutation(api.apply.start, { token, ...candidate })
+    const session = await t.run(async (ctx) =>
+      ctx.db
+        .query('sessions')
+        .withIndex('by_token', (q) => q.eq('accessToken', planted.sessionToken))
+        .unique(),
+    )
+
+    const { results } = await asRecruiter(t).mutation(api.sessions.invite, {
+      projectId: f.projectId,
+      candidates: [candidate],
+    })
+    expect(results[0].created).toBe(true)
+    expect(results[0].sessionId).not.toBe(session!._id)
+
+    await expect(
+      asRecruiter(t).mutation(api.sessions.resendInvitation, {
+        sessionId: session!._id,
+      }),
+    ).rejects.toThrow(/not_invited/)
+  })
+
   it('fails the same way for every token that does not resolve', async () => {
     await applyToken(t, f)
     for (const token of ['x', 'A'.repeat(43)]) {

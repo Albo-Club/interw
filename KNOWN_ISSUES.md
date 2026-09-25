@@ -2790,6 +2790,11 @@ choices that keep it cheap:
   back the open session for an address would hand anyone who knows that
   address its owner's interview, name, CV and `deleteMyData`. Duplicates in
   the table are the price; never "fix" them by reusing a session here.
+- **And never the other way round.** `invite` reuses an open session for an
+  address only if it has `invitedBy`, and `resendInvitation` refuses one that
+  does not (`not_invited`). Otherwise anyone could plant an address through
+  the link, keep the token, and have the recruiter's invitation mail that very
+  token to its real owner — whose interview, CV and erasure they then hold.
 - **No email on submission.** Sending the invitation to the typed address
   would make the form a relay for mail to arbitrary people from our domain.
   The completion email still goes out — only after a whole interview.

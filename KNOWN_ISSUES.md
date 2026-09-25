@@ -664,6 +664,21 @@ back into real bytes. The one thing that would break it is moving the pnpm
 store off the workspace volume: `clonefile()` cannot cross volumes, and the
 275 MB would become 6.8 GB overnight.
 
+## Agent worktrees sit inside the repository
+
+Claude Code checks each agent out under `.claude/worktrees/<name>/` — a full
+copy of the repository, inside it. Two globs then reach every copy: `tsc`'s
+`include: ["**/*.ts", …]` and `eslint .`. With a handful of agents running,
+`pnpm lint` in the main checkout linted every one of them and ran out of
+memory, and `tsc` reported each type error once per copy.
+
+Both ignore the directory now (`globalIgnores` in `eslint.config.mjs`,
+`exclude` in `tsconfig.json`). The trap in the second: setting `exclude`
+**replaces** TypeScript's default instead of extending it, so `node_modules`
+has to be listed again or `tsc` walks into it. Vitest is unaffected — its
+`include` is rooted at `src/` and `convex/`. A new tool that globs from the
+repository root needs the same exclusion.
+
 ## Convex skills were pruned — do not re-vendor them
 
 We vendored 6 Convex skills. **5 were removed; only `convex-create-component`
@@ -1360,6 +1375,29 @@ and ~10 MB of data burned **4.8 GB of Database Bandwidth** this way.
    migration has cleared the field from every row — the widen → migrate →
    narrow pattern.
 
+## Bumping a SHA-pinned GitHub Action
+
+Every `uses:` in `.github/workflows/ci.yml` names a full commit SHA with its
+release as a trailing comment (why: the comment at the top of the file). What
+a retagged action could reach there is the `e2e` job's `CONVEX_DEPLOY_KEY`.
+
+To bump one by hand, resolve the tag to the commit it points at. For an
+*annotated* tag that is the `^{}` line, not the tag object above it:
+
+```bash
+git ls-remote https://github.com/pnpm/action-setup refs/tags/v4.4.0 'refs/tags/v4.4.0^{}'
+# a15d…  refs/tags/v4.4.0        <- the tag object: not this one
+# fc06…  refs/tags/v4.4.0^{}     <- the commit: pin this
+```
+
+A lightweight tag prints a single line, which is the commit. Replace the SHA
+**and** the comment in every job that uses the action — a comment that
+disagrees with its SHA is worse than none. Renovate's `github-actions` manager
+reads this `@<sha> # vX.Y.Z` form and bumps both together once the app is
+installed. The pins were taken from what each major tag (`@v4`) resolved to on
+the day, not from the newest release, so pinning changed no behaviour — which
+is why `pnpm/action-setup` sits on v4.3.0 although v4.4.0 exists.
+
 ## release-please was removed (failed on every merge with `other side closed`)
 
 The `release-please.yml` workflow turned the **Release please** check red on
@@ -1590,6 +1628,16 @@ typed `env` export carrying `CONVEX_CLOUD_URL` / `CONVEX_SITE_URL`). Commit it
 with the bump: `pnpm codegen:api:check` only guards `api.d.ts`, so a stale
 `server.d.ts` sails through CI and reappears as a phantom diff for whoever
 next runs `convex dev`.
+
+`.mcp.json` pins the same version for the Convex MCP server
+(`npx -y convex@<version> mcp start`). Renovate moves it with `convex` (the
+`customManagers` regex in `renovate.json`); a bump by hand must move it in the
+same PR. It is an exact `npx` pin rather than `pnpm exec convex` because
+Claude Code starts MCP servers when a session opens, before anyone has run
+`pnpm install` on a fresh clone, and `pnpm exec` finds nothing without
+`node_modules`. It is not `@latest` because that fetched
+and ran the newest registry release on every start, on machines holding
+Convex credentials — never the version the lockfile had been reviewed at.
 
 ## Convex type inference collapses on two specific cycles
 
@@ -2565,7 +2613,11 @@ red, in order:
 
 1. **The patched version is already inside the parent's range** — refresh
    the lockfile for that package only:
-   `pnpm update --depth Infinity <pkg>`. `package.json` does not change. This
+   `pnpm update --depth Infinity --config.minimum-release-age=4320 <pkg>`.
+   `package.json` does not change. The flag is in minutes (three days), the
+   same cooldown `renovate.json` puts on automerge: it keeps the refresh from
+   pulling a version published this morning. Review the `pnpm-lock.yaml` diff
+   — it should touch the named packages and their own dependencies only. This
    is how js-yaml, nanoid, postcss and browserslist were cleared.
 2. **The parent pins a vulnerable range** — add a `pnpm.overrides` entry in
    `package.json` (never in `pnpm-workspace.yaml`, see § "pnpm 11 silently drops
@@ -2576,6 +2628,11 @@ red, in order:
 
 Moderate and low advisories do not fail the step; Renovate clears most of
 them with their parents.
+
+The step can go red with no change in the PR: an advisory published overnight
+turns every branch red at once, which is the point of the gate. Never mute it
+or add `--ignore` to get a PR through — a finding that genuinely does not apply
+is argued in the PR body, and its advisory id recorded here.
 
 ## The candidate bundle budget reads the start manifest
 

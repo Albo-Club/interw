@@ -1,5 +1,8 @@
 {
   "include": ["**/*.ts", "**/*.tsx", "public/script*.js"],
+  // Agents' checkouts of this repository. Setting `exclude` replaces the
+  // default, so `node_modules` has to be named again.
+  "exclude": ["node_modules", ".claude/worktrees"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

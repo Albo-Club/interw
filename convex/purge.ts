@@ -61,19 +61,23 @@ export const collectSessionObjects = internalQuery({
       .collect()
 
     // Segment rows are written BEFORE the upload, so even an answer whose
-    // upload failed has its keys here. That is what makes erasure exact
-    // rather than a scan-and-hope.
+    // upload failed has its keys here — and so are document slots, through
+    // `pendingDocumentKeys`. That is what makes erasure exact rather than a
+    // scan-and-hope.
     const keys = [
-      ...segments.flatMap((segment) =>
+      ...new Set(
         [
-          segment.videoKey,
-          segment.audioKey,
-          ...(segment.supersededKeys ?? []),
+          ...segments.flatMap((segment) => [
+            segment.videoKey,
+            segment.audioKey,
+            ...(segment.supersededKeys ?? []),
+          ]),
+          session.cvKey,
+          session.coverLetterKey,
+          ...(session.pendingDocumentKeys ?? []),
         ].filter((key): key is string => key !== undefined),
       ),
-      session.cvKey,
-      session.coverLetterKey,
-    ].filter((key): key is string => key !== undefined)
+    ]
 
     return {
       orgId: session.orgId,
@@ -296,6 +300,7 @@ export const clearSessionMedia = internalMutation({
     await ctx.db.patch('sessions', args.sessionId, {
       cvKey: undefined,
       coverLetterKey: undefined,
+      pendingDocumentKeys: undefined,
       mediaPurgedAt: Date.now(),
     })
     await ctx.db.insert('purgeLog', {

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "candidate-emails-job-title": {
+      "title": "Candidate emails name the role by its job title only",
+      "body": "The invitation and the confirmation a candidate receives now name the role only by the job title shown to candidates. A role without one is described as an interview with your organisation, never by the name your team uses for it. We also hardened how uploaded files are tracked, so deleting a candidate, a question or a role removes every file that belongs to it, and tightened the protections on the candidate's interview link."
+    },
     "share-highlights-and-deadlines": {
       "title": "Highlights on shared reports, no dead invitations",
       "body": "A shared report now lists the moments worth watching, as the report in the app does. A bounced invitation is flagged on its candidate however much mail the organisation sent since. A role past its deadline, or archived, no longer sends invitations or reminders that would open on a closed interview, and when a role's creator leaves with nobody else on its team, its admins are told when a report is ready."

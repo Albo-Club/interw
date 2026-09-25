@@ -245,6 +245,19 @@ export function candidateDocumentKey(
   return `${sessionPrefix(orgId, sessionId)}/${kind}.${extension}`
 }
 
+/**
+ * A row's pending keys with `key` added. An upload slot's key is named on the
+ * row it belongs to BEFORE its PUT is signed, so an object uploaded and never
+ * attached is still one deletion can name; attaching takes it out of the list
+ * once the row points at it.
+ */
+export function withPendingKey(
+  pending: Array<string> | undefined,
+  key: string,
+): Array<string> {
+  return pending?.includes(key) ? pending : [...(pending ?? []), key]
+}
+
 export function projectMediaKey(
   orgId: string,
   projectId: string,

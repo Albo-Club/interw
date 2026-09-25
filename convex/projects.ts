@@ -378,7 +378,7 @@ export const remove = mutation({
     // data too, and deleting only the rows left them in the bucket with
     // nothing pointing at them: unreachable by any later purge, billed
     // indefinitely, and removable only by hand.
-    const keys: Array<string> = []
+    const keys: Array<string> = [...(project.pendingMediaKeys ?? [])]
     if (project.introMediaKey) keys.push(project.introMediaKey)
 
     for (const table of ['questions', 'criteria'] as const) {
@@ -387,8 +387,9 @@ export const remove = mutation({
         .withIndex('by_project', (q) => q.eq('projectId', projectId))
         .collect()
       for (const row of rows) {
-        if (table === 'questions' && 'mediaKey' in row && row.mediaKey) {
-          keys.push(row.mediaKey)
+        if ('mediaKey' in row && row.mediaKey) keys.push(row.mediaKey)
+        if ('pendingMediaKeys' in row && row.pendingMediaKeys) {
+          keys.push(...row.pendingMediaKeys)
         }
         await ctx.db.delete(table, row._id)
       }

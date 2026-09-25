@@ -19,7 +19,7 @@ jobs:
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Catches a Convex module added without its codegen committed — CI has
@@ -65,7 +65,7 @@ jobs:
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # A missing secret fails here, by name, instead of as a blank page three
@@ -87,35 +87,18 @@ jobs:
           name: playwright-report
           path: playwright-report/
 
-  # Two jobs, two distinct questions — keep both:
-  #   skills-verify  "is my tree intact?"    offline, deterministic
-  #   skills-drift   "has upstream moved?"   needs the network
-  # The sync script is dependency-free, so neither needs `pnpm install`.
-
-  # Local integrity (TESTING.md B6): does `.agents/skills` still hold exactly
-  # what `skills-lock.json` says we vendored? Offline, so this job can't go red
-  # on a raw.githubusercontent.com hiccup. When it does go red, a vendored file
-  # was hand-edited or is missing: `pnpm run sync:skills` repairs it (no
-  # `--force` needed), then review the diff — see CLAUDE.md.
-  skills-verify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-      - run: node scripts/sync-skills.mjs --verify
-
-  # Upstream skill drift (TESTING.md B6b). Kept in CI here because this repo
-  # has no weekly sync cron to catch drift otherwise — it was deliberately
-  # removed (see KNOWN_ISSUES.md § "sync-skills.yml (cron + auto-PR) was
-  # removed"). When this goes red: run `pnpm run sync:skills:update`, review
-  # the SKILL.md diff, commit. Don't mute the check — see CLAUDE.md.
+  # Upstream skill drift: the CLI has no read-only check, so the diff after an
+  # update IS the drift. Red → CLAUDE.md § Skills. Don't mute it.
   skills-drift:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
-      - run: node scripts/sync-skills.mjs --check
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm skills:update
+      # Staged, so a file upstream added counts as drift too.
+      - run: git add -A .agents .claude/skills skills-lock.json && git diff --cached --stat --exit-code

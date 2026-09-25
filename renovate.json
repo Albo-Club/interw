@@ -11,6 +11,12 @@
       "groupName": "non-major"
     },
     {
+      "description": "The Convex family moves together: a component built against an older convex peer stops type-checking (KNOWN_ISSUES.md § Bumping convex is never one package).",
+      "matchPackageNames": ["convex", "@convex-dev/**", "convex-test"],
+      "groupName": "convex",
+      "prBodyNotes": ["Run `npx convex ai-files update` and commit `convex/_generated/ai/` in this PR: nothing else refreshes the Convex guidelines."]
+    },
+    {
       "description": "Auto-merge dev dependencies on green CI, once the release is 3 days old: nobody reviews an automerged diff, and a hijacked publish is usually caught and yanked within that window.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],

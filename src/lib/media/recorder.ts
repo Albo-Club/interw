@@ -14,9 +14,16 @@
 /**
  * In preference order. MP4 (H.264/AAC) wherever the browser can record it —
  * Chrome and Edge 126+, Safari — because it is what every recruiter's browser
- * plays, iPhones included, and it seeks: MediaRecorder's WebM carries no
- * duration and no cues, so "jump to the quote" landed wherever the browser
- * guessed. WebM stays as the Firefox branch, which records nothing else.
+ * plays, iPhones included, and because H.264/AAC can be rewritten into an
+ * indexed file without re-encoding. WebM stays as the Firefox branch, which
+ * records nothing else.
+ *
+ * Neither format seeks well as recorded. MediaRecorder writes a stream: its
+ * WebM has no Duration and no Cues, and its MP4 is fragmented, with zero
+ * durations in mvhd/tkhd/mdhd and no sidx or mfra. The player learns neither
+ * the length nor where a given second sits in the file until it has read that
+ * far — see KNOWN_ISSUES.md § "Video is recorded as MP4 wherever the browser
+ * can".
  */
 export const VIDEO_MIME_PREFERENCES = [
   'video/mp4;codecs=avc1,mp4a.40.2',

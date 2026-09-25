@@ -1747,14 +1747,25 @@ Traps worth knowing:
 ## Video is recorded as MP4 wherever the browser can
 
 `VIDEO_MIME_PREFERENCES` puts H.264/AAC MP4 first (Chrome and Edge 126+,
-Safari) and keeps WebM only as the Firefox branch. Two reasons, both on the
-recruiter's side, not the candidate's:
+Safari) and keeps WebM only as the Firefox branch, because **WebM playback on
+Safari, iOS above all, varies by version**: a recruiter on an iPhone could not
+always watch an answer recorded in Chrome. H.264/AAC is also what a server can
+rewrite into an indexed file without re-encoding.
 
-- **MediaRecorder's WebM has no duration and no cues.** The player reports an
-  unknown duration and seeks wherever it guesses, which quietly breaks "jump
-  to the quote". Its MP4 is fragmented, which carries its own timing.
-- **WebM playback on Safari, iOS above all, varies by version.** A recruiter on
-  an iPhone could not always watch an answer recorded in Chrome.
+What MP4 does **not** buy is seeking. MediaRecorder writes a stream, whatever
+the container:
+
+- **WebM** (Firefox) has no `Duration` and no `Cues`.
+- **MP4** (Chrome, Safari) is fragmented: `mvhd`, `tkhd` and `mdhd` carry a
+  duration of 0, and there is no `sidx` or `mfra` to map a time to a byte
+  offset.
+
+So the player reports an unknown (or live-looking) duration, and a seek to a
+part of the file it has not downloaded yet is ignored or lands approximately.
+Sources: addpipe, "Duration in MP4 Files Produced by Chrome/Safari" and
+"Duration in WebM Videos Produced by Chrome". The real fix is to rewrite each
+video server-side into an MP4 with its index up front
+(`-movflags +faststart`), which is not built yet.
 
 The **audio** file is deliberately left alone: WebM/Opus on Chrome and
 Firefox, M4A on Safari. It is what gets transcribed, and the transcription
@@ -1762,9 +1773,8 @@ path already takes both — changing it would risk the answer for no gain.
 The transcription call labels the file with `mimeTypeForKey(key)`; it used to
 hard-code `audio/webm`, which was wrong for every Safari answer.
 
-Firefox answers therefore stay WebM, with the seeking problem above, until
-something re-muxes them server-side. Plain `video/mp4` stays in the list
-after the codec-qualified entries for a Safari that answers no codec query.
+Plain `video/mp4` stays in the list after the codec-qualified entries for a
+Safari that answers no codec query.
 
 ## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
 

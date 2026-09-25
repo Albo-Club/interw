@@ -25,6 +25,7 @@ import type * as interview from "../interview.js";
 import type * as invitations from "../invitations.js";
 import type * as jobImport from "../jobImport.js";
 import type * as jobImportFetch from "../jobImportFetch.js";
+import type * as lib_accountLifecycle from "../lib/accountLifecycle.js";
 import type * as lib_agentScope from "../lib/agentScope.js";
 import type * as lib_ai from "../lib/ai.js";
 import type * as lib_auth from "../lib/auth.js";
@@ -91,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   invitations: typeof invitations;
   jobImport: typeof jobImport;
   jobImportFetch: typeof jobImportFetch;
+  "lib/accountLifecycle": typeof lib_accountLifecycle;
   "lib/agentScope": typeof lib_agentScope;
   "lib/ai": typeof lib_ai;
   "lib/auth": typeof lib_auth;

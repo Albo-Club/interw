@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "clearer-account-settings": {
+      "title": "Clearer account settings",
+      "body": "Your profile now follows an email change step by step, shows the ways you can really sign in, and lets you set a password if your account has none. An account-deletion link opened on another device now leads to a clear page, and an account can no longer leave an organization without an owner. We also hardened our security notices: you now get an email after a password reset too."
+    },
     "sign-in-with-a-code": {
       "title": "Sign in with a code from your email",
       "body": "Enter your email and we send you a 6-digit code — or a button that fills it in for you. The same steps create your account, so there is no password to choose; you can still sign in with one if you have it. Invitations use the same sign-in, and a session that expires now brings you back to the page you were on."

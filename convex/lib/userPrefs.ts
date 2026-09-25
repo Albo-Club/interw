@@ -1,5 +1,5 @@
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
-import type { DataModel, Doc } from '../_generated/dataModel'
+import type { DataModel, Doc, Id } from '../_generated/dataModel'
 
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 type MutCtx = GenericMutationCtx<DataModel>
@@ -23,6 +23,25 @@ export async function getLastOrgSlug(
   // created before the move to `userPrefs` keep their last viewed org until
   // it gets written here on next navigation.
   return prefs?.lastOrgSlug ?? user.lastOrgSlug ?? null
+}
+
+export type EmailChange = NonNullable<Doc<'userPrefs'>['emailChange']>
+
+/** Record where the caller's email change stands (see the schema). */
+export async function setEmailChange(
+  ctx: MutCtx,
+  userId: Id<'users'>,
+  emailChange: EmailChange,
+): Promise<void> {
+  const prefs = await ctx.db
+    .query('userPrefs')
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .unique()
+  if (!prefs) {
+    await ctx.db.insert('userPrefs', { userId, emailChange })
+  } else {
+    await ctx.db.patch('userPrefs', prefs._id, { emailChange })
+  }
 }
 
 export async function setLastOrgSlug(

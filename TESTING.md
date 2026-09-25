@@ -29,7 +29,7 @@ undone later.
 | P4 | Model provider key | `MISTRAL_API_KEY` on the Convex deployment — one key for transcription, evaluation and the AI chat agent | The pipeline fails at the first step without it, visibly, in `jobLog`, and the chat agent's reply fails visibly in the AI panel. There is deliberately no second provider key: see `.env.example` § "AI provider" |
 | P4b | **Retire the chat agent's old key** | On every deployment that ever ran `pnpm setup`: `pnpm exec convex env remove ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` (add `--prod` for production) | The code stopped reading them, which is not the same as them being gone: a credential nothing calls is a credential nobody rotates or notices, and it stays valid and billable until someone removes it |
 | P4a | **The model actually answers, on both paths** | Push a throwaway `internalAction` calling `complete()` to the dev deployment and run it with `npx convex run`, **then** run level 5 C3 (ask the assistant a question that needs a tool) | Every stub in the unit suite is hand-written, so none of them can discover that a provider disagrees with its documented response shape — which is exactly how a block-shaped `content` reached production. The id in `convex/lib/ai.ts` now drives two clients: the hand-rolled one in `complete()` and `@ai-sdk/mistral` in `convex/agent.ts`, which also needs tool calling and streaming. Do both halves whenever that id changes. See `KNOWN_ISSUES.md` § "A reasoning model does not answer in a string" |
-| P4b | **`PURGE_HASH_SALT` on the Convex deployment** | `pnpm exec convex env set PURGE_HASH_SALT "$(openssl rand -hex 32)"`, distinct per deployment | The erasure register stores a hash of the candidate's address, not the address. Unsalted, that hash is reversible by dictionary — the register would hold the data it exists to prove it destroyed. Unset, every erasure path throws `purge_hash_salt_not_configured`, on purpose |
+| P4c | **`PURGE_HASH_SALT` on the Convex deployment** | `pnpm exec convex env set PURGE_HASH_SALT "$(openssl rand -hex 32)"`, distinct per deployment | The erasure register stores a hash of the candidate's address, not the address. Unsalted, that hash is reversible by dictionary — the register would hold the data it exists to prove it destroyed. Unset, every erasure path throws `purge_hash_salt_not_configured`, on purpose |
 | P5 | Resend delivery webhook | Point a Resend webhook at `https://<convex-site-url>/resend-webhook`, store `RESEND_WEBHOOK_SECRET` | Without it a bounced invitation is indistinguishable from a candidate who has not opened it |
 | P6a | `MEDIA_ORIGIN` on the **web server** (each Vercel project's env, or `.env.local` for `pnpm dev`) | The bucket origin signed URLs point at, e.g. `https://interw-media.s3.fr-par.scw.cloud` | The CSP is served by the web server, which never talks to the bucket, so this is the one object-store setting that does not live on the Convex deployment. Unset, `media-src` falls back to `https:` — video still plays, but from any host |
 | P6 | Sentry for the backend | Convex dashboard → Settings → Integrations → Sentry | Convex reports thrown exceptions from actions through its own log stream; there is deliberately no Sentry SDK in the Convex runtime. The code's part of the contract is to never swallow an error, which `pnpm lint` and code review enforce |
@@ -74,14 +74,14 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | A2  | Sign out → re-sign in correct                          | Redirects to `/app/acme` (last org via `lastOrgSlug`)                              |
 | A3  | "Use my password instead", wrong password                | Inline destructive `<Alert>` above the form (not a toast), focus back in the password field. No session. Tab order: email → password → Sign in → "Forgot your password?" |
 | A4  | `/app/acme/projects` unauthenticated | Redirects to `/login?redirect=/app/acme/projects`; signing in lands back there. Signed in, then the session dies without a sign-out (delete the `interw.session_*` cookies, or revoke the session from another device) → `/app` bounces with "Your session expired. Sign in to continue." A voluntary sign-out shows no such notice |
-| A5  | `/app/me` → change password                            | Success toast **+ "Password changed" email** (anti-takeover) + other sessions invalidated |
+| A5  | `/app/me` → change password                            | Success toast **+ "Password changed" email** (anti-takeover, sent by the server — also for a change made through the API alone) + other sessions invalidated. The email links to `/app/me?tab=sessions`, which opens on the Sessions tab |
 | A5b | Change password 3× within a minute                     | Two "Password changed" emails, then none; each change still succeeds (`passwordChangedNotify` bucket, per user) |
 | A6  | Email code for a registered **and** an unregistered address | Identical "Check your inbox" step, both get a code email (subject "`123456` is your interw sign-in code", in the language of the page for a new address). Unregistered: the code creates the account and asks for a name. No `users` row before `/app` |
 | A6b | Code errors                                             | Wrong code → "That code isn't right…" under the field, field cleared and focused. 5 wrong codes → "Too many incorrect tries", even the right one is refused until "Resend code". Code older than 10 min → "This code has expired". "Resend code" is disabled for 30 s with a countdown; after a resend the previous code no longer works |
 | A6c | Code email link ("Continue signing in")                 | Opens `/login/code`: address + code shown, **nothing happens until "Confirm and sign in"**. The address bar shows `/login/code` with no `#…` once loaded; no code in Vercel/Convex logs. Same browser → lands where the sign-in started (e.g. an invitation); another device → `/app`. Opened by a mail scanner (e.g. `curl` the URL): the code still works when typed |
 | A6d | Squatted address: a legacy **unverified** password account (created before password sign-up was turned off) | Code sign-in succeeds, then "Your previous password was turned off" screen → Continue. The old password now gets "Email or password is incorrect" |
 | A6e | "Open Gmail" / "Open Outlook" on the code step           | `@gmail.com` → Gmail only; `@outlook.com`/`@hotmail.*` → Outlook only; a work domain → both; `@yahoo.*`/`@orange.fr` → none. Each opens in a new tab |
-| A7  | Forgot → reset chain (email → token → new password)    | Sign-in with new password works. All pre-reset sessions invalidated.              |
+| A7  | Forgot → reset chain (email → token → new password)    | Sign-in with new password works. All pre-reset sessions invalidated. **"Password changed" email** arrives.              |
 | A8  | `/reset-password?token=expired` (or no token)          | Card "Invalid or expired link" + primary CTA "Send a new reset link"              |
 | A9  | "Last used" badge                                       | After a code sign-in, sign out: "Last used" on "Continue with email"; after a password sign-in, on "Use my password instead"; after Google, on the Google button. Private window → no badge, no error |
 | A10 | Rate-limit                                              | Password sign-in 6× /60s, or 4 code requests /60s from one browser → "Too many attempts…". 4 codes to **one address** within the hour → "We've already sent several emails to this address…" — same answer for an address with no account. Same on "Forgot your password?" and "Resend verification email" |
@@ -91,8 +91,8 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | A12c | Expired verification link | Open a sign-up link more than 1 h old (or tamper with `token=`) | `/login` with "This verification link has expired…" notice. Correct password → "not verified" banner + Resend; the new link works |
 | A12d | Google on an unverified password account | "Continue with Google" with the address of a legacy unverified password account | Back on `/login` with an inline "An account already exists for this address, but it isn't confirmed yet. Continue with your email…" alert (not a toast, not the generic provider error); `redirect` preserved |
 | A13 | Email change, cross-device | `/app/me` → change email, approve from the old inbox, then click the new-address link in a fresh browser | Sent to `/login`; after signing in with the old address and password the change completes. Without signing in, nothing changes |
-| A12 | Password constraints (`/reset-password`)                | <12 chars → Zod block. HIBP leak → "appeared in known data breaches". zxcvbn meter visible. |
-| A13 | Password match feedback `/reset-password`              | Match → green ✓ "Passwords match". Mismatch → red case-sensitive hint.           |
+| A23 | Password constraints (`/reset-password`, `/app/me`) | <12 chars → Zod block. HIBP leak → "appeared in known data breaches". zxcvbn meter visible. |
+| A26 | Password match feedback (`/reset-password`, `/app/me`)   | Match → green ✓ "Passwords match". Mismatch → red case-sensitive hint.           |
 | A14 | Resend (verification & reset)                          | 2nd email arrives if address exists. Neutral privacy-respecting toast.            |
 | A15 | Network error (offline) on "Continue with email" + forgot | Inline `<Alert>` "Network error" (no misleading "Check your inbox" / "link sent"). |
 | A16 | `/app/me` Sessions → list + Revoke + "Sign out others" | Current session = "Current" badge, no Revoke button. Revoking others works. "Sign out other devices" asks confirmation then invalidates all except current. |
@@ -105,11 +105,10 @@ Test with a fresh user "Alice" (`alice@test.local`).
 | A22b | **Google in prod** — after `pnpm run setup:prod` (Google creds present in dev) | `convex env list --prod` contains `GOOGLE_CLIENT_ID`; prod redirect URI added to the same Google client; button visible on prod domain, sign-in works. |
 | A24 | **Open redirect** — sign in from `/login?redirect=https://evil.com`, then from `/login?redirect=/%09/evil.com` (tab-smuggling) | Both land on `/app`, **never** off-site. The hostile param is dropped silently — normal login page, no error screen. Repeat with `//evil.com` and `/\evil.com`. |
 | A25 | **Return URL preserved** — sign in from `/login?redirect=/app/acme/projects`; then, still signed in, open `/login?redirect=/app/acme/projects` again | Both land on `/app/acme/projects` (internal paths still work — the guard rejects origins, not paths; an already signed-in visitor goes to the return URL, not `/app`). |
-| A26 | Auth pages, keyboard and phone                          | `/login` at 390 px wide: every button/field ≥ 44 px tall, language switcher top-right (switching re-renders in place), one `<h1>` per step. Submitting an invalid email focuses the email field. The code field accepts a pasted "123 456" and submits by itself at 6 digits |
+| A27 | Auth pages, keyboard and phone                          | `/login` at 390 px wide: every button/field ≥ 44 px tall, language switcher top-right (switching re-renders in place), one `<h1>` per step. Submitting an invalid email focuses the email field. The code field accepts a pasted "123 456" and submits by itself at 6 digits |
 
-> **A23+ (known gaps)**: no "Password changed" email on the
-> `/forgot-password → /reset-password` flow, nor NewDeviceEmail — see
-> `KNOWN_ISSUES.md` § "Post-event notification coverage" for the roadmap.
+> **Known gap**: no NewDeviceEmail — see `KNOWN_ISSUES.md` § "Post-event
+> notification coverage".
 
 ## Level 2 — Internationalisation i18n (8 min)
 
@@ -118,15 +117,15 @@ request it. Architecture details: `KNOWN_ISSUES.md` § "i18n (react-i18next) SSR
 
 | #   | Step                                                                  | Expected result                                                                                   |
 | --- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| I1  | Browser in `en-US`, `lang` cookie cleared, visit `/`                 | Everything in English. `<html lang="en">`. No flash.                                              |
-| I2  | Force `Accept-Language: fr-CA` (DevTools or `curl -H`), cookie cleared, reload `/` | **From the SSR HTML source** (View Source, JS disabled) everything is in French. `<html lang="fr">`. |
-| I3  | Reload in FR several times                                            | Console **without** "Text content does not match" warning (no hydration mismatch).                |
-| I4  | Language switcher (footer sidebar, connected, or corner of `/`)       | Instant FR↔EN toggle. `lang` cookie updated. Survives reload.                                     |
-| I5  | Logged in, change language                                            | `users.preferredLanguage` patched (check Convex dashboard).                                       |
-| I6  | Variants `fr-BE` / `fr-FR` / `fr`                                    | All → French (any fr variant).                                                                    |
-| I7  | Emails (reset password, invitation) for a user with `preferredLanguage=fr` | Subject + body in French; for EN/no-pref user → English.                                    |
-| I8  | Wrong credentials in FR / invalid form in FR                         | FR auth error message (via classifier); FR Zod messages.                                          |
-| I9  | Regression grep: `git grep -nE "\"[A-Z][a-z]+ " src/routes src/components` | No hardcoded UI string outside `src/components/ui/*` (shadcn chrome).                       |
+| I18N-1 | Browser in `en-US`, `lang` cookie cleared, visit `/`                 | Everything in English. `<html lang="en">`. No flash.                                              |
+| I18N-2 | Force `Accept-Language: fr-CA` (DevTools or `curl -H`), cookie cleared, reload `/` | **From the SSR HTML source** (View Source, JS disabled) everything is in French. `<html lang="fr">`. |
+| I18N-3 | Reload in FR several times                                            | Console **without** "Text content does not match" warning (no hydration mismatch).                |
+| I18N-4 | Language switcher (footer sidebar, connected, or corner of `/`)       | Instant FR↔EN toggle. `lang` cookie updated. Survives reload.                                     |
+| I18N-5 | Logged in, change language                                            | `users.preferredLanguage` patched (check Convex dashboard).                                       |
+| I18N-6 | Variants `fr-BE` / `fr-FR` / `fr`                                    | All → French (any fr variant).                                                                    |
+| I18N-7 | Emails (reset password, invitation) for a user with `preferredLanguage=fr` | Subject + body in French; for EN/no-pref user → English.                                    |
+| I18N-8 | Wrong credentials in FR / invalid form in FR                         | FR auth error message (via classifier); FR Zod messages.                                          |
+| I18N-9 | Regression grep: `git grep -nE "\"[A-Z][a-z]+ " src/routes src/components` | No hardcoded UI string outside `src/components/ui/*` (shadcn chrome).                       |
 
 ## Level 2 — App shell UI (10 min)
 
@@ -175,7 +174,7 @@ Still logged in as Alice. Prepare a second browser for Bob.
 | M6  | Bob creates a second org "Beta" from the org switcher → "Create organization" | `/app/onboarding` titled "Create an organization" (not "first"), with a "Back to my organization" link. Submit switches to `/app/beta`, Alice is NOT a member |
 | M7  | Alice navigates to `/app/beta` directly                     | Redirects to `/app` or 403                                          |
 | M8  | Roles isolated: Alice sees Acme roles only                  | No Beta role on Alice's side                                        |
-| M9  | Switch org via top-bar dropdown                             | Routes recalculated, roles reloaded                                 |
+| M9  | Switch org via the sidebar org switcher                     | Routes recalculated, roles reloaded                                 |
 | M10 | Bob (Acme admin) deletes a role created by Alice, no candidate invited yet | Allowed (owner/admin)                                 |
 | M11 | Non-admin member tries to delete another user's role        | Error "insufficient_role", no deletion                              |
 
@@ -221,15 +220,21 @@ Server rules are covered by `convex/invitations.test.ts`; these rows check the s
 | U4 | Replace an existing logo                                | Old one replaced, no orphan (check `_storage`)                    |
 | U5 | As a plain member, call `files:setMyAvatar` with the org's logo id, or a colleague's avatar id | Refused `not_found`; the logo and the colleague's avatar are untouched. `organizations:bySlug` returns no `logoStorageId` |
 
-## Level 4 — Account lifecycle (8 min)
+## Level 4 — Account lifecycle (12 min)
 
 | #  | Step                                                    | Expected result                                                   |
 | -- | ------------------------------------------------------- | ----------------------------------------------------------------- |
-| L1 | `/app/me` → change email                                | Verification email sent to the old address                        |
-| L2 | Click the verification link                             | Email updated, sessions still valid                               |
-| L3 | `/app/me` → delete account                              | Confirmation email sent                                           |
-| L4 | Click the link in the delete email                      | Convex user purged, memberships removed, BA user deleted          |
-| L5 | Deleted user attempts `/login`                          | Auth fails                                                        |
+| L1 | `/app/me` → change email                                | "Step 1 of 2" toast; approval email at the **old** address; the Email card shows "Email change in progress — step 1 of 2". Same card for an address already taken by another account (and no email at all then) |
+| L2 | Click the approval link (old inbox)                     | Lands on `/app/me` with "Change approved…" toast; card now says step 2 of 2; an email titled "Confirm your new email address" (mentions the old address, no password wording) reaches the new address |
+| L3 | Click the new-address link                              | "Your email is now …" toast, email updated, sessions still valid. An expired or reused link → "invalid or has expired" toast. Cross-device variant: A13 |
+| L4 | Sole owner of Acme → Security tab                       | Delete card lists "Acme" (link to its members page) and the delete button is disabled. `/delete-user` called directly → 400 `SOLE_OWNER`, no email |
+| L5 | Make Bob an owner of Acme → delete account              | Confirmation email ("expires in 1 hour") sent                     |
+| L6 | Open the delete link in a browser with no session       | `/account-deletion` "Sign in to confirm the deletion", **not** raw JSON. Sign in → account deleted → "Your account was deleted" |
+| L7 | Click the delete link while signed in (another request) | Convex user purged, memberships removed, BA user deleted, lands on "Your account was deleted". A tampered token → "This link can't be used" |
+| L8 | Deleted user attempts `/login`                          | Auth fails                                                        |
+| L9 | Google-only account (or password removed) → Security tab | Sign-in methods: Password "Not set", Google "Connected" with Disconnect disabled. Card reads "Set a password" (no current-password field); within an hour of signing in it sets it, sends a "Password added" email, and the card switches to "Change password". After an hour: "sign in again" message and button |
+| L10 | Google configured, password account → Security tab     | Google "Not connected" → Connect → back on the Security tab, Google "Connected", Disconnect enabled. Without `GOOGLE_*`, no Google row at all. No "Magic link" card |
+| L11 | Session older than an hour → `/app/me?tab=sessions`    | Opens on the Sessions tab; shows "sign in again" instead of an endless skeleton. After signing in again it returns to the tab with the list |
 
 ## Level 4 — Super-admin (5 min)
 

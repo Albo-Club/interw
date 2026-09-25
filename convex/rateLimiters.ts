@@ -30,9 +30,9 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 2,
   },
-  // "Your password was changed" notices: per user. The client fires it after
-  // Better Auth confirms the change, but the mutation is public and cannot
-  // tell a real change from a replay, so each call is one paid send.
+  // "Your password was changed" notices: per user. Only a real change sends
+  // one (server-side hooks), but a burst of changes should not become a burst
+  // of emails.
   passwordChangedNotify: {
     kind: 'token bucket',
     rate: 3,

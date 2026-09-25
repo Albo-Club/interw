@@ -11,12 +11,15 @@ import { RESEND_FROM, resend } from './email'
 import {
   changeEmailVerificationEmail,
   deleteAccountVerificationEmail,
+  newEmailVerificationEmail,
   resetPasswordEmail,
   signInCodeEmail,
   verificationEmail,
 } from './emailTemplates'
+import { accountLifecycle } from './lib/accountLifecycle'
 import { localeFromHeaders } from './lib/locale'
 import { rateLimiter } from './rateLimiters'
+import type { AccountLifecycleEffects } from './lib/accountLifecycle'
 import type { DataModel } from './_generated/dataModel'
 import type { GenericCtx } from '@convex-dev/better-auth'
 import type { BetterAuthPlugin } from 'better-auth/types'
@@ -266,6 +269,38 @@ export const verificationRequiresCredential = createAuthMiddleware(
   },
 )
 
+// What the account-lifecycle hooks do to the database. Resolved lazily: a
+// query can build `createAuth` too, and only endpoints that write reach these.
+const lifecycleEffects = (
+  ctx: GenericCtx<DataModel>,
+): AccountLifecycleEffects => ({
+  soleOwnedOrgs: (userId) =>
+    requireRunMutationCtx(ctx).runQuery(internal.users.soleOwnedOrgNames, {
+      betterAuthId: userId,
+    }),
+  passwordChanged: async (userId) => {
+    // The change is committed by now; a failed notice must not report it as
+    // failed, so it is logged rather than rethrown.
+    try {
+      await requireRunMutationCtx(ctx).runMutation(
+        internal.notifications.passwordChanged,
+        { betterAuthId: userId },
+      )
+    } catch (error) {
+      console.error('[password-changed-notice] failed', {
+        userId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  },
+  emailChangeRequested: async (userId, newEmail) => {
+    await requireRunMutationCtx(ctx).runMutation(
+      internal.users.recordEmailChangeRequested,
+      { betterAuthId: userId, newEmail },
+    )
+  },
+})
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   // Language for an email: the recipient's stored preference, else the
   // language of the request that triggered it.
@@ -318,9 +353,11 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // refresh once a day
       cookieCache: { enabled: true, maxAge: 60 * 5 }, // 5 min
-      // `freshAge` is how recently a user must have authenticated for
-      // sensitive ops (changeEmail, deleteUser, change-password). BA enforces
-      // this when an endpoint asks for a fresh session.
+      // `freshAge` is how recently a user must have signed in for the
+      // endpoints BA 1.6.30 guards with `freshSessionMiddleware`: only
+      // `/list-sessions` and `/unlink-account`. change-email, change-password
+      // and delete-user (with its email link) ask for a session, not a fresh
+      // one. `users.setPassword` applies it too, on its own.
       freshAge: 60 * 60, // 1h
     },
     emailAndPassword: {
@@ -357,21 +394,34 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       // Invalidate every other session on reset — basic account-takeover
       // mitigation if the previous password was leaked.
       revokeSessionsOnPasswordReset: true,
+      onPasswordReset: ({ user }) =>
+        lifecycleEffects(ctx).passwordChanged(user.id),
     },
     emailVerification: {
       sendOnSignUp: true,
       // No `autoSignInAfterVerification`: a link alone never signs anyone in
       // (see `verificationRequiresCredential`).
       sendVerificationEmail: async (
-        data: { user: { email: string }; url: string },
+        data: { user: { id: string; email: string }; url: string },
         request?: Request,
       ) => {
         const mutCtx = requireRunMutationCtx(ctx)
-        const locale = await emailLocale(data.user.email, request?.headers)
-        const { subject, html, text } = verificationEmail({
-          locale,
-          url: data.url,
-        })
+        // Step 2 of an email change reuses this sender; it gets its own copy.
+        const change = await mutCtx.runMutation(
+          internal.users.recordEmailChangeApproved,
+          { betterAuthId: data.user.id, newEmail: data.user.email },
+        )
+        const { subject, html, text } = change
+          ? newEmailVerificationEmail({
+              locale: change.locale,
+              url: data.url,
+              oldEmail: change.oldEmail,
+              newEmail: data.user.email,
+            })
+          : verificationEmail({
+              locale: await emailLocale(data.user.email, request?.headers),
+              url: data.url,
+            })
         await resend.sendEmail(mutCtx, {
           from: RESEND_FROM,
           to: data.user.email,
@@ -454,6 +504,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
       },
       deleteUser: {
         enabled: true,
+        // BA's default is 24 h; the UI and the email promise one hour, like
+        // every other link we send.
+        deleteTokenExpiresIn: 60 * 60,
         sendDeleteAccountVerification: async (data: {
           user: { email: string; name?: string | null }
           url: string
@@ -510,6 +563,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         return ok
       }),
       revokedPasswordNotice,
+      accountLifecycle(lifecycleEffects(ctx)),
       convex({ authConfig }),
     ],
   })

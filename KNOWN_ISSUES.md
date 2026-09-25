@@ -253,7 +253,8 @@ fallback, a Google sign-in whose email matches an existing password user **links
 to the same Convex `users` row instead of creating a duplicate. No new
 provisioning code — the existing `/app` route trigger
 (`src/routes/app/route.tsx`) handles it. If you add GitHub/Apple later, the same
-trusted-email reasoning applies; flip the scaffold in `linked-accounts.tsx`.
+trusted-email reasoning applies; add its row to `linked-accounts.tsx`, which
+lists only the methods this deployment really offers.
 
 ## Auth hardening (Phase 0)
 
@@ -1157,34 +1158,64 @@ deploy time anyway.
 
 ## Post-event notification coverage
 
-`notifications.notifyPasswordChanged` fires from the client right after
-`authClient.changePassword()` succeeds on `/app/me`. **It does NOT fire on
-the `/forgot-password` → `/reset-password` flow** because that path runs
-server-side inside Better Auth and we don't have a clean hook (BA exposes
-`sendResetPassword` for sending the *link*, not a post-reset callback). The
-existing `revokeSessionsOnPasswordReset: true` covers the takeover-mitigation
-side (all sessions revoked, user must re-auth) so a hijacker is locked out;
-the missing piece is the *informational* email to the rightful owner.
+"Password changed" is sent **by the server**, never by the page that made the
+change: a client-fired notice is skipped by anyone calling the API directly,
+and a public "notify me" mutation cannot tell a real change from a replay.
+`notifications.passwordChanged` (internal, per-user `passwordChangedNotify`
+bucket, logs instead of throwing past it) is reached from three places:
 
-The mutation is public and cannot tell a real change from a replay, so it
-consumes the per-user `passwordChangedNotify` bucket (3/h, burst 2) before
-sending; the client's fire-and-forget call absorbs a `rate_limited` silently.
+- `/change-password` — an `after` hook in `accountLifecycle`
+  (`convex/lib/accountLifecycle.ts`), which skips a failed attempt by checking
+  `isAPIError(ctx.context.returned)`: after-hooks run on errors too.
+- `/reset-password` — `emailAndPassword.onPasswordReset`. BA 1.6.30 **does**
+  have this post-reset hook (`api/routes/password.mjs`, called after the new
+  hash is stored, before `revokeSessionsOnPasswordReset`); an earlier version
+  of this section said it did not.
+- `users.setPassword` — with `added: true` ("a password was added").
 
-Two paths if/when this matters:
-1. Add `databaseHooks.account.update.after(account)` in `convex/auth.ts` and
-   gate on `providerId === 'credential'`. Risk: BA's `databaseHooks` type
-   surface is heavy and may trigger the TS inference cycle that CLAUDE.md
-   anti-pattern flags. Try in isolation.
-2. Add a thin wrapper around `authClient.resetPassword()` that, on success,
-   POSTs to a public Convex mutation. Symmetric to the `/me` pattern but
-   needs the user's email — derivable from the JWT BA sets on the response,
-   or by passing it through the reset-password page state.
-
-**NewDeviceEmail** is not implemented for the same scoping reason: detecting
+**NewDeviceEmail** is not implemented: detecting
 "new device" requires storing UA fingerprints in our schema (BA's component
 tables aren't queryable from `ctx.db` directly). Tracked as Phase 3 work
 behind a dedicated PR — needs a `deviceFingerprints` table + a session-create
 hook + an action to send the email.
+
+## Account lifecycle: what Better Auth 1.6.30 leaves to us
+
+Each of these cost an audit finding; the fixes live in
+`convex/lib/accountLifecycle.ts` (a local BA plugin, tested on the memory
+adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
+
+- **`freshAge` guards almost nothing.** Only `/list-sessions` and
+  `/unlink-account` use `freshSessionMiddleware`; change-email,
+  change-password and delete-user use `sensitiveSessionMiddleware`, which
+  checks the session exists, not its age. The flip side: **the Sessions tab
+  fails with `SESSION_NOT_FRESH` for any sign-in older than an hour** — the
+  common case. `ActiveSessions` renders a "sign in again" state for it rather
+  than a skeleton that never resolves. `setPassword` is server-only and has no
+  freshness check either; `users.setPassword` adds one.
+- **Both email-change links return to the same `callbackURL`.** BA reuses the
+  approval link's callback for the confirmation link, and stores nothing
+  queryable in between. So the step lives in `userPrefs.emailChange`
+  (never on the hot `users` row): `approve` from an `after` hook on
+  `/change-email` — recorded even when BA silently sends nothing because the
+  address is taken, so the profile cannot be used to probe addresses —
+  `verify` when `sendVerificationEmail` receives the account with the new
+  address swapped in (`users.recordEmailChangeApproved`), `done` from
+  `syncBetterAuthUser`. The landing on `/app/me?from=email-change` reads the
+  step to say which link just worked.
+- **`/delete-user/callback` answers JSON on every failure.** Opened without a
+  session it returns `FAILED_TO_GET_USER_INFO`; a bad token or a throwing
+  `beforeDelete` is JSON too. A `before` hook resolves each case to
+  `/account-deletion?status=…` first, reading the token with
+  `findVerificationValue` (not consuming it, so the link still works after
+  signing in). Its default expiry is **24 h**, not the hour our copy promised:
+  `deleteTokenExpiresIn` is now set.
+- **Deleting a sole owner orphaned the organisation.** `cascadeDelete` throws
+  `sole_owner` (the last line of defence — it runs inside `beforeDelete`),
+  `/delete-user` refuses with `SOLE_OWNER` before mailing, and `/app/me` lists
+  the organisations. There is no organisation deletion yet, so an owner who is
+  the only member cannot delete their account until another member is made
+  owner.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 

@@ -6,19 +6,18 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { ConvexError } from 'convex/values'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
+import { MailCheck } from 'lucide-react'
 
 import { api } from '../../../convex/_generated/api'
 import { authClient } from '~/lib/auth-client'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { classifyAuthError, formatAuthError } from '~/lib/auth-errors'
-import { isPasswordPwned } from '~/lib/hibp'
+import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Skeleton } from '~/components/ui/skeleton'
 import { Spinner } from '~/components/ui/spinner'
-import { PasswordInput } from '~/components/auth/password-input'
-import { PasswordStrength } from '~/components/auth/password-strength'
 import { ImageUpload } from '~/components/ImageUpload'
 import {
   Field,
@@ -49,10 +48,30 @@ import {
   TabsTrigger,
 } from '~/components/ui/tabs'
 import { ActiveSessions } from '~/components/auth/active-sessions'
-import { LinkedAccounts } from '~/components/auth/linked-accounts'
+import {
+  LinkedAccounts,
+  useLinkedAccounts,
+} from '~/components/auth/linked-accounts'
+import { PasswordSettings } from '~/components/auth/password-settings'
+
+const TABS = ['profile', 'security', 'sessions'] as const
+type Tab = (typeof TABS)[number]
+
+// Every link Better Auth sends expires after an hour (convex/auth.ts).
+const LINK_TTL_MS = 60 * 60 * 1000
+
+const searchSchema = z.object({
+  // Deep-linkable tab: the password-changed email points at `sessions`.
+  tab: z.enum(TABS).optional().catch(undefined),
+  // Set on the return URL of a flow that leaves the page; Better Auth adds
+  // `error` when the link or the provider failed.
+  from: z.enum(['email-change', 'google-link']).optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+})
 
 export const Route = createFileRoute('/app/me')({
   component: ProfilePage,
+  validateSearch: searchSchema,
   head: () => ({
     meta: [
       {
@@ -65,6 +84,7 @@ export const Route = createFileRoute('/app/me')({
 function ProfilePage() {
   const { t } = useTranslation(['account', 'validation', 'errors', 'common'])
   const te = (k: string) => t(`errors:${k}`)
+  const search = Route.useSearch()
   const profileSchema = useMemo(
     () =>
       z.object({
@@ -79,32 +99,21 @@ function ProfilePage() {
     () => z.object({ newEmail: z.email(t('validation:email.invalid')) }),
     [t],
   )
-  const passwordSchema = useMemo(
-    () =>
-      z
-        .object({
-          currentPassword: z.string().min(1, t('validation:required')),
-          newPassword: z.string().min(12, t('validation:password.min12')),
-        })
-        .refine((v) => v.currentPassword !== v.newPassword, {
-          message: t('validation:password.different'),
-          path: ['newPassword'],
-        }),
-    [t],
-  )
   const navigate = useNavigate()
   const me = useConvexQuery(api.users.me)
+  const emailChange = useConvexQuery(api.users.emailChangeStatus)
+  const deletionBlockers = useConvexQuery(api.users.accountDeletionBlockers)
+  const { accounts, failed: accountsFailed, refresh: refreshAccounts } =
+    useLinkedAccounts()
   const updateProfile = useConvexMutation(api.users.updateProfile)
   const [savingProfile, setSavingProfile] = useState(false)
-  const [changingPassword, setChangingPassword] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  // Read once: whether a pending email change's link has expired only needs
+  // to be right when the page opens.
+  const [openedAt] = useState(() => Date.now())
 
   const setMyAvatar = useConvexMutation(api.files.setMyAvatar)
   const removeMyAvatar = useConvexMutation(api.files.removeMyAvatar)
-  const notifyPasswordChanged = useConvexMutation(
-    api.notifications.notifyPasswordChanged,
-  )
-  const [sendingMagic, setSendingMagic] = useState(false)
   const [savingEmail, setSavingEmail] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -141,9 +150,11 @@ function ProfilePage() {
         return
       }
       setSavingEmail(true)
+      // Both links (approval, then confirmation) come back here; the
+      // `emailChangeStatus` query tells which step just completed.
       const { error } = await authClient.changeEmail({
         newEmail: value.newEmail,
-        callbackURL: '/app',
+        callbackURL: '/app/me?tab=profile&from=email-change',
       })
       setSavingEmail(false)
       if (error) {
@@ -157,36 +168,39 @@ function ProfilePage() {
     },
   })
 
-  const passwordForm = useForm({
-    defaultValues: { currentPassword: '', newPassword: '' },
-    validators: { onChange: passwordSchema, onSubmit: passwordSchema },
-    onSubmit: async ({ value, formApi }) => {
-      setChangingPassword(true)
-      const { error } = await authClient.changePassword({
-        currentPassword: value.currentPassword,
-        newPassword: value.newPassword,
-        revokeOtherSessions: true,
-      })
-      setChangingPassword(false)
-      if (error) {
-        toast.error(formatAuthError(classifyAuthError(error), 'change', te))
-        return
-      }
-      // Fire-and-forget: post-event notification email. Never await — a
-      // notification failure must not surface as a password-change failure.
-      notifyPasswordChanged({}).catch((err) => {
-        console.warn('[notifyPasswordChanged]', err)
-      })
-      toast.success(t('account:password.changed'))
-      formApi.reset()
-    },
-  })
-
   useEffect(() => {
     if (me?.kind === 'ready') {
       profileForm.reset({ name: me.user.name ?? '' })
     }
   }, [me, profileForm])
+
+  // Landing from an emailed link or a provider: say what just happened, then
+  // drop the one-shot params so a reload does not say it again.
+  useEffect(() => {
+    if (!search.from) return
+    if (search.error) {
+      toast.error(
+        search.from === 'email-change'
+          ? t('account:email.linkFailed')
+          : t('account:linked.connectFailed'),
+        { id: search.from },
+      )
+    } else if (search.from === 'email-change') {
+      if (emailChange === undefined) return
+      if (emailChange?.step === 'verify') {
+        toast.success(
+          t('account:email.approved', { email: emailChange.newEmail }),
+          { id: search.from },
+        )
+      } else if (emailChange?.step === 'done') {
+        toast.success(
+          t('account:email.changed', { email: emailChange.newEmail }),
+          { id: search.from },
+        )
+      }
+    }
+    void navigate({ to: '/app/me', search: { tab: search.tab }, replace: true })
+  }, [search.from, search.error, search.tab, emailChange, navigate, t])
 
   if (!me || me.kind !== 'ready') {
     return (
@@ -211,39 +225,39 @@ function ProfilePage() {
     navigate({ to: '/login' })
   }
 
-  async function handleMagicLink() {
-    if (me?.kind !== 'ready') return
-    setSendingMagic(true)
-    // Magic links were replaced by sign-in codes (convex/auth.ts).
-    const { error } = await authClient.emailOtp.sendVerificationOtp({
-      email: me.user.email,
-      type: 'sign-in',
-    })
-    setSendingMagic(false)
-    if (error) {
-      toast.error(formatAuthError(classifyAuthError(error), 'signin', te))
-      return
-    }
-    toast.success(t('account:magic.sent', { email: me.user.email }))
-  }
-
   async function handleDelete() {
+    if (me?.kind !== 'ready') return
     setDeleting(true)
-    const { error } = await authClient.deleteUser({ callbackURL: '/login' })
+    // The link lands on /account-deletion whatever happens — deleted, or
+    // opened where nobody is signed in (see convex/lib/accountLifecycle.ts).
+    const { error } = await authClient.deleteUser({
+      callbackURL: '/account-deletion?status=deleted',
+    })
     setDeleting(false)
     if (error) {
       toast.error(formatAuthError(classifyAuthError(error), 'change', te))
       return
     }
-    toast.success(
-      t('account:danger.confirmationSent', {
-        email: me?.kind === 'ready' ? me.user.email : 'your email',
-      }),
-    )
+    toast.success(t('account:danger.confirmationSent', { email: me.user.email }))
     setConfirmDelete(false)
   }
 
   const backTo = me.user.lastOrgSlug ?? null
+  const pendingEmailChange =
+    emailChange &&
+    emailChange.step !== 'done' &&
+    openedAt - emailChange.at < LINK_TTL_MS
+      ? emailChange
+      : null
+  // Unknown after a failed load: default to the form that cannot lock anyone
+  // out — "change" asks for the current password, "set" would be refused.
+  const hasPassword = accounts
+    ? accounts.some((a) => a.providerId === 'credential')
+    : accountsFailed
+      ? true
+      : undefined
+  const deletionBlocked =
+    deletionBlockers === undefined || deletionBlockers.length > 0
 
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6">
@@ -269,7 +283,17 @@ function ProfilePage() {
         )}
       </header>
 
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs
+        value={search.tab ?? 'profile'}
+        onValueChange={(tab) =>
+          void navigate({
+            to: '/app/me',
+            search: { tab: tab as Tab },
+            replace: true,
+          })
+        }
+        className="space-y-6"
+      >
         <TabsList>
           <TabsTrigger value="profile">
             {t('account:page.tabs.profile')}
@@ -371,6 +395,29 @@ function ProfilePage() {
         >
           <CardContent>
             <FieldGroup>
+              {pendingEmailChange && (
+                <Alert>
+                  <MailCheck aria-hidden="true" />
+                  <AlertTitle>{t('account:email.pendingTitle')}</AlertTitle>
+                  <AlertDescription>
+                    <p>
+                      <Trans
+                        t={t}
+                        i18nKey={
+                          pendingEmailChange.step === 'approve'
+                            ? 'account:email.pendingApprove'
+                            : 'account:email.pendingVerify'
+                        }
+                        values={{
+                          email: me.user.email,
+                          newEmail: pendingEmailChange.newEmail,
+                        }}
+                      />
+                    </p>
+                    <p>{t('account:email.pendingExpiry')}</p>
+                  </AlertDescription>
+                </Alert>
+              )}
               <emailForm.Field name="newEmail">
                 {(field) => {
                   const invalid =
@@ -385,6 +432,7 @@ function ProfilePage() {
                         name={field.name}
                         type="email"
                         autoComplete="email"
+                        spellCheck={false}
                         value={field.state.value}
                         onBlur={field.handleBlur}
                         onChange={(e) => field.handleChange(e.target.value)}
@@ -414,122 +462,27 @@ function ProfilePage() {
         <TabsContent value="security" className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>{t('account:magic.title')}</CardTitle>
-          <CardDescription>{t('account:magic.description')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            onClick={handleMagicLink}
-            disabled={sendingMagic}
-          >
-            {sendingMagic && <Spinner />}
-            {t('account:magic.send')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>{t('account:connected.title')}</CardTitle>
           <CardDescription>{t('account:connected.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <LinkedAccounts />
+          <LinkedAccounts
+            accounts={accounts}
+            onChange={() => void refreshAccounts()}
+          />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('account:password.title')}</CardTitle>
-          <CardDescription>{t('account:password.description')}</CardDescription>
-        </CardHeader>
-        <form
-          className="flex flex-col gap-6"
-          onSubmit={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            void passwordForm.handleSubmit()
-          }}
-        >
-          <CardContent>
-            <FieldGroup>
-              <passwordForm.Field name="currentPassword">
-                {(field) => {
-                  const invalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field data-invalid={invalid || undefined}>
-                      <FieldLabel htmlFor={field.name}>
-                        {t('account:password.current')}
-                      </FieldLabel>
-                      <PasswordInput
-                        id={field.name}
-                        name={field.name}
-                        autoComplete="current-password"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={invalid || undefined}
-                      />
-                      {invalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
-              </passwordForm.Field>
-              <passwordForm.Field
-                name="newPassword"
-                validators={{
-                  onBlurAsync: async ({ value }) => {
-                    if (!value || value.length < 12) return undefined
-                    const { pwned } = await isPasswordPwned(value)
-                    return pwned
-                      ? { message: t('validation:password.pwned') }
-                      : undefined
-                  },
-                }}
-              >
-                {(field) => {
-                  const invalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field data-invalid={invalid || undefined}>
-                      <FieldLabel htmlFor={field.name}>
-                        {t('account:password.new')}
-                      </FieldLabel>
-                      <PasswordInput
-                        id={field.name}
-                        name={field.name}
-                        autoComplete="new-password"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={invalid || undefined}
-                      />
-                      <FieldDescription>
-                        {t('account:password.hint')}
-                      </FieldDescription>
-                      <PasswordStrength
-                        value={field.state.value}
-                        userInputs={[me.user.email, me.user.name ?? '']}
-                      />
-                      {invalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
-              </passwordForm.Field>
-              <Button type="submit" disabled={changingPassword}>
-                {changingPassword && <Spinner />}
-                {t('account:password.change')}
-              </Button>
-            </FieldGroup>
-          </CardContent>
-        </form>
-      </Card>
+      {hasPassword === undefined ? (
+        <Skeleton className="h-72 w-full rounded-xl" />
+      ) : (
+        <PasswordSettings
+          key={String(hasPassword)}
+          hasPassword={hasPassword}
+          userInputs={[me.user.email, me.user.name ?? '']}
+          onPasswordSet={() => void refreshAccounts()}
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -555,11 +508,35 @@ function ProfilePage() {
           </CardTitle>
           <CardDescription>{t('account:danger.description')}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {deletionBlockers && deletionBlockers.length > 0 && (
+            <Alert>
+              <AlertTitle>{t('account:danger.blockedTitle')}</AlertTitle>
+              <AlertDescription>
+                <p>{t('account:danger.blocked')}</p>
+                <ul className="list-disc pl-4">
+                  {deletionBlockers.map((org) => (
+                    <li key={org._id}>
+                      <Link
+                        to="/app/$orgSlug/settings/members"
+                        params={{ orgSlug: org.slug }}
+                        aria-label={t('account:danger.manageMembers', {
+                          name: org.name,
+                        })}
+                        className="text-foreground font-medium underline underline-offset-4"
+                      >
+                        {org.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
           <Button
             variant="destructive"
             onClick={() => setConfirmDelete(true)}
-            disabled={deleting}
+            disabled={deleting || deletionBlocked}
           >
             {t('account:danger.action')}
           </Button>

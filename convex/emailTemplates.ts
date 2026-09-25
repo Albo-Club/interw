@@ -300,7 +300,7 @@ export function deleteAccountVerificationEmail({
         ? `${safeName}, you asked to delete your ${APP_NAME} account.`
         : `You asked to delete your ${APP_NAME} account.`,
       followup: `This will permanently remove your profile, your organization memberships, and your access. <strong>This cannot be undone.</strong>`,
-      footer: `If you didn't request this, ignore this email and nothing happens.`,
+      footer: `This link expires in 1 hour. If you didn't request this, ignore this email and nothing happens.`,
       preheader: `Confirm account deletion.`,
       cta: 'Delete my account',
       text: [
@@ -308,7 +308,7 @@ export function deleteAccountVerificationEmail({
           ? `${name}, you asked to delete your ${APP_NAME} account.`
           : `You asked to delete your ${APP_NAME} account.`,
         `This will permanently remove your profile and access. This cannot be undone.`,
-        `Confirm by opening this link:`,
+        `Confirm by opening this link (it expires in 1 hour):`,
         url,
         `If you didn't request this, ignore this email.`,
       ],
@@ -320,7 +320,7 @@ export function deleteAccountVerificationEmail({
         ? `${safeName}, vous avez demandé à supprimer votre compte ${APP_NAME}.`
         : `Vous avez demandé à supprimer votre compte ${APP_NAME}.`,
       followup: `Cela supprimera définitivement votre profil, vos adhésions aux organisations et votre accès. <strong>Cette action est irréversible.</strong>`,
-      footer: `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et rien ne se passera.`,
+      footer: `Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail et rien ne se passera.`,
       preheader: `Confirmer la suppression du compte.`,
       cta: 'Supprimer mon compte',
       text: [
@@ -328,7 +328,7 @@ export function deleteAccountVerificationEmail({
           ? `${name}, vous avez demandé à supprimer votre compte ${APP_NAME}.`
           : `Vous avez demandé à supprimer votre compte ${APP_NAME}.`,
         `Cela supprimera définitivement votre profil et votre accès. Cette action est irréversible.`,
-        `Confirmez en ouvrant ce lien :`,
+        `Confirmez en ouvrant ce lien (il expire dans 1 heure) :`,
         url,
         `Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.`,
       ],
@@ -397,6 +397,66 @@ export function verificationEmail({
   return { subject: c.subject, html, text: plainText(c.text) }
 }
 
+export function newEmailVerificationEmail({
+  locale,
+  url,
+  oldEmail,
+  newEmail,
+}: {
+  locale: EmailLocale
+  url: string
+  oldEmail: string
+  newEmail: string
+}) {
+  // Second step of an email change, sent to the NEW address once the current
+  // one has approved. The change happens when this link is opened.
+  const safeOld = esc(oldEmail)
+  const safeNew = esc(newEmail)
+  const c = pick(locale, {
+    en: {
+      subject: `Confirm your new email address for ${APP_NAME}`,
+      heading: `Confirm your new email address`,
+      intro: `You asked to use <strong>${safeNew}</strong> for your ${APP_NAME} account instead of <strong>${safeOld}</strong>, and approved it from that address. One last step: confirm this one.`,
+      followup: `If you aren't signed in to ${APP_NAME} on this device, you'll be asked to sign in first. This link expires in 1 hour.`,
+      footer: `Didn't ask for this? Ignore this email — the account keeps its current address.`,
+      preheader: `One last step to switch to ${safeNew}.`,
+      cta: 'Confirm new address',
+      text: [
+        `Confirm your new email address for ${APP_NAME}.`,
+        `You asked to use ${newEmail} for your ${APP_NAME} account instead of ${oldEmail}. Open this link to confirm (it expires in 1 hour):`,
+        url,
+        `Didn't ask for this? Ignore this email — the account keeps its current address.`,
+      ],
+    },
+    fr: {
+      subject: `Confirmez votre nouvelle adresse e-mail pour ${APP_NAME}`,
+      heading: `Confirmez votre nouvelle adresse e-mail`,
+      intro: `Vous avez demandé à utiliser <strong>${safeNew}</strong> pour votre compte ${APP_NAME} à la place de <strong>${safeOld}</strong>, et l'avez approuvé depuis cette adresse. Dernière étape : confirmez celle-ci.`,
+      followup: `Si vous n'êtes pas connecté à ${APP_NAME} sur cet appareil, il vous sera demandé de vous connecter d'abord. Ce lien expire dans 1 heure.`,
+      footer: `Vous n'avez rien demandé ? Ignorez cet e-mail — le compte garde son adresse actuelle.`,
+      preheader: `Dernière étape pour passer à ${safeNew}.`,
+      cta: 'Confirmer la nouvelle adresse',
+      text: [
+        `Confirmez votre nouvelle adresse e-mail pour ${APP_NAME}.`,
+        `Vous avez demandé à utiliser ${newEmail} pour votre compte ${APP_NAME} à la place de ${oldEmail}. Ouvrez ce lien pour confirmer (il expire dans 1 heure) :`,
+        url,
+        `Vous n'avez rien demandé ? Ignorez cet e-mail — le compte garde son adresse actuelle.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.followup, urlFallback(locale, url)],
+    cta: { label: c.cta, url },
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}
+
 export function resetPasswordEmail({
   locale,
   url,
@@ -450,41 +510,64 @@ export function resetPasswordEmail({
 export function passwordChangedEmail({
   locale,
   email,
+  added,
   resetUrl,
+  sessionsUrl,
 }: {
   locale: EmailLocale
   email: string
+  /** A first password was set on an account that had none. */
+  added: boolean
   resetUrl: string
+  sessionsUrl: string
 }) {
-  // Post-event notification — fired AFTER the password is already changed.
+  // Post-event notification — sent AFTER the password is already changed.
   const safeEmail = esc(email)
+  const sessionsLink = (label: string) =>
+    `<a href="${esc(sessionsUrl)}" style="color:${BRAND};">${label}</a>`
   const c = pick(locale, {
     en: {
-      subject: `Your ${APP_NAME} password was changed`,
-      heading: `Password changed`,
-      intro: `The password for <strong>${safeEmail}</strong> was just changed on ${APP_NAME}.`,
-      followup: `If you made this change, no action is needed. <strong>If you didn't, your account may be compromised</strong> — reset your password now and review your active sessions.`,
-      footer: `For your safety, all other sessions were signed out automatically.`,
-      preheader: `Password changed for ${safeEmail}.`,
+      subject: added
+        ? `A password was added to your ${APP_NAME} account`
+        : `Your ${APP_NAME} password was changed`,
+      heading: added ? `Password added` : `Password changed`,
+      intro: added
+        ? `A password was just added to <strong>${safeEmail}</strong> on ${APP_NAME}. It can now be used to sign in.`
+        : `The password for <strong>${safeEmail}</strong> was just changed on ${APP_NAME}.`,
+      followup: `If you did this, no action is needed. <strong>If you didn't, your account may be compromised</strong> — reset your password now and ${sessionsLink('review your active sessions')}.`,
+      footer: `We send this notice every time the password on your account changes.`,
+      preheader: added
+        ? `Password added for ${safeEmail}.`
+        : `Password changed for ${safeEmail}.`,
       cta: 'Reset password',
       text: [
-        `Your ${APP_NAME} password was just changed.`,
+        added
+          ? `A password was just added to your ${APP_NAME} account.`
+          : `Your ${APP_NAME} password was just changed.`,
         `If you didn't do this, reset your password now: ${resetUrl}`,
-        `For your safety, all other sessions were signed out automatically.`,
+        `Then review your active sessions: ${sessionsUrl}`,
       ],
     },
     fr: {
-      subject: `Votre mot de passe ${APP_NAME} a été modifié`,
-      heading: `Mot de passe modifié`,
-      intro: `Le mot de passe de <strong>${safeEmail}</strong> vient d'être modifié sur ${APP_NAME}.`,
-      followup: `Si vous êtes à l'origine de ce changement, aucune action n'est requise. <strong>Sinon, votre compte est peut-être compromis</strong> — réinitialisez votre mot de passe maintenant et vérifiez vos sessions actives.`,
-      footer: `Pour votre sécurité, toutes les autres sessions ont été déconnectées automatiquement.`,
-      preheader: `Mot de passe modifié pour ${safeEmail}.`,
+      subject: added
+        ? `Un mot de passe a été ajouté à votre compte ${APP_NAME}`
+        : `Votre mot de passe ${APP_NAME} a été modifié`,
+      heading: added ? `Mot de passe ajouté` : `Mot de passe modifié`,
+      intro: added
+        ? `Un mot de passe vient d'être ajouté à <strong>${safeEmail}</strong> sur ${APP_NAME}. Il permet désormais de se connecter.`
+        : `Le mot de passe de <strong>${safeEmail}</strong> vient d'être modifié sur ${APP_NAME}.`,
+      followup: `Si c'est vous, aucune action n'est requise. <strong>Sinon, votre compte est peut-être compromis</strong> — réinitialisez votre mot de passe maintenant et ${sessionsLink('vérifiez vos sessions actives')}.`,
+      footer: `Nous envoyons cet avis à chaque changement du mot de passe de votre compte.`,
+      preheader: added
+        ? `Mot de passe ajouté pour ${safeEmail}.`
+        : `Mot de passe modifié pour ${safeEmail}.`,
       cta: 'Réinitialiser le mot de passe',
       text: [
-        `Votre mot de passe ${APP_NAME} vient d'être modifié.`,
-        `Si vous n'êtes pas à l'origine de ce changement, réinitialisez votre mot de passe maintenant : ${resetUrl}`,
-        `Pour votre sécurité, toutes les autres sessions ont été déconnectées automatiquement.`,
+        added
+          ? `Un mot de passe vient d'être ajouté à votre compte ${APP_NAME}.`
+          : `Votre mot de passe ${APP_NAME} vient d'être modifié.`,
+        `Si ce n'est pas vous, réinitialisez votre mot de passe maintenant : ${resetUrl}`,
+        `Puis vérifiez vos sessions actives : ${sessionsUrl}`,
       ],
     },
   })

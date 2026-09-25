@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { invitationEmail, verificationEmail } from './emailTemplates'
+import {
+  invitationEmail,
+  newEmailVerificationEmail,
+  verificationEmail,
+} from './emailTemplates'
 
 // A URL the template did not build itself: its query string can carry
 // anything the caller put in a `callbackURL`.
@@ -28,6 +32,21 @@ describe('email templates', () => {
       acceptUrl: HOSTILE_URL,
     })
     expect(html).not.toContain('"><img')
+  })
+
+  it('confirm a new address without the sign-up copy', () => {
+    for (const locale of ['en', 'fr'] as const) {
+      const { subject, html, text } = newEmailVerificationEmail({
+        locale,
+        url: HOSTILE_URL,
+        oldEmail: 'old@example.test',
+        newEmail: '"><img src=x>@example.test',
+      })
+      expect(html).not.toContain('"><img')
+      expect(text).toContain('old@example.test')
+      // Not the sign-up template: nothing about signing in with a password.
+      expect(`${subject} ${text}`).not.toMatch(/password|mot de passe/i)
+    }
   })
 
   it('names the role and the expiry date in the invitation', () => {

@@ -77,6 +77,23 @@ verification token without the credential. A squatted address is recovered by
 forgot-password (which replaces the stranger's password) or a magic link
 (which deletes it).
 
+The same hook also owns the dead ends. An expired or bad token goes to
+`/login?verifyExpired=1`, because BA's own `${callbackURL}?error=` lands on
+`/app`, whose guard drops the error on the way to a bare `/login`. `/login`
+opened with a `verifyToken` in a browser signed in to *another* account
+explains itself instead of bouncing to `/app`, which used to drop the token.
+Google on a still-unverified password account is refused by design
+(`requireLocalEmailVerified`) and comes back as `?error=account_not_linked`,
+which gets its own message.
+
+### TanStack Router JSON-parses search values
+
+`?flag=1` reaches `validateSearch` as the **number** `1`, and `?flag=true` as a
+boolean. A `z.literal('1')` fails, and a failing `validateSearch` renders the
+route's error screen rather than dropping the param. Type flags for what the
+parser produces (`z.literal(1)`), and add `.catch(undefined)` when a malformed
+value should be ignored rather than fatal.
+
 ### Legacy users
 
 Prod accounts created before this fix have `emailVerified: false` on the BA

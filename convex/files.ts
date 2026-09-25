@@ -2,6 +2,7 @@ import { ConvexError, v } from 'convex/values'
 import { mutation } from './_generated/server'
 import { requireAppUser, requireOrgRole } from './lib/auth'
 import { heldElsewhere, release } from './lib/storage'
+import { consumeLimit } from './rateLimiters'
 import type { GenericMutationCtx } from 'convex/server'
 
 import type { DataModel, Id } from './_generated/dataModel'
@@ -47,7 +48,8 @@ async function claim(
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireAppUser(ctx)
+    const user = await requireAppUser(ctx)
+    await consumeLimit(ctx, 'storageUpload', user._id)
     return await ctx.storage.generateUploadUrl()
   },
 })

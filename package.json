@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e",
   "engines": {
-    "node": ">=22",
+    "node": "24.x",
     "pnpm": "10.x"
   },
   "scripts": {
@@ -13,14 +13,11 @@
     "dev:vite": "vite dev",
     "dev:convex": "convex dev",
     "build": "if [ \"$DEPLOY_CONVEX\" = 'true' ]; then npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL --cmd 'pnpm build:app'; else pnpm build:app; fi",
-    "build:app": "vite build && tsc --noEmit",
+    "build:app": "vite build",
     "start": "node .output/server/index.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:native": "tsgo --noEmit",
     "lint": "tsc && eslint .  --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "sync:skills": "node scripts/sync-skills.mjs",
-    "sync:skills:verify": "node scripts/sync-skills.mjs --verify",
-    "sync:skills:check": "node scripts/sync-skills.mjs --check",
     "setup": "node scripts/setup.mjs",
     "setup:prod": "node scripts/setup-prod.mjs",
     "init": "node scripts/init.mjs",
@@ -30,12 +27,14 @@
     "audit:access:check": "node scripts/audit-convex-access.mjs --check",
     "codegen:api": "node scripts/codegen-api-types.mjs",
     "codegen:api:check": "node scripts/codegen-api-types.mjs --check",
+    "bundle:budget": "node scripts/bundle-budget.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:smoke": "node scripts/e2e-smoke.mjs",
     "test:e2e": "playwright test",
     "test:cookies": "bash scripts/test-cookies.sh",
-    "sync:skills:update": "node scripts/sync-skills.mjs --update"
+    "skills:update": "DISABLE_TELEMETRY=1 skills update --project --yes"
   },
   "dependencies": {
     "@ai-sdk/mistral": "^3.0.65",
@@ -45,9 +44,9 @@
     "@convex-dev/react-query": "^0.1.0",
     "@convex-dev/resend": "^0.2.8",
     "@convex-dev/workpool": "^0.4.7",
+    "@fontsource-variable/inter": "^5.3.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@sentry/react": "^10.56.0",
     "@tanstack/react-form": "^1.33.0",
@@ -63,8 +62,8 @@
     "better-auth": "~1.6.30",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
     "convex": "^1.46.0",
-    "convex-helpers": "^0.1.118",
     "i18next": "^26.3.1",
     "lucide-react": "^1.17.0",
     "next-themes": "^0.4.6",
@@ -73,7 +72,6 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-i18next": "^17.0.8",
-    "recharts": "3.8.1",
     "sonner": "^2.0.7",
     "streamdown": "^2.5.0",
     "tailwind-merge": "^3.6.0",
@@ -91,12 +89,13 @@
     "@types/react-dom": "^19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20260605.1",
     "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^5.0.0",
     "concurrently": "^10.0.3",
     "convex-test": "^0.0.58",
     "eslint": "^10.4.1",
     "fake-indexeddb": "^6.2.5",
+    "skills": "^1.7.0",
     "tailwindcss": "^4.3.0",
-    "tsx": "^4.22.4",
     "tw-animate-css": "^1.4.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
@@ -107,7 +106,9 @@
     "overrides": {
       "@tanstack/react-router": "1.170.11",
       "@tanstack/react-start": "1.168.20",
-      "@tanstack/router-core": "1.171.9"
+      "@tanstack/router-core": "1.171.9",
+      "dompurify": "^3.4.13",
+      "ws": "^8.21.0"
     }
   }
 }

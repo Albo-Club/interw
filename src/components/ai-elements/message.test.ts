@@ -2,7 +2,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nextProvider } from 'react-i18next'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MessageResponse } from './message'
 import type { Locale } from '~/lib/locale'
@@ -56,11 +56,56 @@ describe('MessageResponse images', () => {
     expect(render(`![chart](${FOREIGN})`, 'fr')).toContain('Image non affichée')
   })
 
-  it('still renders links, and never a javascript: href', () => {
-    const html = render(
-      '[docs](https://example.com/docs) and [x](javascript:alert(1))',
-    )
-    expect(html).toContain('docs')
+})
+
+/**
+ * Audit 2026-09-22, lead 5. A link is a URL the model chose, and a click
+ * hands it — query string included — to the host it names. Links lead into
+ * the app and nowhere else; anything else keeps its text and loses its href.
+ */
+describe('MessageResponse links', () => {
+  const APP = 'https://app.example'
+
+  beforeEach(() => {
+    vi.stubGlobal('window', { location: { origin: APP } })
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function hrefs(html: string): Array<string> {
+    return [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1])
+  }
+
+  it.each([
+    ['an absolute link to the app', `${APP}/app/acme/projects`],
+    ['a path inside the app', '/app/acme/projects'],
+  ])('keeps %s', (_, url) => {
+    const html = render(`[the roles](${url})`)
+    expect(hrefs(html)).toHaveLength(1)
+    expect(new URL(hrefs(html)[0], APP).origin).toBe(APP)
+    expect(html).toContain('the roles')
+  })
+
+  it.each([
+    ['an https link', 'https://attacker.example/?d=secret'],
+    ['a look-alike host', 'https://app.example.attacker.example/?d=secret'],
+    ['a protocol-relative link', '//attacker.example/?d=secret'],
+    ['a raw HTML link', '<a href="https://attacker.example/?d=secret">x</a>'],
+    ['a mailto: link', 'mailto:someone@attacker.example?body=secret'],
+    ['an xmpp: link', 'xmpp:someone@attacker.example?message;body=secret'],
+    ['a javascript: link', 'javascript:alert(1)'],
+  ])('keeps the text of %s, never its href', (_, url) => {
+    const markdown = url.startsWith('<') ? url : `[the link](${url})`
+    const html = render(markdown)
+    expect(hrefs(html)).toEqual([])
+    expect(html).not.toContain('attacker.example')
     expect(html).not.toContain('javascript:')
+    expect(html).not.toContain('data-streamdown="link"')
+  })
+
+  it('keeps no link at all when rendered without a window', () => {
+    vi.unstubAllGlobals()
+    expect(hrefs(render(`[the roles](${APP}/app)`))).toEqual([])
   })
 })

@@ -8,9 +8,11 @@ import { api } from '../../../../convex/_generated/api'
 import { Skeleton } from '~/components/ui/skeleton'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/done')({
   component: InterviewDone,
+  head: () => candidateHead('done'),
 })
 
 function InterviewDone() {

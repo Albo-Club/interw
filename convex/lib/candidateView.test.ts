@@ -127,6 +127,20 @@ describe('candidate projections', () => {
     }
   })
 
+  // Decision n° 1 (T05): an intro is the recruiter's video or nothing. A row
+  // still holding a retired mode must not send the candidate to an intro
+  // screen with nothing on it, nor hand them the retired text.
+  it('reads a retired text or audio intro as no intro', () => {
+    for (const introMode of ['text', 'audio'] as const) {
+      const view = toCandidateProjectView({ ...project, introMode }, 4)
+      expect(view.introMode).toBe('none')
+      expect(JSON.stringify(view)).not.toContain('Bienvenue')
+    }
+    expect(
+      toCandidateProjectView({ ...project, introMode: 'video' }, 4).introMode,
+    ).toBe('video')
+  })
+
   // A key is an internal address; the candidate gets a signed URL instead,
   // minted only after their token has been checked.
   it('never hands a candidate a raw object key', () => {

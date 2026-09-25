@@ -24,6 +24,7 @@ node_modules
 /test-results/
 /playwright-report/
 /blob-report/
+/coverage/
 /playwright/.cache/
 
 app.config.timestamp_*.js

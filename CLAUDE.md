@@ -127,12 +127,12 @@ wrong — link, don't duplicate.
 ### Skills
 
 `.agents/skills/` is pulled from upstream — never edit in place
-(`pnpm run sync:skills` overwrites). When upstream is wrong or missing,
-override here via `CLAUDE.md` / `KNOWN_ISSUES.md`. When
-`pnpm run sync:skills:check` reports drift, read the new SKILL.md and
-update project overrides if needed — don't mute the check.
+(`pnpm skills:update` overwrites). When upstream is wrong or missing,
+override here via `CLAUDE.md` / `KNOWN_ISSUES.md`. When the CI job
+`skills-drift` goes red, read the new SKILL.md and update project overrides if
+needed — don't mute the check.
 
-**Two skill channels, don't mix them.** The `sync:skills` pipeline is only
+**Two skill channels, don't mix them.** The `skills` CLI is only
 for library skills that upstream does **not** ship as a Claude Code plugin.
 Skills delivered by a plugin (e.g. `resend@claude-plugins-official`, enabled
 in `.claude/settings.json`) auto-update via the marketplace — never
@@ -185,8 +185,7 @@ other developer-facing text. The only exceptions are user-facing copy in
 
 Before each production deployment, run through `TESTING.md`
 (levels 1 → 6, ~70 min). Level 1 is automated (`pnpm typecheck`,
-`pnpm lint`, `pnpm build`, `pnpm test:smoke`, `pnpm sync:skills:verify`,
-`pnpm sync:skills:check`);
+`pnpm lint`, `pnpm build`, `pnpm test:smoke`);
 the rest is manual — a sign-off checklist to validate auth, multi-tenant,
 invitations, roles and questions, the candidate interview, reports and their
 share links, uploads, account lifecycle, super-admin, AI chat, security.
@@ -198,9 +197,9 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `emailOTP()` (sign-in code, which also creates accounts) + `convex()`; password sign-up is off. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front; generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
-- **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
-- **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
+- **AI** : `@convex-dev/agent` backend + its `useUIMessages` hook front (`src/components/ai/`, not `@assistant-ui/react` — see `KNOWN_ISSUES.md` § "Trade-offs vs the original brief"); generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
+- **File storage** : Convex native (`ctx.storage.generateUploadUrl()`, 20 MB cap) for branding images only. Candidate recordings, CVs and recruiter-recorded questions go to a private S3-compatible bucket via `convex/lib/objectStore.ts` — see `KNOWN_ISSUES.md` § "Candidate recordings are NOT in Convex file storage".
+- **Observability** : Sentry on the front end only (`src/lib/sentry.ts`); the Convex side logs named events (e.g. `pipeline_step_failed`). CORS strict, security headers, HMAC verify on webhooks.
 
 ## Skills (READ BEFORE CODING)
 
@@ -209,79 +208,20 @@ domains below, read the corresponding skill in `.agents/skills/`
 (symlinked at `.claude/skills/`). It supersedes your training knowledge,
 which is stale for these libraries.
 
-Manifest: `skills-lock.json` — each skill pins an immutable commit
-(`pinnedRef`, reproducible) and watches a moving branch (`trackingRef`) to
-notice when upstream advances; `computedHash` is the SHA-256 of the vendored
-content. Both guarded in CI (`.github/workflows/ci.yml`): job `skills-verify`
-re-hashes the working tree against the lock, job `skills-drift` compares the
-lock against upstream.
+Skills are installed by the standard [`skills` CLI](https://github.com/vercel-labs/skills)
+(pinned in `devDependencies`, so Renovate bumps it), committed under
+`.agents/skills/` and recorded in `skills-lock.json`. The CLI owns the tree,
+the symlinks and the lock — never edit them by hand.
 
-Skills that split content out of `SKILL.md` declare their auxiliary files in an
-optional `references` array, with paths relative to the `SKILL.md` directory —
-identical upstream and locally, so the relative Markdown links keep resolving.
-References are folded into `computedHash`, so drift detection covers them.
-**Any new auxiliary file must be added there**: a file vendored by hand is seen
-by none of `sync:skills`, `--check` or `--verify`, and rots silently.
+- Add: `DISABLE_TELEMETRY=1 pnpm exec skills add <owner/repo> --skill <name> --full-depth -y`
+- Update all: `pnpm skills:update`, then **read the diff** before committing —
+  a skill update is a prompt-injection surface, never rubber-stamp it. Check
+  that no project override in `CLAUDE.md` / `KNOWN_ISSUES.md` became false.
+- Remove: `pnpm exec skills remove <name>`.
 
-A `references` path may only point at a **descendant** of the `SKILL.md`
-directory — never `../`, which writes outside `.agents/skills/<name>/`. To root a
-tree elsewhere upstream, add a second lock entry. Same section of
-`KNOWN_ISSUES.md` explains why, and why `MAX_IN_FLIGHT` in the sync script must
-stay put as the skill list grows.
-
-An upstream that publishes its rules as a plain `AGENTS.md` rather than a real
-skill declares an optional `frontmatter` map, prepended to `SKILL.md` at vendor
-time (the Agent Skills spec makes `name` + `description` mandatory, and `name`
-must equal the directory name). It is applied **before** hashing, so editing it
-registers as drift exactly like an upstream change. Reach for it only when
-upstream ships no `SKILL.md` — never to "fix" a description you disagree with,
-which belongs in an override here. See `KNOWN_ISSUES.md` § "`web-design-guidelines`
-vendors `AGENTS.md`".
-
-**Two distinct questions, two modes — don't conflate them.** `--verify` answers
-"is my working tree intact?" (local re-hash, offline, deterministic); `--check`
-answers "has upstream moved?" (network, and the answer changes without anyone
-touching the repo). `--check` alone is blind to a vendored file edited or left
-stale on disk — it compares the upstream tip to the lock and never reads what
-we actually shipped. See `KNOWN_ISSUES.md` § "`--check` is blind to the working
-tree — hence `--verify`".
-
-- `pnpm run sync:skills` — vendor each skill at its `pinnedRef`
-  (reproducible, no network surprise; idempotent). **Self-healing**: rewrites
-  any file that no longer matches `computedHash`, so it repairs a corrupted or
-  stale tree without `--force`, and unlinks any `.claude/skills/` symlink whose
-  lock entry is gone.
-- `pnpm run sync:skills:verify` — re-hash the vendored files and compare to the
-  lock, and report orphaned symlinks; exit 2 if the tree diverged. No network —
-  this is the offline CI gate.
-- `pnpm run sync:skills:check` — compare each `trackingRef` tip against the
-  vendored content; exit 2 on drift (upstream moved since the last bump).
-- `pnpm run sync:skills:update` — advance `pinnedRef` to the current
-  `trackingRef` tip, re-vendor, rewrite the lock. The deliberate bump — do it
-  after reviewing the diff.
-
-Rule: `--verify` guards, `--check` detects, `--update` bumps. Never `--update`
-without reading what the new version changes.
-
-**When the CI job `skills-verify` is red**: the vendored tree no longer matches
-the lock — someone hand-edited `.agents/skills/`, a file is missing, or a
-`.claude/skills/` symlink outlived the lock entry that owned it.
-`pnpm run sync:skills` repairs all three (no `--force` needed), then re-read the
-`git diff`: if the content reverts to what the lock says, the local edit was
-the mistake. Never patch `skills-lock.json` to match a hand edit.
-
-**Removing a skill is two deletions, not one.** Drop the lock entry *and* run
-`pnpm run sync:skills` so the symlink goes with it — committing the lock alone
-leaves Claude Code advertising a skill whose `SKILL.md` no longer exists. See
-`KNOWN_ISSUES.md` § "Third hole, same family: a pruned skill left its
-symlink behind".
-
-**When the CI job `skills-drift` is red** (upstream moved): never bypass it, and
-never `--update` blindly. Run `pnpm run sync:skills:check` to name the drifting
-skill(s), read what the new upstream version changes, then `--update` and review
-the diff — a skill update is a prompt-injection surface, so read it rather than
-rubber-stamp it. Check that no project override in `CLAUDE.md` /
-`KNOWN_ISSUES.md` became false.
+CI job `skills-drift` runs `skills:update` and fails on any diff: red means
+upstream moved, and the fix is the update above. Why it is not a
+SessionStart hook: `KNOWN_ISSUES.md` § "Skills: the standard `skills` CLI".
 
 | Skill                                     | Domain                                 | Upstream source                            | Official?  |
 | ----------------------------------------- | -------------------------------------- | ------------------------------------------ | ---------- |
@@ -291,20 +231,20 @@ rubber-stamp it. Check that no project override in `CLAUDE.md` /
 | `email-and-password-best-practices`       | Email/password BA                      | `better-auth/skills`                       | ✅ official |
 | `two-factor-authentication-best-practices`| 2FA / TOTP / backup codes              | `better-auth/skills`                       | ✅ official |
 | `organization-best-practices`             | BA `organization()` plugin             | `better-auth/skills`                       | ✅ official ⚠️ |
-| `create-auth-skill`                       | Auth BA scaffolding                    | `better-auth/skills`                       | ✅ official |
-| `tanstack-start-core`                     | **Start entry point** + server functions, middleware, server auth, execution model, server routes, deployment | `TanStack/router` (official monorepo) | ✅ official |
-| `tanstack-react-start`                    | React bindings for Start + server components| `TanStack/router` (official monorepo) | ✅ official |
-| `tanstack-router-core`                    | **Router entry point** + data loading, guards, SSR, 404/errors, search/path params, navigation, code splitting, type safety | `TanStack/router` (official monorepo) | ✅ official |
-| `tanstack-react-router`                   | React hooks/components of the router   | `TanStack/router` (official monorepo)      | ✅ official |
-| `tanstack-router-query`                   | Router ↔ TanStack Query integration    | `TanStack/router` (official monorepo)      | ✅ official |
+| `create-auth`                             | Auth BA scaffolding                    | `better-auth/skills`                       | ✅ official |
+| `start-core`                              | **Start entry point** + server functions, middleware, server auth, execution model, server routes, deployment | `TanStack/router` (official monorepo) | ✅ official |
+| `react-start`                             | React bindings for Start + server components| `TanStack/router` (official monorepo) | ✅ official |
+| `router-core`                             | **Router entry point** + data loading, guards, SSR, 404/errors, search/path params, navigation, code splitting, type safety | `TanStack/router` (official monorepo) | ✅ official |
+| `react-router`                            | React hooks/components of the router   | `TanStack/router` (official monorepo)      | ✅ official |
+| `router-query`                            | Router ↔ TanStack Query integration    | `TanStack/router` (official monorepo)      | ✅ official |
 | `agentmail`                               | Email inboxes for AI agents (AgentMail)| `agentmail-to/agentmail-skills`            | ✅ official |
 | `frontend-design`                         | Aesthetic direction for new UI         | `anthropics/skills`                        | ✅ official |
-| `web-design-guidelines`                   | Interface correctness rules (a11y, focus, forms, motion, perf) | `vercel-labs/web-interface-guidelines` | ✅ official |
+| `web-design-guidelines`                   | Interface correctness rules (a11y, focus, forms, motion, perf) | `vercel-labs/web-interface-guidelines` (project-owned copy) | ✅ official |
 
 **`agentmail`**: official AgentMail skill (email-for-AI-agents platform).
-Vendored from `agentmail-to/agentmail-skills` at `agentmail/SKILL.md`. Needs
+Installed from `agentmail-to/agentmail-skills`. Needs
 `AGENTMAIL_API_KEY` in the environment. `SKILL.md` is a router: the actual
-patterns live in the six vendored `references/` files (TypeScript, Python,
+patterns live in the six `references/` files (TypeScript, Python,
 admin/DNS, webhooks, websockets, deliverability) — read the one matching your
 task rather than working from `SKILL.md` alone.
 
@@ -319,6 +259,9 @@ colours and radii still come from `src/styles/brand.css`, never a hardcoded
 `className` (see Anti-patterns). Much of the Vercel rule set is already
 satisfied by `src/components/ui/` (shadcn builds on Radix); it earns its keep on
 hand-rolled interactive markup, which is where the a11y gaps actually appear.
+`web-design-guidelines` is the one skill outside the CLI: a committed copy of
+upstream's `AGENTS.md` under `.claude/skills/`, refreshed by hand (see
+`KNOWN_ISSUES.md` § "Skills: the standard `skills` CLI").
 
 **⚠️ `organization-best-practices`**: official BA skill, but the
 `organization()` plugin is **disabled** in this project (see `KNOWN_ISSUES.md`).
@@ -330,22 +273,17 @@ our orgs/members live in the custom Convex schema.
 (`packages/*/skills/*/SKILL.md`). If a behavior change is unclear, fall back to
 the `context7` MCP (`mcp__…__query-docs`) for `/tanstack/start`.
 
-**Start with `tanstack-start-core` or `tanstack-router-core`.** Those two are
-*routers*: each opens on a sub-skill table + decision tree, and the real content
-lives in descendant directories reached from there
-(`tanstack-start-core/server-functions/SKILL.md`,
-`tanstack-router-core/data-loading/SKILL.md`, …). Sub-skills are vendored as
-`references`, so their sibling links resolve locally — but Claude Code only
-registers the 5 top-level skills, so a sub-skill is *read through its parent's
-table*, never picked from the skill list.
+**Start with `start-core` or `router-core`.** Those two are *routers*: each
+opens on a sub-skill table + decision tree, and the real content lives in
+descendant directories (`start-core/server-functions/SKILL.md`,
+`router-core/data-loading/SKILL.md`, …). Claude Code only registers the
+top-level skills, so a sub-skill is *read through its parent's table*.
 
 Upstream links that climb out of a skill (`../../../<pkg>/skills/<skill>/…`)
-**dangle by design**: we vendor flat (`.agents/skills/<name>/`), upstream nests
-under `packages/<pkg>/skills/`. Translate with `<skill>[/<sub>]` →
-`tanstack-<skill>[/<sub>]` (so `start-client-core/skills/start-core/middleware`
-→ `tanstack-start-core/middleware`); the one irregular case is
-`react-router/skills/compositions/router-query` → `tanstack-router-query`. See
-`KNOWN_ISSUES.md` § "Vendored skills: cross-family links".
+**dangle by design**: skills are installed flat, upstream nests them under
+`packages/<pkg>/skills/`. Read them as `.agents/skills/<skill>[/<sub>]` (so
+`start-client-core/skills/start-core/middleware` → `start-core/middleware`;
+`react-router/skills/compositions/router-query` → `router-query`).
 
 **shadcn/ui**: no agent skill yet. Conventions live in `components.json`
 (alias `@/components`, neutral theme, radius 0.5rem, oklch tokens in
@@ -376,13 +314,16 @@ drop-in components or roll our own to stay consistent with the rest of the
 project.
 
 **Convex knowledge comes from three self-refreshing channels, not from
-vendored skills.** Only `convex-create-component` is still vendored — the rest
+installed skills.** Only `convex-create-component` is still installed — the rest
 were pruned (see `KNOWN_ISSUES.md` § "Convex skills were pruned"). In order of
 precedence:
 
-1. `convex/_generated/ai/guidelines.md` — regenerated by `convex dev`.
-   Required reading before non-trivial Convex patterns; **it overrides
-   everything, including upstream skills.**
+1. `convex/_generated/ai/guidelines.md` — **loaded automatically** by
+   `convex/CLAUDE.md` the moment any file under `convex/` is read, so never
+   `Read` it again, and ignore the `ai-files install` hint in the generated
+   `convex-ai-start` block at the end of this file (see `KNOWN_ISSUES.md` §
+   "Skills: the standard `skills` CLI"). **It overrides everything, including
+   upstream skills.**
 2. The **Convex MCP server** (`.mcp.json`, `npx convex mcp start`) — reads the
    live deployment: tables, data, logs, insights, env. Prefer it over any
    static doc for "why is this slow / what's actually in the DB / what broke"
@@ -624,7 +565,7 @@ verification is in `TESTING.md`.
   anchors) comes from data the server observed itself — provider output, the
   stored transcript — never from a number the candidate's client sent. A client
   value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
-  § "Para-verbal analysis is computed, not generated".
+  § "Para-verbal analysis was removed".
 
 ## Model output
 
@@ -705,3 +646,17 @@ verification is in `TESTING.md`.
   person accountable has to be the one who made it.
 - Every prompt touching a candidate carries the anti-discrimination clause
   from `convex/lib/prompts.ts`. Never remove it to "shorten the prompt".
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

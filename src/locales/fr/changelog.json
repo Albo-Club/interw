@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "assistant-history-purged": {
+      "title": "Anciennes conversations avec l’assistant supprimées",
+      "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures au 24 septembre ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."
+    },
     "delete-organization": {
       "title": "Supprimer une organisation",
       "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."

@@ -644,6 +644,19 @@ export default defineSchema({
     .index('by_session', ['sessionId'])
     .index('by_thread_and_session', ['threadId', 'sessionId']),
 
+  /** One-off data migrations that run themselves (convex/migrations.ts). A
+   *  row per migration: `cutoff` is fixed on its first run, `doneAt` ends it
+   *  for good. The cursor fields are where an unfinished pass stands. */
+  migrations: defineTable({
+    name: v.string(),
+    cutoff: v.number(),
+    doneAt: v.optional(v.number()),
+    scopesCursor: v.optional(v.string()),
+    scope: v.optional(v.string()),
+    threadsCursor: v.optional(v.string()),
+    foundInPass: v.optional(v.boolean()),
+  }).index('by_name', ['name']),
+
   /** Every pipeline state transition, with its duration and outcome. This is
    *  what makes "a step can fail" observable instead of a lost session — and
    *  it is why there are no catch-up scripts. */

@@ -24,6 +24,18 @@ crons.interval(
   {},
 )
 
+/**
+ * One-off: deletes the assistant threads that predate erasure tracking, then
+ * returns at once on every later tick (convex/migrations.ts). Remove with the
+ * function once every deployment's `migrations` row has `doneAt`.
+ */
+crons.interval(
+  'purge assistant threads from before erasure tracking',
+  { hours: 1 },
+  internal.migrations.purgeLegacyAssistantThreads,
+  {},
+)
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /**

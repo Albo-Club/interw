@@ -1765,7 +1765,8 @@ part of the file it has not downloaded yet is ignored or lands approximately.
 Sources: addpipe, "Duration in MP4 Files Produced by Chrome/Safari" and
 "Duration in WebM Videos Produced by Chrome". The real fix is to rewrite each
 video server-side into an MP4 with its index up front
-(`-movflags +faststart`), which is not built yet.
+(`-movflags +faststart`), which is not built yet; until then the player works
+around it — see "A MediaRecorder video is played from a downloaded copy".
 
 The **audio** file is deliberately left alone: WebM/Opus on Chrome and
 Firefox, M4A on Safari. It is what gets transcribed, and the transcription
@@ -1804,17 +1805,46 @@ link and then navigates back into `/app` in the same tab keeps the role's
 language until the next full load. Harmless, and cheaper than a second i18n
 instance for the candidate bundle.
 
-## Seeking a `<video>` before `loadedmetadata` is silently ignored
+## A MediaRecorder video is played from a downloaded copy
 
-Setting `video.currentTime` before metadata has loaded does nothing — no
-error, no warning — and the video plays from the beginning. This is how
-"jump to the quote" quietly becomes "plays from the start", which reads as a
-broken feature rather than a race.
+`AnswerPlayer` does not stream the signed URL. It fetches the whole answer
+(`downloadMedia`, with a visible percentage), plays it from a `blob:` URL, and
+only then applies a quote's seek. The files have no index (see "Video is
+recorded as MP4 wherever the browser can"), and the obvious fixes each fail:
 
-`AnswerPlayer` waits for `readyState >= 1`, or listens once for
-`loadedmetadata`. It also carries a **nonce** on the seek cue, because
-clicking the same quote twice must replay it and a plain
-`{ segmentId, seconds }` object would compare equal.
+- **`preload="auto"` + waiting for `buffered`.** Chrome keeps downloading a
+  paused, cue-less WebM to the end, but `buffered` stays at the first ~2 s it
+  demuxed — measured in Chromium: the network went idle at 19 s with
+  `buffered` still `0–2.3`. A player waiting on `buffered` never seeks.
+  `seekable` is no better: it reports `[0, ∞)`.
+- **`preload` at all, on iOS.** Safari ignores it; nothing is fetched until a
+  gesture asks for the media. `fetch` is not media loading, so the copy starts
+  downloading on the iPhone too.
+- **Seeking the stream and trusting the browser.** Chromium scans forward and
+  lands on the right second (measured on self-timestamped recordings, MP4 and
+  WebM alike), but the addpipe write-ups report ignored or approximate seeks
+  elsewhere, and that is exactly what we cannot see from here. A complete local
+  file removes the variable: every demuxer has every byte before the seek.
+
+Nothing new is opened for it: the bucket's CORS rule already allows `GET`
+(`TESTING.md` P2a), `Content-Length` is a CORS-safelisted header, `connect-src`
+takes `https:` and `media-src` already lists `blob:`. The cost is one full
+download (≈ 7.5 MB a minute) before the first frame; only the active answer is
+kept, and its object URL is revoked on switch.
+
+Two rules survive from the streaming days:
+
+- **Seek after `loadedmetadata`.** Setting `currentTime` earlier is silently
+  ignored — no error — and the video plays from the start.
+- **The cue carries a nonce**, because clicking the same quote twice must
+  replay it and a plain `{ segmentId, seconds }` object would compare equal.
+
+A `play()` refused after the wait (iOS no longer sees the click as the cause)
+turns into a visible "Play from 3:30" button, never a click that did nothing.
+
+The real fix is server-side: an MP4 rewritten with its index up front
+(`-movflags +faststart`) streams and seeks immediately, and would let the
+player drop the download for it.
 
 ## Para-verbal analysis is computed, not generated
 

@@ -52,6 +52,12 @@
     "notAnswered": "No answer recorded",
     "uploadFailed": "The candidate recorded an answer, but it never reached us. This is a technical failure on our side, not a skipped question."
   },
+  "player": {
+    "loading": "Loading the answer…",
+    "loadingPercent": "Loading the answer… {{percent}}%",
+    "playAt": "Play from {{time}}",
+    "failed": "This answer could not be loaded. Reload the page to try again."
+  },
   "delivery": {
     "subtitle": "Measured from the transcript timings, not judged by a model.",
     "pace": "Speaking rate",

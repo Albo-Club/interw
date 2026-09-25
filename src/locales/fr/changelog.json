@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "quote-seek-reliable": {
+      "title": "Des citations qui tombent à la seconde, et la durée de chaque réponse",
+      "body": "Dans un rapport, chaque réponse affiche désormais sa durée dès l'ouverture. Un clic sur une citation montre le chargement de la réponse, puis la démarre au moment cité. Si le navigateur refuse de lancer la lecture tout seul, un bouton « Lire à partir de » apparaît au lieu d'un clic qui semble ne rien faire."
+    },
     "interview-survives-crash": {
       "title": "Une réponse survit à un plantage, et les candidats peuvent s’écouter avant de commencer",
       "body": "Pendant qu’un candidat répond, l’enregistrement est désormais aussi conservé sur son appareil : si la page plante ou se ferme, rouvrir le lien envoie la réponse au lieu de la perdre. Il voit aussi un indicateur de micro pendant qu’il parle — avec une alerte si nous ne l’entendons plus — et l’écran de vérification le prévient quand sa caméra n’affiche que du noir et lui permet d’enregistrer un court test pour s’écouter avant de commencer."

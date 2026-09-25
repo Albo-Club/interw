@@ -2,7 +2,7 @@
 import { convexTest } from 'convex-test'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -139,6 +139,22 @@ describe('the answer length shown to the recruiter', () => {
 
   it("falls back to the browser's figure for an answer never measured", async () => {
     expect(await lengthShown()).toBe(60)
+  })
+
+  // The player shows it before the video knows its own length — which, for a
+  // MediaRecorder file, is never. So only the server's figure, or nothing.
+  it('travels with the playback URL, measured or not at all', async () => {
+    const lengthPlayed = async () => {
+      const media = await t
+        .withIdentity({ subject: 'ba_recruiter' })
+        .query(internal.reports.resolveSessionMedia, { sessionId: s.sessionId })
+      return media.segments[0].durationSeconds
+    }
+    expect(await lengthPlayed()).toBeNull()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('segments', s.segmentId, { measuredSeconds: 9.5 })
+    })
+    expect(await lengthPlayed()).toBe(9.5)
   })
 })
 

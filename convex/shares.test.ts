@@ -4,7 +4,7 @@ import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
 import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
@@ -192,6 +192,49 @@ describe('shares.view', () => {
       const result = await t.query(api.shares.view, { token, now: NOW })
       expect(result).toEqual({ state: 'not_found', report: null })
     }
+  })
+})
+
+describe('shared playback', () => {
+  it('carries the length the server measured, and nothing else about the answer', async () => {
+    const t = newTest()
+    const s = await seed(t)
+    await t.run(async (ctx) => {
+      const share = await ctx.db.get('reportShares', s.shareId)
+      const report = await ctx.db.get('reports', share!.reportId)
+      const session = await ctx.db.get('sessions', report!.sessionId)
+      const questionId = await ctx.db.insert('questions', {
+        orgId: session!.orgId,
+        projectId: session!.projectId,
+        orderIndex: 0,
+        content: 'Tell me about a migration you led.',
+        maxResponseSeconds: 120,
+      })
+      await ctx.db.insert('segments', {
+        orgId: session!.orgId,
+        sessionId: session!._id,
+        questionId,
+        questionIndex: 0,
+        audioKey: 'orgs/o/sessions/s/q0.weba',
+        durationSeconds: 60,
+        measuredSeconds: 9.5,
+        uploadState: 'uploaded',
+        uploadAttempts: 1,
+        recordedAt: 0,
+      })
+    })
+
+    const media = await t.query(internal.shares.resolveSharedMedia, {
+      token: s.token,
+      now: NOW,
+    })
+    expect(media).toEqual([
+      {
+        segmentId: expect.any(String),
+        key: 'orgs/o/sessions/s/q0.weba',
+        durationSeconds: 9.5,
+      },
+    ])
   })
 })
 

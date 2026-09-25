@@ -52,6 +52,12 @@
     "notAnswered": "Aucune réponse enregistrée",
     "uploadFailed": "Le candidat a enregistré une réponse, mais elle ne nous est jamais parvenue. C'est une défaillance technique de notre côté, pas une question esquivée."
   },
+  "player": {
+    "loading": "Chargement de la réponse…",
+    "loadingPercent": "Chargement de la réponse… {{percent}} %",
+    "playAt": "Lire à partir de {{time}}",
+    "failed": "Cette réponse n'a pas pu être chargée. Rechargez la page pour réessayer."
+  },
   "delivery": {
     "subtitle": "Mesuré à partir des horodatages de la transcription, non jugé par un modèle.",
     "pace": "Débit",

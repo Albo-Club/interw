@@ -204,6 +204,9 @@ export const resolveSessionMedia = internalQuery({
           segmentId: segment._id,
           key: media?.key ?? null,
           kind: media?.kind ?? ('audio' as const),
+          // The player cannot learn it from a MediaRecorder file, so it shows
+          // the server's measurement — never the browser's own figure.
+          durationSeconds: segment.measuredSeconds ?? null,
         }
       }),
       cvKey: session.cvKey ?? null,
@@ -224,7 +227,12 @@ export const sessionMediaUrls = action({
     ctx,
     { sessionId },
   ): Promise<{
-    segments: Array<{ segmentId: Id<'segments'>; url: string; kind: string }>
+    segments: Array<{
+      segmentId: Id<'segments'>
+      url: string
+      kind: string
+      durationSeconds: number | null
+    }>
     cv: string | null
     coverLetter: string | null
   }> => {
@@ -237,6 +245,7 @@ export const sessionMediaUrls = action({
         .map(async (segment) => ({
           segmentId: segment.segmentId,
           kind: segment.kind,
+          durationSeconds: segment.durationSeconds,
           url: await presignGet(segment.key!),
         })),
     )

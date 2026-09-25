@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "quote-seek-reliable": {
+      "title": "Quotes that land on the second, and every answer's length",
+      "body": "In a report, each answer now shows its length straight away. Clicking a quote shows the answer loading, then starts it at the moment quoted. If the browser will not start playback on its own, a \"Play from\" button appears instead of a click that seems to do nothing."
+    },
     "interview-survives-crash": {
       "title": "An answer survives a crash, and candidates can hear themselves first",
       "body": "While a candidate answers, the recording is now also kept on their device: if the page crashes or is closed, reopening the link sends the answer instead of losing it. They also see a live microphone meter while they talk — with a warning if we stop hearing them — and the check screen tells them when their camera shows only black and lets them record a short test to hear themselves before starting."

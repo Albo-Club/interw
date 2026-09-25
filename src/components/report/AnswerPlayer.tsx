@@ -1,12 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { Loader2, Play } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { downloadMedia } from './download'
+import { Button } from '~/components/ui/button'
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { cn } from '~/lib/utils'
 
 export type PlayableSegment = {
   segmentId: string
   url: string
   kind: string
+  /** Measured server-side; the file itself does not say. */
+  durationSeconds: number | null
 }
 
 /**
@@ -23,6 +29,13 @@ export type SeekCue = {
   nonce: number
 } | null
 
+/** The active answer's local copy — every state visible, none silent. */
+type Download = { segmentId: string } & (
+  | { phase: 'loading'; percent: number | null }
+  | { phase: 'done'; objectUrl: string }
+  | { phase: 'failed' }
+)
+
 export function AnswerPlayer({
   segments,
   cue,
@@ -38,26 +51,70 @@ export function AnswerPlayer({
 }) {
   const { t } = useTranslation('report')
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const [download, setDownload] = useState<Download | null>(null)
+  /** A seek that landed but whose autoplay the browser refused. */
+  const [playAt, setPlayAt] = useState<number | null>(null)
   // `segments[0]` is only defined when the list is non-empty, and tsconfig has
   // no noUncheckedIndexedAccess — so say so explicitly rather than let the
   // optional chains below read as dead code.
   const current: PlayableSegment | undefined =
     segments.find((segment) => segment.segmentId === activeSegmentId) ??
     (segments.length > 0 ? segments[0] : undefined)
+  const segmentId = current?.segmentId
+  const url = current?.url
+  const status = download?.segmentId === segmentId ? download : null
+  const objectUrl = status?.phase === 'done' ? status.objectUrl : undefined
 
+  // The whole answer, as soon as it is shown: a MediaRecorder file has no
+  // index, so a quote is only reachable once the bytes before it are here.
   useEffect(() => {
-    if (!cue || !videoRef.current) return
-    if (cue.segmentId !== current?.segmentId) return
+    if (!segmentId || !url) return
+    const controller = new AbortController()
+    let local: string | null = null
+    setPlayAt(null)
+    setDownload({ segmentId, phase: 'loading', percent: 0 })
+    downloadMedia(
+      url,
+      (percent) => setDownload({ segmentId, phase: 'loading', percent }),
+      controller.signal,
+    ).then(
+      (blob) => {
+        local = URL.createObjectURL(blob)
+        setDownload({ segmentId, phase: 'done', objectUrl: local })
+      },
+      (error: unknown) => {
+        if (controller.signal.aborted) return
+        console.warn('[interw] answer download failed', error)
+        setDownload({ segmentId, phase: 'failed' })
+      },
+    )
+    return () => {
+      controller.abort()
+      if (local) URL.revokeObjectURL(local)
+    }
+  }, [segmentId, url])
+
+  // A cue that arrives mid-download waits here for the local copy.
+  useEffect(() => {
     const video = videoRef.current
+    if (!cue || !video || !objectUrl || cue.segmentId !== segmentId) return
     const seek = () => {
       video.currentTime = cue.seconds
-      void video.play().catch(() => undefined)
+      video.play().then(
+        () => setPlayAt(null),
+        // Autoplay refused (iOS, once the wait outlived the click): offer a
+        // play button rather than leave a click that did nothing.
+        () => setPlayAt(cue.seconds),
+      )
     }
-    // Seeking before metadata is loaded is silently ignored by every browser,
-    // which is how "jump to quote" turns into "plays from the beginning".
-    if (video.readyState >= 1) seek()
-    else video.addEventListener('loadedmetadata', seek, { once: true })
-  }, [cue, current?.segmentId])
+    // Seeking before metadata is loaded is silently ignored by every browser.
+    if (video.readyState >= 1) {
+      seek()
+      return
+    }
+    video.addEventListener('loadedmetadata', seek, { once: true })
+    return () => video.removeEventListener('loadedmetadata', seek)
+  }, [cue, segmentId, objectUrl])
 
   if (segments.length === 0) return null
 
@@ -65,28 +122,68 @@ export function AnswerPlayer({
     <div className="space-y-3">
       <video
         ref={videoRef}
-        key={current?.segmentId}
-        src={current?.url}
+        key={segmentId}
+        src={objectUrl}
         controls
         playsInline
         className="bg-muted aspect-video w-full rounded-lg"
       />
+      <div aria-live="polite" className="text-muted-foreground text-sm">
+        {status?.phase === 'loading' && (
+          <span className="inline-flex items-center gap-2">
+            <Loader2
+              aria-hidden
+              className="size-4 animate-spin motion-reduce:animate-none"
+            />
+            {status.percent === null
+              ? t('player.loading')
+              : t('player.loadingPercent', { percent: status.percent })}
+          </span>
+        )}
+        {status?.phase === 'failed' && (
+          <span className="text-destructive">{t('player.failed')}</span>
+        )}
+        {playAt !== null && (
+          <Button
+            size="sm"
+            onClick={() => {
+              const video = videoRef.current
+              // A refusal leaves this button in place, which is the signal.
+              if (video) {
+                fireAndForget(
+                  video.play().then(() => setPlayAt(null)),
+                  'report playback',
+                )
+              }
+            }}
+          >
+            <Play aria-hidden />
+            {t('player.playAt', { time: formatTimecode(playAt) })}
+          </Button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         {segments.map((segment, index) => (
           <button
             key={segment.segmentId}
             type="button"
             onClick={() => onSelect(segment.segmentId)}
-            aria-current={segment.segmentId === current?.segmentId}
+            aria-current={segment.segmentId === segmentId}
             className={cn(
               'focus-visible:ring-ring rounded-md border px-3 py-1.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
-              segment.segmentId === current?.segmentId
+              segment.segmentId === segmentId
                 ? 'border-primary bg-primary/10 text-foreground'
                 : 'text-muted-foreground hover:bg-accent',
             )}
           >
             {questionLabels[segment.segmentId] ??
               t('answers.question', { index: index + 1 })}
+            {segment.durationSeconds !== null && (
+              <span className="text-muted-foreground tabular-nums">
+                {' · '}
+                {formatTimecode(segment.durationSeconds)}
+              </span>
+            )}
           </button>
         ))}
       </div>

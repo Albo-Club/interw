@@ -316,7 +316,15 @@ export const resolveSharedMedia = internalQuery({
       .collect()
     return segments.flatMap((segment) => {
       const media = playbackMedia(segment)
-      return media ? [{ segmentId: segment._id, key: media.key }] : []
+      return media
+        ? [
+            {
+              segmentId: segment._id,
+              key: media.key,
+              durationSeconds: segment.measuredSeconds ?? null,
+            },
+          ]
+        : []
     })
   },
 })
@@ -337,7 +345,13 @@ export const sharedMediaUrls = action({
   handler: async (
     ctx,
     { token },
-  ): Promise<Array<{ segmentId: Id<'segments'>; url: string }>> => {
+  ): Promise<
+    Array<{
+      segmentId: Id<'segments'>
+      url: string
+      durationSeconds: number | null
+    }>
+  > => {
     const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, {
       token,
       now: Date.now(),
@@ -346,6 +360,7 @@ export const sharedMediaUrls = action({
     return await Promise.all(
       segments.map(async (segment) => ({
         segmentId: segment.segmentId,
+        durationSeconds: segment.durationSeconds,
         url: await presignGet(segment.key),
       })),
     )

@@ -70,7 +70,12 @@ function CandidateReportPage() {
   const navigate = useNavigate()
 
   const [media, setMedia] = useState<{
-    segments: Array<{ segmentId: string; url: string; kind: string }>
+    segments: Array<{
+      segmentId: string
+      url: string
+      kind: string
+      durationSeconds: number | null
+    }>
     cv: string | null
     coverLetter: string | null
   } | null>(null)

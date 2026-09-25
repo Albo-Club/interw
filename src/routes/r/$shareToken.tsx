@@ -46,7 +46,11 @@ function SharedReport() {
   const sharedMedia = useConvexAction(api.shares.sharedMediaUrls)
 
   const [media, setMedia] = useState<
-    Array<{ segmentId: string; url: string }> | null
+    Array<{
+      segmentId: string
+      url: string
+      durationSeconds: number | null
+    }> | null
   >(null)
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)

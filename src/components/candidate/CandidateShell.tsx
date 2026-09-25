@@ -1,7 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { chooseCandidateLanguage } from './useCandidateLanguage'
 import type { ReactNode } from 'react'
 
+import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
 /**
@@ -34,7 +36,8 @@ export function CandidateShell({
   privacyToken?: string
   width?: 'narrow' | 'wide'
 }) {
-  const { t } = useTranslation('interview')
+  const { t, i18n } = useTranslation(['interview', 'common'])
+  const other = i18n.language === 'fr' ? 'en' : 'fr'
   return (
     <div
       className={cn(
@@ -45,13 +48,24 @@ export function CandidateShell({
       <header className="border-b">
         <div
           className={cn(
-            'mx-auto flex h-14 items-center px-4',
+            'mx-auto flex h-14 items-center justify-between gap-4 px-4',
             width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl',
           )}
         >
-          <span className="text-sm font-semibold tracking-tight">
+          <span className="truncate text-sm font-semibold tracking-tight">
             {organisationName ?? 'interw'}
           </span>
+          {/* Named in its own language, so it reads to the person who needs
+              it rather than to the one already served. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            lang={other}
+            title={t('interview:shell.language')}
+            onClick={() => chooseCandidateLanguage(i18n, other)}
+          >
+            {t(`common:language.${other}`)}
+          </Button>
         </div>
       </header>
 
@@ -77,7 +91,7 @@ export function CandidateShell({
               params={{ token: privacyToken }}
               className="underline underline-offset-4"
             >
-              {t('shell.privacy')}
+              {t('interview:shell.privacy')}
             </Link>
           </div>
         </footer>

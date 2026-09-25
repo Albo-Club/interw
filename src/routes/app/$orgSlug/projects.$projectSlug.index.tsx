@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import { maxInterviewMinutes } from '../../../../convex/lib/interviewDuration'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
@@ -36,6 +37,7 @@ import { Progress } from '~/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { ProjectStatusBadge } from '~/components/projects/ProjectStatusBadge'
 import { ProjectTeamDialog } from '~/components/projects/ProjectTeamDialog'
+import { useCanManageProject } from '~/components/projects/useCanManageProject'
 import { CandidatesTable } from '~/components/candidates/CandidatesTable'
 import { InviteCandidatesDialog } from '~/components/candidates/InviteCandidatesDialog'
 import { EmptyState } from '~/components/projects/EmptyState'
@@ -60,13 +62,13 @@ function ProjectDetailPage() {
   const [inviting, setInviting] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
-  const me = useConvexQuery(api.users.me)
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
   const data = useConvexQuery(
     api.projects.getBySlug,
     org ? { orgId: org._id, slug: projectSlug } : 'skip',
   )
   const publish = useConvexMutation(api.projects.publish)
+  const canManage = useCanManageProject(orgSlug, data?.project.createdBy)
   const archive = useConvexMutation(api.projects.archive)
   const restore = useConvexMutation(api.projects.restore)
   const remove = useConvexMutation(api.projects.remove)
@@ -100,14 +102,6 @@ function ProjectDetailPage() {
   // Mirrors `assertAcceptsCandidates` in convex/sessions.ts: only a live role
   // mails a link, since the candidate would otherwise find it already closed.
   const canInvite = project.status === 'active' && !expired
-  // Mirrors `requireProjectOwnerOrAdmin`, which is what enforces it: this only
-  // spares a member an action the server would refuse.
-  const ready = me?.kind === 'ready' ? me : null
-  const myRole = ready?.orgs.find((o) => o.slug === orgSlug)?.role
-  const canManage =
-    myRole === 'admin' ||
-    myRole === 'owner' ||
-    project.createdBy === ready?.user._id
   // `projects.remove` refuses once anyone was invited; the dialog says so
   // up front instead of offering a button that can only fail.
   const deletable = project.sessionCount === 0
@@ -253,9 +247,9 @@ function ProjectDetailPage() {
           value={String(criteria.length)}
         />
         <StatCard
-          label={t('projects:detail.stats.duration')}
-          value={t('projects:detail.stats.durationValue', {
-            count: project.maxDurationMinutes,
+          label={t('projects:questions.duration.label')}
+          value={t('projects:questions.duration.value', {
+            count: maxInterviewMinutes(questions),
           })}
         />
         <StatCard

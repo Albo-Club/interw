@@ -90,7 +90,7 @@ async function seed(t: TestConvex): Promise<World> {
     api.projects.create,
     {
       orgId,
-      title: 'Backend',
+      jobTitle: 'Backend',
       language: 'en',
       team: [users.teammate],
     },
@@ -286,13 +286,13 @@ describe('new role slugs', () => {
   it('do not depend on roles the caller cannot see', async () => {
     const hidden = await as(t, 'admin').mutation(api.projects.create, {
       orgId: w.orgId,
-      title: 'Replace Paul',
+      jobTitle: 'Replace Paul',
       language: 'en',
     })
-    const create = (title: string) =>
+    const create = (jobTitle: string) =>
       as(t, 'teammate').mutation(api.projects.create, {
         orgId: w.orgId,
-        title,
+        jobTitle,
         language: 'en',
       })
     const taken = await create('Replace Paul')
@@ -365,7 +365,7 @@ describe('leaving a role team', () => {
   async function otherRole() {
     const { projectId } = await as(t, 'owner').mutation(api.projects.create, {
       orgId: w.orgId,
-      title: 'Design',
+      jobTitle: 'Design',
       language: 'en',
       team: [w.users.teammate],
     })

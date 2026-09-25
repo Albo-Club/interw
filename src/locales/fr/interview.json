@@ -27,7 +27,8 @@
     }
   },
   "shell": {
-    "privacy": "Vos données"
+    "privacy": "Vos données",
+    "language": "Changer de langue"
   },
   "state": {
     "notFound": {
@@ -54,7 +55,7 @@
   "apply": {
     "title": "Entretien pour le poste de {{jobTitle}}",
     "titleNoRole": "Entretien avec {{org}}",
-    "intro": "{{org}} aimerait vous entendre. C’est un court entretien vidéo, d’environ {{count}} minutes, que vous enregistrez vous-même depuis ce navigateur.",
+    "intro": "{{org}} aimerait vous entendre. C’est un court entretien vidéo, de {{count}} minutes au plus, que vous enregistrez vous-même depuis ce navigateur.",
     "name": "Nom complet",
     "email": "Adresse e-mail",
     "emailHint": "{{org}} l’utilisera pour revenir vers vous au sujet de ce poste.",
@@ -72,7 +73,7 @@
       "questions": "{{count}} question, posée face caméra par l'équipe",
       "questions_other": "{{count}} questions, posées face caméra par l'équipe",
       "record": "Vous enregistrez votre réponse à chacune, à votre rythme",
-      "duration": "Environ {{count}} minutes au total",
+      "duration": "Jusqu'à {{count}} minutes",
       "alone": "Personne ne vous attend : vous choisissez quand commencer"
     },
     "whatYouNeed": "Ce qu'il vous faut",

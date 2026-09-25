@@ -27,7 +27,8 @@
     }
   },
   "shell": {
-    "privacy": "Your data"
+    "privacy": "Your data",
+    "language": "Change language"
   },
   "state": {
     "notFound": {
@@ -54,7 +55,7 @@
   "apply": {
     "title": "Interview for {{jobTitle}}",
     "titleNoRole": "Interview with {{org}}",
-    "intro": "{{org}} would like to hear from you. It is a short video interview, about {{count}} minutes, that you record on your own from this browser.",
+    "intro": "{{org}} would like to hear from you. It is a short video interview, up to {{count}} minutes, that you record on your own from this browser.",
     "name": "Full name",
     "email": "Email address",
     "emailHint": "{{org}} will use it to get back to you about this role.",
@@ -72,7 +73,7 @@
       "questions": "{{count}} question, asked on camera by the team",
       "questions_other": "{{count}} questions, asked on camera by the team",
       "record": "You record your answer to each one, in your own time",
-      "duration": "About {{count}} minutes in total",
+      "duration": "Up to {{count}} minutes",
       "alone": "No one is waiting — you choose when to start"
     },
     "whatYouNeed": "What you'll need",

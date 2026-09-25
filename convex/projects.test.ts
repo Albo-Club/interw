@@ -349,3 +349,73 @@ describe('jobImport.applyDraft', () => {
     expect(await counts()).toEqual({ questions: 1, criteria: 1 })
   })
 })
+
+/**
+ * One title a recruiter types, the one the candidate sees. The internal name
+ * is optional and, until one is given, follows the job title — on the server,
+ * so no client can let the two drift.
+ */
+describe('a role title', () => {
+  let t: TestConvex
+  let s: Awaited<ReturnType<typeof seed>>
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seed(t)
+  })
+
+  const titles = (projectId: Id<'projects'>) =>
+    t.run(async (ctx) => {
+      const project = await ctx.db.get('projects', projectId)
+      return { title: project?.title, jobTitle: project?.jobTitle }
+    })
+
+  it('is the job title alone until an internal name is given', async () => {
+    const { projectId } = await as(t, 'creator').mutation(api.projects.create, {
+      orgId: s.orgId,
+      jobTitle: '  Backend engineer ',
+      language: 'en',
+    })
+    expect(await titles(projectId)).toEqual({
+      title: 'Backend engineer',
+      jobTitle: 'Backend engineer',
+    })
+
+    await as(t, 'creator').mutation(api.projects.update, {
+      projectId,
+      jobTitle: 'Senior backend engineer',
+    })
+    expect(await titles(projectId)).toEqual({
+      title: 'Senior backend engineer',
+      jobTitle: 'Senior backend engineer',
+    })
+  })
+
+  it('keeps an internal name when the job title changes', async () => {
+    const { projectId } = await as(t, 'creator').mutation(api.projects.create, {
+      orgId: s.orgId,
+      jobTitle: 'Backend engineer',
+      internalTitle: 'Backend - Lyon',
+      language: 'en',
+    })
+    await as(t, 'creator').mutation(api.projects.update, {
+      projectId,
+      jobTitle: 'Senior backend engineer',
+    })
+    expect(await titles(projectId)).toEqual({
+      title: 'Backend - Lyon',
+      jobTitle: 'Senior backend engineer',
+    })
+  })
+
+  it('refuses to clear the job title a role is named by', async () => {
+    const { projectId } = await as(t, 'creator').mutation(api.projects.create, {
+      orgId: s.orgId,
+      jobTitle: 'Backend engineer',
+      language: 'en',
+    })
+    await expect(
+      as(t, 'creator').mutation(api.projects.update, { projectId, jobTitle: ' ' }),
+    ).rejects.toThrow('invalid_title')
+  })
+})

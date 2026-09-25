@@ -2602,6 +2602,14 @@ The general shape: a flag that names a target is a *request*, and an ambient
 credential that names a different target wins. Whenever both exist, trust what
 the tool says it did, never what you asked for.
 
+The same key turns **`npx convex dev` into a deploy**. In the Claude Code cloud
+sandbox it points at **staging**, not at a throwaway dev deployment, and
+`convex dev --once` (even with `CONVEX_AGENT_MODE=anonymous`, even after asking
+for a local deployment) pushed a branch's unmerged functions there and wrote a
+`.env.local` naming it. To look at a change in the app from the sandbox, start
+from `env -u CONVEX_DEPLOY_KEY`; if something did land, redeploy `main` from a
+worktree of `origin/main` the same way.
+
 ## A fresh clone has no `origin/HEAD`, and `/security-review` needs it
 
 `git clone` normally writes `refs/remotes/origin/HEAD`, but the checkout a
@@ -2963,6 +2971,41 @@ Lazy `import()` chunks are not counted.
   then fails loudly ("no start manifest", "route … is missing") rather than
   measuring nothing — read the new manifest, don't delete the step.
 
+## A role's interview length is computed, never typed
+
+A role used to carry `maxDurationMinutes` (default 20, 5–120), which the
+candidate was told — in the invitation and on the welcome screen — and which
+nothing enforced. The per-question answer time (`maxResponseSeconds`) is the
+only limit the recorder applies. In production a role set to 30 minutes had
+questions that took longer, and a candidate planned their time on the wrong
+figure.
+
+The figure is now `maxInterviewMinutes()` (`convex/lib/interviewDuration.ts`):
+the answer times plus 30 s to read each question, rounded up. The candidate is
+told "up to" that, never "about". The column stays in the schema as optional
+legacy until rows stop carrying it; nothing reads it.
+
+The general rule: a number shown to one person that is derived from settings
+made elsewhere is computed from them, not entered alongside them — two inputs
+for one fact will eventually disagree.
+
+## Transcription detects the language of each answer
+
+`transcribe()` sends no `language`. A role may ask one question in French and
+the next in English, and the provider detects the language per answer; a
+role-level hint would transcribe every answer in the other language as if it
+were in the role's. The cost is some accuracy on very short answers, which the
+hint used to buy — accepted, because a mixed-language role was a product
+decision and a mis-heard language is worse than a mis-heard word. If short
+answers come back garbled, the fix is a language per question, not the role
+hint back.
+
+`projects.language` still exists, but it is the recruiting team's language (set
+from the app's language at creation, not chosen): it writes the report, the job
+ad import and the emails, and is the candidate's default screen language. The
+candidate can switch their own screens from the header for the rest of the tab
+(`useCandidateLanguage`), which leaves the `lang` cookie alone.
+
 ## Mistral's transcription response is not OpenAI's
 
 Every transcription failed validation, and so every report after it found no
@@ -2977,5 +3020,6 @@ and token counts, never `total_seconds`. Nothing caught it because
   Mistral's docs — refresh it from there, not from another provider's.
 - **`language` with `timestamp_granularities`.** One Mistral doc page says the
   two are incompatible; production says otherwise. With both sent, Voxtral
-  answered HTTP 200 on every call in `jobLog` (September 2026).
-  Keep `language`: it helps accuracy on short answers.
+  answered HTTP 200 on every call in `jobLog` (September 2026). `language` is
+  no longer sent anyway — see § "Transcription detects the language of each
+  answer".

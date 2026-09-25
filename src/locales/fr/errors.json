@@ -42,7 +42,7 @@
     "incomplete_order": "Les questions ont changé pendant le réordonnancement. Réessayez.",
     "insufficient_role": "Seuls les admins, les propriétaires et le créateur du poste peuvent faire cela.",
     "invalid_content": "Une question doit avoir un texte, de 1000 caractères au plus.",
-    "invalid_duration": "Choisissez une durée entre 5 et 120 minutes.",
+    "invalid_duration": "La durée de cet enregistrement est illisible. Enregistrez à nouveau votre réponse.",
     "invalid_email": "Cette adresse e-mail n'est pas valide.",
     "invalid_expiry": "Un lien dure entre 1 et 365 jours, ou n'expire pas.",
     "invalid_job_title": "L'intitulé du poste doit faire 120 caractères au plus.",

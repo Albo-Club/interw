@@ -204,17 +204,12 @@ export const segmentForTranscription = internalQuery({
       .query('transcripts')
       .withIndex('by_segment', (q) => q.eq('segmentId', segmentId))
       .unique()
-    const session = await ctx.db.get('sessions', segment.sessionId)
-    const project = session
-      ? await ctx.db.get('projects', session.projectId)
-      : null
     return {
       sessionId: segment.sessionId,
       orgId: segment.orgId,
       audioKey: segment.audioKey ?? null,
       videoKey: segment.videoKey ?? null,
       alreadyTranscribed: existing !== null,
-      language: project?.language ?? 'fr',
     }
   },
 })
@@ -300,7 +295,6 @@ export const transcribeSegment = internalAction({
       if (!key) throw new ConvexError('segment_has_no_media')
       const stream = await getObjectStream(key)
       const result = await transcribe(stream, {
-        language: context.language,
         fileName: key.split('/').pop() ?? 'answer',
         contentType: mimeTypeForKey(key),
       })

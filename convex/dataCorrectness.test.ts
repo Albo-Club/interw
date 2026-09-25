@@ -162,7 +162,7 @@ describe("role slugs past 200 roles (Back M4)", () => {
     });
     const { slug } = await asOwner(t).mutation(api.projects.create, {
       orgId: f.orgId,
-      title: "Product Manager",
+      jobTitle: "Product Manager",
       language: "en",
     });
 

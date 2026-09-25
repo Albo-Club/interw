@@ -113,7 +113,7 @@ function ApplyPage() {
           <p className="text-muted-foreground text-lg leading-relaxed">
             {t('interview:apply.intro', {
               org: data.organisationName,
-              count: data.maxDurationMinutes,
+              count: data.maxInterviewMinutes,
             })}
           </p>
         </header>

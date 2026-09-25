@@ -13,6 +13,7 @@ import { ConvexError, v } from 'convex/values'
 import { mutation, query } from './_generated/server'
 import { languageValidator } from './schema'
 import { effectiveNow } from './lib/clock'
+import { maxInterviewMinutes } from './lib/interviewDuration'
 import { roleGate } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import { consumeLimit } from './rateLimiters'
@@ -42,7 +43,7 @@ export const landing = query({
     organisationName: v.string(),
     jobTitle: v.union(v.string(), v.null()),
     language: languageValidator,
-    maxDurationMinutes: v.number(),
+    maxInterviewMinutes: v.number(),
     state: v.union(
       v.literal('ready'),
       v.literal('closed'),
@@ -51,11 +52,15 @@ export const landing = query({
   }),
   handler: async (ctx, { token, now }) => {
     const { project, org } = await requireApplyProject(ctx, token)
+    const questions = await ctx.db
+      .query('questions')
+      .withIndex('by_project', (q) => q.eq('projectId', project._id))
+      .collect()
     return {
       organisationName: org.name,
       jobTitle: project.jobTitle ?? null,
       language: project.language,
-      maxDurationMinutes: project.maxDurationMinutes,
+      maxInterviewMinutes: maxInterviewMinutes(questions),
       state: roleGate(project, org, effectiveNow(now)) ?? ('ready' as const),
     }
   },

@@ -672,7 +672,7 @@ describe("the role's team", () => {
     await expect(
       as(t, 'acmeMember').mutation(api.projects.create, {
         orgId: w.acmeOrgId,
-        title: 'Designer',
+        jobTitle: 'Designer',
         language: 'en',
         team: [shared, await userId(t, 'rivalOwner')],
       }),
@@ -680,7 +680,7 @@ describe("the role's team", () => {
 
     const { projectId, slug } = await as(t, 'acmeMember').mutation(
       api.projects.create,
-      { orgId: w.acmeOrgId, title: 'Designer', language: 'en', team: [shared] },
+      { orgId: w.acmeOrgId, jobTitle: 'Designer', language: 'en', team: [shared] },
     )
     expect(await teamRowsOf(t, projectId)).toEqual([
       await userId(t, 'acmeMember'),

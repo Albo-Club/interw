@@ -735,7 +735,7 @@ export function candidateInvitationEmail({
           ? `Your interview with ${safeOrg}`
           : `Your interview for ${safeJob}`,
       intro: `Hello ${safeName}, <strong>${safeOrg}</strong> would like to hear from you${safeJob === null ? '' : ` about the ${safeJob} role`}.`,
-      how: `It is a short video interview you record on your own, from your browser, whenever suits you. You will answer a handful of questions asked on camera by the team. It takes about ${durationMinutes} minutes.`,
+      how: `It is a short video interview you record on your own, from your browser, whenever suits you. You will answer a handful of questions asked on camera by the team. Allow up to ${durationMinutes} minutes.`,
       needs: `You will need a working camera and microphone, and a quiet few minutes. Your answers are recorded and reviewed by ${safeOrg}.`,
       footer: `This link is personal to you — please do not forward it. If you were not expecting this, you can ignore this email.`,
       preheader: `A short video interview ${safeJob === null ? `with ${safeOrg}` : `for ${safeJob}`}, whenever suits you.`,
@@ -743,7 +743,7 @@ export function candidateInvitationEmail({
       text: [
         `Hello ${candidateName},`,
         `${orgName} would like to hear from you${jobTitle === null ? '' : ` about the ${jobTitle} role`}.`,
-        `It is a short video interview you record on your own, from your browser, whenever suits you. It takes about ${durationMinutes} minutes.`,
+        `It is a short video interview you record on your own, from your browser, whenever suits you. Allow up to ${durationMinutes} minutes.`,
         `Start the interview:`,
         startUrl,
         `You will need a working camera and microphone, and a quiet few minutes.`,
@@ -760,7 +760,7 @@ export function candidateInvitationEmail({
           ? `Votre entretien avec ${safeOrg}`
           : `Votre entretien pour le poste de ${safeJob}`,
       intro: `Bonjour ${safeName}, <strong>${safeOrg}</strong> souhaite vous entendre${safeJob === null ? '' : ` au sujet du poste de ${safeJob}`}.`,
-      how: `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Vous répondrez à quelques questions posées face caméra par l'équipe. Comptez environ ${durationMinutes} minutes.`,
+      how: `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Vous répondrez à quelques questions posées face caméra par l'équipe. Comptez jusqu'à ${durationMinutes} minutes.`,
       needs: `Prévoyez une caméra et un micro en état de marche, et quelques minutes au calme. Vos réponses sont enregistrées et consultées par ${safeOrg}.`,
       footer: `Ce lien vous est personnel : merci de ne pas le transmettre. Si vous n'attendiez pas ce message, vous pouvez l'ignorer.`,
       preheader: `Un court entretien vidéo ${safeJob === null ? `avec ${safeOrg}` : `pour le poste de ${safeJob}`}, quand vous voulez.`,
@@ -768,7 +768,7 @@ export function candidateInvitationEmail({
       text: [
         `Bonjour ${candidateName},`,
         `${orgName} souhaite vous entendre${jobTitle === null ? '' : ` au sujet du poste de ${jobTitle}`}.`,
-        `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Comptez environ ${durationMinutes} minutes.`,
+        `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Comptez jusqu'à ${durationMinutes} minutes.`,
         `Commencer l'entretien :`,
         startUrl,
         `Prévoyez une caméra et un micro en état de marche, et quelques minutes au calme.`,

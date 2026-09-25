@@ -120,7 +120,7 @@ export const landing = query({
     return {
       organisationName: org.name,
       session: toCandidateSessionView(session),
-      project: toCandidateProjectView(project, progress.questions.length),
+      project: toCandidateProjectView(project, progress.questions),
       gate: {
         ...evaluateSessionGate({
           session,

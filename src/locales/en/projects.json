@@ -38,17 +38,17 @@
   },
   "new": {
     "title": "New role",
-    "subtitle": "Two fields to start. Everything else comes next.",
+    "subtitle": "Start with the job title. We'll guide you through the rest, step by step.",
     "fields": {
-      "title": "Internal title",
-      "titleHint": "Only your team sees this.",
-      "jobTitle": "Job title shown to candidates",
-      "jobTitleHint": "This is what appears on the candidate's screen.",
-      "language": "Interview language",
-      "languageHint": "Decides the language of the candidate screens and of the AI evaluation."
+      "title": "Internal name",
+      "titleHint": "Only your team sees this. Handy to tell apart two roles with the same title.",
+      "jobTitle": "Job title",
+      "jobTitleHint": "What candidates see, in the email and on screen.",
+      "jobTitlePlaceholder": "Senior backend engineer"
     },
     "submit": "Create and continue",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "addInternalName": "Add an internal name"
   },
   "detail": {
     "edit": "Edit",
@@ -70,8 +70,6 @@
     "stats": {
       "questions": "Questions",
       "criteria": "Criteria",
-      "duration": "Max duration",
-      "durationValue": "{{count}} min",
       "expiry": "Link expires",
       "noExpiry": "No expiry"
     },
@@ -87,23 +85,24 @@
   "wizard": {
     "title": "Edit role",
     "steps": {
-      "basics": "Basics",
       "questions": "Questions",
-      "criteria": "Criteria",
-      "candidate": "Candidate form",
-      "review": "Review"
+      "criteria": "Evaluation",
+      "candidate": "Candidate experience",
+      "publish": "Publish"
     },
     "back": "Back",
-    "next": "Next",
+    "next": "Next: {{step}}",
     "saved": "Saved",
     "saveFailed": "Could not save. Your last change was not applied.",
-    "finish": "Finish"
+    "finish": "Finish",
+    "autosave": "Changes save automatically.",
+    "stepDone": "done",
+    "stepTodo": "to complete"
+  },
+  "experience": {
+    "subtitle": "Everything the candidate sees: the job title, who welcomes them, and what you ask of them."
   },
   "basics": {
-    "title": "The role",
-    "subtitle": "What the candidate sees before they start.",
-    "duration": "Maximum interview length",
-    "durationHint": "Between 5 and 120 minutes. Candidates see this before they begin.",
     "persona": "Interviewer name",
     "personaHint": "The name shown alongside your questions. Your own name works well.",
     "expiry": "Link expiry",
@@ -174,7 +173,17 @@
       "confirm": "Delete question"
     },
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "duration": {
+      "label": "Maximum interview length",
+      "value": "{{count}} min",
+      "hint": "The answer times added up, plus 30 s to read each question. This is what the candidate is told."
+    },
+    "time": {
+      "seconds": "{{count}} s",
+      "minutes": "{{count}} min",
+      "minutesSeconds": "{{minutes}} min {{seconds}} s"
+    }
   },
   "criteria": {
     "title": "Evaluation criteria",
@@ -213,7 +222,7 @@
   },
   "review": {
     "title": "Ready to publish",
-    "subtitle": "One last look before candidates can be invited.",
+    "subtitle": "One last look before you invite candidates. Click anything left to fix to go there.",
     "readyTitle": "This role is ready",
     "readyBody": "Publish it, then invite your first candidate.",
     "blocked": "Not ready yet",
@@ -222,7 +231,8 @@
       "question_not_written": "Question {{position}} still has the example text. Write the question you want to ask.",
       "no_criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against.",
       "criterion_not_named": "Criterion {{position}} still has its example name. Name what you want to assess."
-    }
+    },
+    "options": "Options"
   },
   "team": {
     "title": "Role team",
@@ -230,9 +240,10 @@
     "creator": "Creator of the role, always on the team",
     "createdBy": "Created by <name></name>",
     "label": "Team",
-    "hint": "Who follows this role with you. You can change it later.",
+    "hint": "Who follows this role with you, and is emailed when a report is ready.",
     "save": "Save team",
-    "saved": "Team updated"
+    "saved": "Team updated",
+    "manage": "Choose the team…"
   },
   "import": {
     "title": "Import from a job ad",
@@ -262,7 +273,6 @@
     "invalid_content": "A question needs text, up to 1000 characters.",
     "invalid_label": "A criterion needs a label, up to 80 characters.",
     "invalid_weight": "A weight must be between 0 and 100.",
-    "invalid_duration": "Choose a length between 5 and 120 minutes.",
     "invalid_response_seconds": "Answer time must be between 15 and 600 seconds.",
     "no_questions": "Add at least one question before publishing.",
     "too_many_questions": "A role can hold at most 25 questions.",

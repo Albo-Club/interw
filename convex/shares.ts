@@ -200,6 +200,7 @@ const shareViewReturns = v.object({
           segmentId: v.id('segments'),
           questionIndex: v.number(),
           question: v.string(),
+          durationSeconds: v.union(v.number(), v.null()),
         }),
       ),
     }),
@@ -277,6 +278,10 @@ export const view = query({
             questionIndex: segment.questionIndex,
             // By id, not by index: see convex/pipeline.ts.
             question: questionById.get(segment.questionId)?.content ?? '',
+            // The player cannot learn it from a MediaRecorder file. Same rule
+            // as the recruiter's page (`reports.forSession`).
+            durationSeconds:
+              segment.measuredSeconds ?? segment.durationSeconds ?? null,
           })),
       },
     }
@@ -316,15 +321,7 @@ export const resolveSharedMedia = internalQuery({
       .collect()
     return segments.flatMap((segment) => {
       const media = playbackMedia(segment)
-      return media
-        ? [
-            {
-              segmentId: segment._id,
-              key: media.key,
-              durationSeconds: segment.measuredSeconds ?? null,
-            },
-          ]
-        : []
+      return media ? [{ segmentId: segment._id, key: media.key }] : []
     })
   },
 })
@@ -345,13 +342,7 @@ export const sharedMediaUrls = action({
   handler: async (
     ctx,
     { token },
-  ): Promise<
-    Array<{
-      segmentId: Id<'segments'>
-      url: string
-      durationSeconds: number | null
-    }>
-  > => {
+  ): Promise<Array<{ segmentId: Id<'segments'>; url: string }>> => {
     const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, {
       token,
       now: Date.now(),
@@ -360,7 +351,6 @@ export const sharedMediaUrls = action({
     return await Promise.all(
       segments.map(async (segment) => ({
         segmentId: segment.segmentId,
-        durationSeconds: segment.durationSeconds,
         url: await presignGet(segment.key),
       })),
     )

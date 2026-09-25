@@ -46,11 +46,7 @@ function SharedReport() {
   const sharedMedia = useConvexAction(api.shares.sharedMediaUrls)
 
   const [media, setMedia] = useState<
-    Array<{
-      segmentId: string
-      url: string
-      durationSeconds: number | null
-    }> | null
+    Array<{ segmentId: string; url: string }> | null
   >(null)
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)
@@ -100,6 +96,9 @@ function SharedReport() {
       answer.segmentId,
       t('report:answers.question', { index: answer.questionIndex + 1 }),
     ]),
+  )
+  const answerLengths = Object.fromEntries(
+    report.answers.map((a) => [a.segmentId, a.durationSeconds]),
   )
 
   const jump = (segmentId: string, seconds: number) => {
@@ -154,6 +153,7 @@ function SharedReport() {
             activeSegmentId={activeSegment}
             onSelect={setActiveSegment}
             questionLabels={questionLabels}
+            answerLengths={answerLengths}
           />
         )}
 

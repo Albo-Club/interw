@@ -70,12 +70,7 @@ function CandidateReportPage() {
   const navigate = useNavigate()
 
   const [media, setMedia] = useState<{
-    segments: Array<{
-      segmentId: string
-      url: string
-      kind: string
-      durationSeconds: number | null
-    }>
+    segments: Array<{ segmentId: string; url: string; kind: string }>
     cv: string | null
     coverLetter: string | null
   } | null>(null)
@@ -86,8 +81,11 @@ function CandidateReportPage() {
   const [sharing, setSharing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Minted once per session, not on every live update of `data`: each new
+  // signed URL makes the player download the whole answer again.
+  const loaded = data !== undefined
   useEffect(() => {
-    if (!data) return
+    if (!loaded) return
     let cancelled = false
     fireAndForget(
       mediaUrls({ sessionId: sessionId as never }).then((result) => {
@@ -98,7 +96,7 @@ function CandidateReportPage() {
     return () => {
       cancelled = true
     }
-  }, [data, mediaUrls, sessionId])
+  }, [loaded, mediaUrls, sessionId])
 
   useEffect(() => {
     if (data && !noteLoaded) {
@@ -116,6 +114,13 @@ function CandidateReportPage() {
     }
     return labels
   }, [data, t])
+  const answerLengths = useMemo(
+    () =>
+      Object.fromEntries(
+        (data?.answers ?? []).map((a) => [a.segmentId, a.durationSeconds]),
+      ),
+    [data],
+  )
 
   if (data === undefined) {
     return (
@@ -497,6 +502,7 @@ function CandidateReportPage() {
               activeSegmentId={activeSegment}
               onSelect={setActiveSegment}
               questionLabels={questionLabels}
+              answerLengths={answerLengths}
             />
           )}
 

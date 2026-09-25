@@ -1842,10 +1842,6 @@ Two rules survive from the streaming days:
 A `play()` refused after the wait (iOS no longer sees the click as the cause)
 turns into a visible "Play from 3:30" button, never a click that did nothing.
 
-The real fix is server-side: an MP4 rewritten with its index up front
-(`-movflags +faststart`) streams and seeks immediately, and would let the
-player drop the download for it.
-
 ## Para-verbal analysis is computed, not generated
 
 The six delivery figures (speaking rate, hesitation, silence, time used,

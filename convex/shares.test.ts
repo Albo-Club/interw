@@ -4,7 +4,7 @@ import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, internal } from './_generated/api'
+import { api } from './_generated/api'
 import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
@@ -195,8 +195,8 @@ describe('shares.view', () => {
   })
 })
 
-describe('shared playback', () => {
-  it('carries the length the server measured, and nothing else about the answer', async () => {
+describe('shared answers', () => {
+  it('carry the length the server measured', async () => {
     const t = newTest()
     const s = await seed(t)
     await t.run(async (ctx) => {
@@ -224,17 +224,8 @@ describe('shared playback', () => {
       })
     })
 
-    const media = await t.query(internal.shares.resolveSharedMedia, {
-      token: s.token,
-      now: NOW,
-    })
-    expect(media).toEqual([
-      {
-        segmentId: expect.any(String),
-        key: 'orgs/o/sessions/s/q0.weba',
-        durationSeconds: 9.5,
-      },
-    ])
+    const result = await t.query(api.shares.view, { token: s.token, now: NOW })
+    expect(result.report?.answers[0].durationSeconds).toBe(9.5)
   })
 })
 

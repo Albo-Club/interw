@@ -11,8 +11,6 @@ export type PlayableSegment = {
   segmentId: string
   url: string
   kind: string
-  /** Measured server-side; the file itself does not say. */
-  durationSeconds: number | null
 }
 
 /**
@@ -42,12 +40,15 @@ export function AnswerPlayer({
   activeSegmentId,
   onSelect,
   questionLabels,
+  answerLengths,
 }: {
   segments: Array<PlayableSegment>
   cue: SeekCue
   activeSegmentId: string | null
   onSelect: (segmentId: string) => void
   questionLabels: Record<string, string>
+  /** Seconds, from the report: a MediaRecorder file does not know its own. */
+  answerLengths: Record<string, number | null>
 }) {
   const { t } = useTranslation('report')
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -65,20 +66,20 @@ export function AnswerPlayer({
   const status = download?.segmentId === segmentId ? download : null
   const objectUrl = status?.phase === 'done' ? status.objectUrl : undefined
 
-  // The whole answer, as soon as it is shown: a MediaRecorder file has no
-  // index, so a quote is only reachable once the bytes before it are here.
+  // The whole answer, as soon as it is shown — see `downloadMedia`.
   useEffect(() => {
     if (!segmentId || !url) return
     const controller = new AbortController()
     let local: string | null = null
     setPlayAt(null)
-    setDownload({ segmentId, phase: 'loading', percent: 0 })
+    setDownload({ segmentId, phase: 'loading', percent: null })
     downloadMedia(
       url,
       (percent) => setDownload({ segmentId, phase: 'loading', percent }),
       controller.signal,
     ).then(
       (blob) => {
+        if (controller.signal.aborted) return
         local = URL.createObjectURL(blob)
         setDownload({ segmentId, phase: 'done', objectUrl: local })
       },
@@ -163,29 +164,32 @@ export function AnswerPlayer({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
-        {segments.map((segment, index) => (
-          <button
-            key={segment.segmentId}
-            type="button"
-            onClick={() => onSelect(segment.segmentId)}
-            aria-current={segment.segmentId === segmentId}
-            className={cn(
-              'focus-visible:ring-ring rounded-md border px-3 py-1.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
-              segment.segmentId === segmentId
-                ? 'border-primary bg-primary/10 text-foreground'
-                : 'text-muted-foreground hover:bg-accent',
-            )}
-          >
-            {questionLabels[segment.segmentId] ??
-              t('answers.question', { index: index + 1 })}
-            {segment.durationSeconds !== null && (
-              <span className="text-muted-foreground tabular-nums">
-                {' · '}
-                {formatTimecode(segment.durationSeconds)}
-              </span>
-            )}
-          </button>
-        ))}
+        {segments.map((segment, index) => {
+          const length = answerLengths[segment.segmentId]
+          return (
+            <button
+              key={segment.segmentId}
+              type="button"
+              onClick={() => onSelect(segment.segmentId)}
+              aria-current={segment.segmentId === segmentId}
+              className={cn(
+                'focus-visible:ring-ring rounded-md border px-3 py-1.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                segment.segmentId === segmentId
+                  ? 'border-primary bg-primary/10 text-foreground'
+                  : 'text-muted-foreground hover:bg-accent',
+              )}
+            >
+              {questionLabels[segment.segmentId] ??
+                t('answers.question', { index: index + 1 })}
+              {length != null && (
+                <span className="text-muted-foreground tabular-nums">
+                  {' · '}
+                  {formatTimecode(length)}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

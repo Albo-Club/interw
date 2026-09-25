@@ -30,6 +30,7 @@ import {
 } from '~/components/ui/alert-dialog'
 import { EmptyState } from '~/components/projects/EmptyState'
 import { MediaRecorderField } from '~/components/projects/MediaRecorderField'
+import { useProjectPlayback } from '~/components/projects/useProjectPlayback'
 
 export function StepQuestions({
   project,
@@ -44,6 +45,10 @@ export function StepQuestions({
   const remove = useConvexMutation(api.questions.remove)
   const [pendingDelete, setPendingDelete] = useState<WizardQuestion | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const { playback, refresh: refreshPlayback } = useProjectPlayback(
+    project._id,
+    questions.flatMap((q) => (q.hasMedia ? [q._id] : [])).join(','),
+  )
 
   const notify = (error: unknown) => {
     const { key, fallbackKey } = errorMessageKey(error, 'projects')
@@ -112,6 +117,11 @@ export function StepQuestions({
                 question={question}
                 index={index}
                 total={questions.length}
+                playback={
+                  playback?.questions.find((q) => q.questionId === question._id) ??
+                  null
+                }
+                onMediaChanged={refreshPlayback}
                 onMove={(direction) => void move(index, direction)}
                 onDelete={() => setPendingDelete(question)}
               />
@@ -174,10 +184,14 @@ function QuestionCard({
   question,
   index,
   total,
+  playback,
+  onMediaChanged,
   onMove,
   onDelete,
 }: {
   question: WizardQuestion
+  playback: { url: string; kind: 'audio' | 'video' } | null
+  onMediaChanged: () => void
   index: number
   total: number
   onMove: (direction: -1 | 1) => void
@@ -323,9 +337,10 @@ function QuestionCard({
         </div>
 
         <MediaRecorderField
-          questionId={question._id}
+          target={{ kind: 'question', questionId: question._id }}
           hasMedia={question.hasMedia}
-          onChanged={() => undefined}
+          playback={playback}
+          onChanged={onMediaChanged}
         />
       </CardContent>
     </Card>

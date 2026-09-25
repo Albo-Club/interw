@@ -28,7 +28,8 @@ type Row = { name: string; email: string }
  * Invite one person, or a hundred.
  *
  * The pasted list is parsed in the browser and shown back — how many will be
- * invited, and which lines could not be read — before anything is sent.
+ * invited, which addresses were repeated, and which lines could not be
+ * read — before anything is sent.
  * Silently dropping an unreadable line means a real person never gets their
  * interview and nobody finds out.
  */
@@ -49,6 +50,9 @@ export function InviteCandidatesDialog({
   const [sending, setSending] = useState(false)
 
   const parsed = useMemo(() => parseCandidateList(pasted), [pasted])
+  // `duplicates` has one entry per extra line; the recruiter needs each
+  // address once.
+  const repeated = useMemo(() => [...new Set(parsed.duplicates)], [parsed])
   const candidates =
     mode === 'bulk'
       ? parsed.candidates
@@ -172,6 +176,22 @@ export function InviteCandidatesDialog({
                   count: parsed.candidates.length,
                 })}
               </p>
+            )}
+            {repeated.length > 0 && (
+              <Alert>
+                <AlertDescription className="space-y-1">
+                  <p>
+                    {t('candidates:invite.repeated', {
+                      count: repeated.length,
+                    })}
+                  </p>
+                  <ul className="list-disc pl-4 font-mono text-xs break-all">
+                    {repeated.slice(0, 5).map((email) => (
+                      <li key={email}>{email}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
             )}
             {parsed.invalid.length > 0 && (
               <Alert variant="destructive">

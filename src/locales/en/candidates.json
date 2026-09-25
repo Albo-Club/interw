@@ -16,12 +16,24 @@
       "candidate": "Candidate",
       "status": "Status",
       "score": "Score",
+      "recommendation": "AI recommendation",
       "decision": "Decision",
       "invited": "Invited",
       "completed": "Completed",
-      "duration": "Length"
+      "duration": "Length",
+      "actions": "Actions"
     },
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "filters": {
+      "status": "Filter by status",
+      "decision": "Filter by decision",
+      "allStatuses": "All statuses",
+      "allDecisions": "All decisions",
+      "noMatch": "No candidate matches these filters.",
+      "clear": "Clear filters"
+    },
+    "partial": "{{count}} candidate loaded. Sorting and filters only cover the loaded ones.",
+    "partial_other": "{{count}} candidates loaded. Sorting and filters only cover the loaded ones."
   },
   "status": {
     "pending": "Not started",
@@ -37,7 +49,10 @@
     "shortlisted": "Shortlisted",
     "hired": "Hired",
     "set": "Your decision",
-    "saved": "Decision saved"
+    "saved": "Decision saved",
+    "history": "History",
+    "cleared": "Decision cleared",
+    "formerMember": "A former member"
   },
   "invite": {
     "title": "Invite candidates",
@@ -59,7 +74,9 @@
     "sent": "{{count}} invitation sent",
     "sent_other": "{{count}} invitations sent",
     "duplicates": "{{count}} already had an open invitation — their link was sent again.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "repeated": "{{count}} address appeared more than once. Only its first line is kept:",
+    "repeated_other": "{{count}} addresses appeared more than once. Only their first line is kept:"
   },
   "actions": {
     "copyLink": "Copy the link",
@@ -69,7 +86,8 @@
     "cancel": "Cancel this invitation",
     "cancelled": "Invitation cancelled",
     "open": "Open the report",
-    "delete": "Delete this candidate's data"
+    "delete": "Delete this candidate's data",
+    "copyFailed": "The link could not be copied. Try again."
   },
   "cancelConfirm": {
     "title": "Cancel this invitation?",
@@ -92,9 +110,24 @@
     "no_candidates": "Add at least one candidate.",
     "too_many_candidates": "Invite at most 100 people at a time.",
     "project_not_active": "Publish the role before inviting candidates.",
-    "session_closed": "This interview is already finished or cancelled.",
+    "session_closed": "This interview is already finished, cancelled or expired.",
+    "address_undeliverable": "This address bounced or marked our email as spam. Invite the candidate again with a corrected address.",
     "site_url_not_configured": "The site address is not configured, so invitation links cannot be built.",
     "note_too_long": "That note is too long.",
-    "rate_limited": "That is a lot of invitations at once. Wait a moment and try again."
+    "rate_limited": "That is a lot of invitations at once. Wait a moment and try again.",
+    "insufficient_role": "Only admins, owners and the role’s creator can copy a candidate’s link."
+  },
+  "recommendation": {
+    "none": "Not analysed yet",
+    "strong_no": "Clear no",
+    "no": "No",
+    "maybe": "Worth digging into",
+    "yes": "Yes",
+    "strong_yes": "Strong yes"
+  },
+  "delivery": {
+    "bounced": "Invitation bounced",
+    "complained": "Marked as spam",
+    "failed": "Invitation not sent"
   }
 }

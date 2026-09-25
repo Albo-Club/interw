@@ -27,7 +27,7 @@ stranger's phone, where they get one attempt.
 
 **Prerequisites**
 
-- **Node 20+** (LTS recommended)
+- **Node** — the major in `package.json` `engines.node`
 - **pnpm** — enable it once via Corepack (bundled with Node): `corepack enable`
 - **git**
 
@@ -95,7 +95,7 @@ until the app is in. Done when your first PR has green CI and Renovate has
 opened its onboarding PR.
 
 Skills freshness needs nothing: the `skills-drift` job in `ci.yml` goes
-red when upstream skills move — run `pnpm run sync:skills`, review, commit.
+red when upstream skills move — run `pnpm skills:update`, review, commit.
 
 ## Deploying: staging and production
 

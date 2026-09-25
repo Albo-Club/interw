@@ -9,18 +9,21 @@ import {
   projectStatusValidator,
 } from './schema'
 import { requireOrgMember, requireOrgRole } from './lib/auth'
+import { effectiveIntroMode } from './lib/candidateView'
 import {
   filterVisibleProjects,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
+  sharedProjectIds,
 } from './lib/projectAccess'
+import { publishBlockers } from './lib/publishReadiness'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
-import type { Doc } from './_generated/dataModel'
+import type { MutationCtx } from './_generated/server'
+import type { Doc, Id } from './_generated/dataModel'
 
 const TITLE_MAX = 120
 const JOB_TITLE_MAX = 120
-const INTRO_TEXT_MAX = 2_000
 const PERSONA_NAME_MAX = 60
 const MIN_DURATION_MINUTES = 5
 const MAX_DURATION_MINUTES = 120
@@ -31,6 +34,10 @@ const MAX_DURATION_MINUTES = 120
  * thousands — paginate instead.
  */
 const LIST_CAP = 200
+
+/** Largest team a caller may name (Back F7): every list we are handed is
+ *  bounded, and a role followed by more than this is an org, not a team. */
+const TEAM_MAX = 100
 
 const DEFAULT_CANDIDATE_FIELDS = {
   phone: { enabled: false, required: false },
@@ -70,7 +77,6 @@ function toSummary(project: Doc<'projects'>) {
     createdAt: project.createdAt,
     createdBy: project.createdBy,
     expiresAt: project.expiresAt ?? null,
-    restricted: project.restricted,
     sessionCount: project.sessionCount,
     completedSessionCount: project.completedSessionCount,
   }
@@ -97,7 +103,13 @@ export const list = query({
           .order('desc')
           .take(LIST_CAP)
     const visible = await filterVisibleProjects(ctx, rows, user._id, member.role)
-    return visible.map(toSummary)
+    // Owners and admins see every role but are emailed only about the ones
+    // whose team they are on; the list says which (audit recruiter F6).
+    const shared = await sharedProjectIds(ctx, user._id)
+    return visible.map((project) => ({
+      ...toSummary(project),
+      onTeam: project.createdBy === user._id || shared.has(project._id),
+    }))
   },
 })
 
@@ -110,10 +122,14 @@ export const getBySlug = query({
   args: { orgId: v.id('organizations'), slug: v.string() },
   handler: async (ctx, { orgId, slug }) => {
     const { user, member } = await requireOrgMember(ctx, orgId)
+    // `.first()`, not `.unique()` (Back M4): Convex has no unique constraint,
+    // and a duplicate slug written before `create` asked the index made
+    // `.unique()` throw — on the page of both roles, for good. A degraded page
+    // (the older role) beats an error on both.
     const project = await ctx.db
       .query('projects')
       .withIndex('by_org_and_slug', (q) => q.eq('orgId', orgId).eq('slug', slug))
-      .unique()
+      .first()
     if (!project) throw new ConvexError('not_found')
     const visible = await filterVisibleProjects(
       ctx,
@@ -131,17 +147,12 @@ export const getBySlug = query({
       .query('criteria')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
-    const shares = await ctx.db
-      .query('projectShares')
-      .withIndex('by_project', (q) => q.eq('projectId', project._id))
-      .collect()
 
     return {
       project: {
         ...toSummary(project),
         personaName: project.personaName ?? null,
-        introMode: project.introMode,
-        introText: project.introText ?? null,
+        introMode: effectiveIntroMode(project),
         hasIntroMedia: project.introMediaKey !== undefined,
         maxDurationMinutes: project.maxDurationMinutes,
         candidateFields: project.candidateFields,
@@ -165,7 +176,6 @@ export const getBySlug = query({
           orderIndex: c.orderIndex,
         })),
       ),
-      sharedWith: shares.map((s) => s.userId),
     }
   },
 })
@@ -176,16 +186,23 @@ export const create = mutation({
     title: v.string(),
     jobTitle: v.optional(v.string()),
     language: languageValidator,
+    /** Colleagues who follow the role, on top of the creator. */
+    team: v.optional(v.array(v.id('users'))),
   },
-  handler: async (ctx, { orgId, title, jobTitle, language }) => {
+  handler: async (ctx, { orgId, title, jobTitle, language, team }) => {
     const { user } = await requireOrgMember(ctx, orgId)
     const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
 
-    const existing = await ctx.db
-      .query('projects')
-      .withIndex('by_org', (q) => q.eq('orgId', orgId))
-      .take(LIST_CAP)
-    const slug = uniqueSlug(cleanTitle, new Set(existing.map((p) => p.slug)))
+    const slug = await uniqueSlug(
+      cleanTitle,
+      async (candidate) =>
+        (await ctx.db
+          .query('projects')
+          .withIndex('by_org_and_slug', (q) =>
+            q.eq('orgId', orgId).eq('slug', candidate),
+          )
+          .first()) !== null,
+    )
 
     const projectId = await ctx.db.insert('projects', {
       orgId,
@@ -199,10 +216,17 @@ export const create = mutation({
       candidateFields: DEFAULT_CANDIDATE_FIELDS,
       createdBy: user._id,
       createdAt: Date.now(),
-      restricted: false,
       sessionCount: 0,
       completedSessionCount: 0,
     })
+    if (team) {
+      await writeTeam(
+        ctx,
+        { _id: projectId, orgId, createdBy: user._id },
+        team,
+        user._id,
+      )
+    }
     // The slug is derived here, so hand it back: the caller navigates to the
     // wizard next and should not have to guess or re-query for it.
     return { projectId, slug }
@@ -217,7 +241,6 @@ export const update = mutation({
     language: v.optional(languageValidator),
     personaName: v.optional(v.string()),
     introMode: v.optional(introModeValidator),
-    introText: v.optional(v.string()),
     maxDurationMinutes: v.optional(v.number()),
     candidateFields: v.optional(candidateFieldsValidator),
     /** Epoch ms, or null to clear. */
@@ -246,13 +269,6 @@ export const update = mutation({
       )
     }
     if (args.introMode !== undefined) patch.introMode = args.introMode
-    if (args.introText !== undefined) {
-      patch.introText = optionalText(
-        args.introText,
-        INTRO_TEXT_MAX,
-        'intro_too_long',
-      )
-    }
     if (args.maxDurationMinutes !== undefined) {
       if (
         !Number.isInteger(args.maxDurationMinutes) ||
@@ -279,18 +295,25 @@ export const update = mutation({
 })
 
 /**
- * Draft → active. A project with no question cannot be published: a candidate
- * would receive a link to an empty interview, which is worse than an error.
+ * Draft → active. Refused while `publishBlockers` names anything (M10): a
+ * candidate would otherwise receive an empty interview, the wizard's example
+ * question, or a score against a criterion nobody defined — each worse than
+ * an error the recruiter can fix in a minute.
  */
 export const publish = mutation({
   args: { projectId: v.id('projects') },
   handler: async (ctx, { projectId }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    const question = await ctx.db
+    const questions = await ctx.db
       .query('questions')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .first()
-    if (!question) throw new ConvexError('no_questions')
+      .collect()
+    const criteria = await ctx.db
+      .query('criteria')
+      .withIndex('by_project', (q) => q.eq('projectId', projectId))
+      .collect()
+    const blockers = publishBlockers(questions, criteria)
+    if (blockers.length > 0) throw new ConvexError(blockers[0].code)
     if (project.status !== 'active') {
       await ctx.db.patch('projects', projectId, { status: 'active' })
     }
@@ -384,57 +407,88 @@ export const remove = mutation({
 })
 
 /**
- * Restrict a project to named colleagues, or open it back up to the whole
- * organisation with an empty list.
+ * Replace a role's team with `userIds`. The creator is on every team by
+ * construction, so naming them is a no-op rather than a stored row.
  */
-export const setShares = mutation({
-  args: { projectId: v.id('projects'), userIds: v.array(v.id('users')) },
-  handler: async (ctx, { projectId, userIds }) => {
-    const { project, user } = await requireProjectOwnerOrAdmin(ctx, projectId)
+async function writeTeam(
+  ctx: MutationCtx,
+  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'createdBy'>,
+  userIds: Array<Id<'users'>>,
+  grantedBy: Id<'users'>,
+) {
+  if (userIds.length > TEAM_MAX) throw new ConvexError('team_too_large')
+  const wanted = new Set(userIds)
+  wanted.delete(project.createdBy)
 
-    // Everyone named must already be a member of this organisation — sharing
-    // must never become a side door into another org's data.
-    for (const userId of userIds) {
-      const member = await ctx.db
-        .query('organizationMembers')
-        .withIndex('by_org_and_user', (q) =>
-          q.eq('orgId', project.orgId).eq('userId', userId),
-        )
-        .unique()
-      if (!member) throw new ConvexError('not_a_member')
+  // Everyone named must already be a member of this organisation — a team
+  // must never become a side door into another org's data.
+  for (const userId of wanted) {
+    const member = await ctx.db
+      .query('organizationMembers')
+      .withIndex('by_org_and_user', (q) =>
+        q.eq('orgId', project.orgId).eq('userId', userId),
+      )
+      .unique()
+    if (!member) throw new ConvexError('not_a_member')
+  }
+
+  const existing = await ctx.db
+    .query('projectShares')
+    .withIndex('by_project', (q) => q.eq('projectId', project._id))
+    .collect()
+  for (const share of existing) {
+    if (!wanted.has(share.userId)) {
+      await ctx.db.delete('projectShares', share._id)
+    } else {
+      wanted.delete(share.userId)
     }
+  }
+  for (const userId of wanted) {
+    await ctx.db.insert('projectShares', {
+      orgId: project.orgId,
+      projectId: project._id,
+      userId,
+      grantedBy,
+      grantedAt: Date.now(),
+    })
+  }
+}
 
-    const existing = await ctx.db
+/**
+ * The role's current team, for the dialog that edits it. The dialog starts
+ * from this and cannot save before it has loaded (B8): `setTeam` takes the
+ * whole list, so a dialog that opened empty used to wipe the team on save.
+ */
+export const team = query({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    const { project } = await requireProjectOwnerOrAdmin(ctx, projectId)
+    const rows = await ctx.db
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
       .collect()
-    const wanted = new Set(userIds)
-    for (const share of existing) {
-      if (!wanted.has(share.userId)) {
-        await ctx.db.delete('projectShares', share._id)
-      } else {
-        wanted.delete(share.userId)
-      }
+    return {
+      createdBy: project.createdBy,
+      members: rows.map((row) => row.userId),
     }
-    for (const userId of wanted) {
-      await ctx.db.insert('projectShares', {
-        orgId: project.orgId,
-        projectId,
-        userId,
-        grantedBy: user._id,
-        grantedAt: Date.now(),
-      })
-    }
+  },
+})
 
-    await ctx.db.patch('projects', projectId, {
-      restricted: userIds.length > 0,
-    })
+/**
+ * Set who follows the role. The team, plus org admins and owners, is who sees
+ * it; the team alone is who is emailed when one of its reports is ready.
+ */
+export const setTeam = mutation({
+  args: { projectId: v.id('projects'), userIds: v.array(v.id('users')) },
+  handler: async (ctx, { projectId, userIds }) => {
+    const { project, user } = await requireProjectOwnerOrAdmin(ctx, projectId)
+    await writeTeam(ctx, project, userIds, user._id)
     return null
   },
 })
 
-/** Org members, for the "share with" picker. */
-export const shareCandidates = query({
+/** Org members, for the team picker. */
+export const teamCandidates = query({
   args: { orgId: v.id('organizations') },
   handler: async (ctx, { orgId }) => {
     await requireOrgRole(ctx, orgId, 'member')

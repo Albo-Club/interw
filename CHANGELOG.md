@@ -1,9 +1,14 @@
 # Changelog
 
-Template releases, newest first. Each tag matches `.template-version` at that
-commit. Downstream projects: read the sections between your version and the
-latest **before** running `pnpm run upgrade-template` — migration steps live
-in [UPGRADING.md](UPGRADING.md).
+Interw cuts no versioned releases or tags: a release is moving the
+`production` branch (README § "Deploying: staging and production"), and what
+users see changing is the in-app changelog (`src/lib/changelog.ts`).
+
+The sections below are **not** Interw's. They are the releases of the
+`albo-ouvre-boite` template this project was forked from, up to the one
+recorded in `.template-version` — kept because [UPGRADING.md](UPGRADING.md)
+reads them. Later template releases are in the template's own `CHANGELOG.md`;
+read them before running `pnpm run upgrade-template`.
 
 ## v0.3.0 — 2026-06-15
 

@@ -4,7 +4,7 @@ import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, internal } from './_generated/api'
-import { segmentKey } from './lib/objectStore'
+import { playbackMedia, segmentKey } from './lib/objectStore'
 import schema from './schema'
 import type { Doc, Id } from './_generated/dataModel'
 
@@ -549,7 +549,6 @@ describe('one resume cursor, on the server', () => {
     })
     const privacy = await t.query(api.candidate.privacySummary, {
       token: s.token,
-      now: Date.now(),
     })
     expect(questions.language).toBe('fr')
     expect(privacy.language).toBe('fr')
@@ -588,6 +587,135 @@ describe('one resume cursor, on the server', () => {
       audio: AUDIO,
     })
     expect(slot.status).toBe('reserved')
+  })
+})
+
+/**
+ * h01/h02, h09. Every answer could weigh 300 MB whatever the question's time
+ * limit — and a paid transcription reads the whole object into memory — and
+ * its PUT URL stayed valid for 15 minutes, well past `finish`, a cancellation
+ * or an erasure.
+ */
+describe('an answer slot is sized by its question', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+  const MB = 1024 * 1024
+
+  beforeEach(async () => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+    t = newTest()
+    s = await seedOpen(t)
+    await t.run(async (ctx) => {
+      await ctx.db.patch('questions', s.questionIds[0], {
+        maxResponseSeconds: 60,
+      })
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const reserve = (audioBytes: number, videoBytes?: number) =>
+    t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      audio: { mimeType: 'audio/webm', contentLength: audioBytes },
+      video:
+        videoBytes === undefined
+          ? undefined
+          : { mimeType: 'video/webm', contentLength: videoBytes },
+    })
+
+  it('refuses a video no 60-second answer could produce', async () => {
+    await expect(reserve(1_000, 100 * MB)).rejects.toThrow('media_too_large')
+    await expect(reserve(10 * MB)).rejects.toThrow('media_too_large')
+  })
+
+  it('still takes several times what the recorder asks for', async () => {
+    // 60 s at 1 Mbit/s is ~7.5 MB of video and ~0.5 MB of audio.
+    const slot = await reserve(2 * MB, 30 * MB)
+    expect(slot.status).toBe('reserved')
+  })
+
+  it('signs the PUT for the answer’s length plus a margin, not 15 minutes', async () => {
+    const slot = await t.action(api.interview.requestSegmentUpload, {
+      token: s.token,
+      questionIndex: 0,
+      audio: { mimeType: 'audio/webm', contentLength: 1_000 },
+      video: { mimeType: 'video/webm', contentLength: 2_000 },
+    })
+    if (slot.status !== 'reserved') throw new Error('expected a slot')
+    for (const url of [slot.audio.uploadUrl, slot.video!.uploadUrl]) {
+      expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe(
+        String(60 + 3 * 60),
+      )
+    }
+  })
+})
+
+/**
+ * An answer whose video upload failed kept its `videoKey` — written before the
+ * upload, for erasure — and the report signed it: the recruiter got a 404 for
+ * an answer whose audio had arrived.
+ */
+describe('a video counts once it has landed', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seedOpen(t)
+  })
+
+  async function reserveWithVideo() {
+    const slot = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      audio: AUDIO,
+      video: { mimeType: 'video/mp4', contentLength: 5_000 },
+    })
+    if (slot.status !== 'reserved') throw new Error('expected a reservation')
+    return slot.segmentId
+  }
+
+  const playable = (segmentId: Id<'segments'>) =>
+    t.run(async (ctx) => playbackMedia((await ctx.db.get('segments', segmentId))!))
+
+  it('plays the audio until the video is confirmed', async () => {
+    const segmentId = await reserveWithVideo()
+    await t.mutation(api.interview.markSegmentUploaded, {
+      token: s.token,
+      segmentId,
+      durationSeconds: 30,
+    })
+    expect(await playable(segmentId)).toEqual({
+      key: segmentKey(s.orgId, s.sessionId, 0, 'weba'),
+      kind: 'audio',
+    })
+
+    await t.mutation(api.interview.markVideoUploaded, {
+      token: s.token,
+      segmentId,
+    })
+    expect(await playable(segmentId)).toEqual({
+      key: segmentKey(s.orgId, s.sessionId, 0, 'mp4'),
+      kind: 'video',
+    })
+  })
+
+  it("refuses to confirm another candidate's video", async () => {
+    const segmentId = await reserveWithVideo()
+    await expect(
+      t.mutation(api.interview.markVideoUploaded, {
+        token: 'x'.repeat(43),
+        segmentId,
+      }),
+    ).rejects.toThrow('not_found')
   })
 })
 
@@ -649,24 +777,25 @@ describe('the completion email', () => {
   })
 })
 
-describe('the browser test fixtures', () => {
-  it('seed a fresh open session each time, on one org', async () => {
+// Cand M12: leaving mid-answer disposed the recorder and told no one.
+describe('an answer abandoned on the page', () => {
+  it('is recorded in the session journal', async () => {
     const t = newTest()
-    const first = await t.mutation(internal.interview.seedE2eSession, {})
-    const second = await t.mutation(internal.interview.seedE2eSession, {})
-    expect(first.token).not.toBe(second.token)
-
-    const landing = await t.query(api.candidate.landing, {
-      token: second.token,
-      now: Date.now(),
+    const s = await seedStarted(t)
+    await t.mutation(api.interview.logEvent, {
+      token: s.token,
+      kind: 'recording_abandoned',
+      detail: 'unsent',
     })
-    expect(landing.gate.state).toBe('ready')
-    const orgs = await t.run((ctx) => ctx.db.query('organizations').collect())
-    expect(orgs).toHaveLength(1)
-    expect(
-      await t.query(internal.interview.e2eSessionState, {
-        token: second.token,
-      }),
-    ).toEqual({ status: 'pending', uploadedSegments: 0 })
+    const events = await t.run((ctx) =>
+      ctx.db
+        .query('sessionEvents')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    )
+    expect(events.at(-1)).toMatchObject({
+      kind: 'recording_abandoned',
+      detail: 'unsent',
+    })
   })
 })

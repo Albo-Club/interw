@@ -1,8 +1,13 @@
 import { ConvexError, v } from 'convex/values'
+import { paginationOptsValidator } from 'convex/server'
 import { internalMutation, mutation, query } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { requireSuperAdmin } from './lib/auth'
-import type { FunctionReference, GenericQueryCtx } from 'convex/server'
+import type {
+  FunctionReference,
+  GenericMutationCtx,
+  GenericQueryCtx,
+} from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 /**
@@ -83,69 +88,96 @@ export const purgeExcept = internalMutation({
   },
 })
 
+/**
+ * Rows one deployment-wide figure may read (Back F8). There is no count
+ * operator, and these used to be four whole-table `.collect()` calls — the
+ * screen would have stopped loading well before the product got big. A figure
+ * that hits the bound is reported as capped: "1000+" is a true statement.
+ */
+const OVERVIEW_CAP = 1000
+
 export const overview = query({
   args: {},
   handler: async (ctx) => {
     await requireSuperAdmin(ctx)
     const [users, orgs, members, invitations] = await Promise.all([
-      ctx.db.query('users').collect(),
-      ctx.db.query('organizations').collect(),
-      ctx.db.query('organizationMembers').collect(),
-      ctx.db.query('invitations').collect(),
+      ctx.db.query('users').take(OVERVIEW_CAP),
+      ctx.db.query('organizations').take(OVERVIEW_CAP),
+      ctx.db.query('organizationMembers').take(OVERVIEW_CAP),
+      ctx.db.query('invitations').take(OVERVIEW_CAP),
     ])
+    const counted = (rows: Array<unknown>, count = rows.length) => ({
+      count,
+      capped: rows.length === OVERVIEW_CAP,
+    })
     return {
-      userCount: users.length,
-      orgCount: orgs.length,
-      memberCount: members.length,
-      pendingInvitations: invitations.filter((i) => !i.acceptedAt).length,
+      users: counted(users),
+      orgs: counted(orgs),
+      members: counted(members),
+      pendingInvitations: counted(
+        invitations,
+        invitations.filter((i) => !i.acceptedAt).length,
+      ),
     }
   },
 })
 
 export const listOrgs = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireSuperAdmin(ctx)
-    const orgs = await ctx.db.query('organizations').collect()
-    return await Promise.all(
-      orgs.map(async (org) => {
-        const members = await ctx.db
-          .query('organizationMembers')
-          .withIndex('by_org', (q) => q.eq('orgId', org._id))
-          .collect()
-        return {
-          _id: org._id,
-          slug: org.slug,
-          name: org.name,
-          memberCount: members.length,
-          createdAt: org.createdAt,
-        }
-      }),
-    )
+    const page = await ctx.db
+      .query('organizations')
+      .order('desc')
+      .paginate(paginationOpts)
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (org) => {
+          const members = await ctx.db
+            .query('organizationMembers')
+            .withIndex('by_org', (q) => q.eq('orgId', org._id))
+            .collect()
+          return {
+            _id: org._id,
+            slug: org.slug,
+            name: org.name,
+            memberCount: members.length,
+            createdAt: org.createdAt,
+          }
+        }),
+      ),
+    }
   },
 })
 
 export const listUsers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
     await requireSuperAdmin(ctx)
-    const users = await ctx.db.query('users').collect()
-    return await Promise.all(
-      users.map(async (u) => {
-        const memberships = await ctx.db
-          .query('organizationMembers')
-          .withIndex('by_user', (q) => q.eq('userId', u._id))
-          .collect()
-        return {
-          _id: u._id,
-          email: u.email,
-          name: u.name ?? null,
-          superAdmin: u.superAdmin,
-          orgCount: memberships.length,
-          createdAt: u.createdAt,
-        }
-      }),
-    )
+    const page = await ctx.db
+      .query('users')
+      .order('desc')
+      .paginate(paginationOpts)
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (u) => {
+          const memberships = await ctx.db
+            .query('organizationMembers')
+            .withIndex('by_user', (q) => q.eq('userId', u._id))
+            .collect()
+          return {
+            _id: u._id,
+            email: u.email,
+            name: u.name ?? null,
+            superAdmin: u.superAdmin,
+            orgCount: memberships.length,
+            createdAt: u.createdAt,
+          }
+        }),
+      ),
+    }
   },
 })
 
@@ -154,9 +186,14 @@ export const setSuperAdmin = mutation({
   handler: async (ctx, { userId, value }) => {
     const me = await requireSuperAdmin(ctx)
     if (userId === me._id && !value) {
-      const all = await ctx.db.query('users').collect()
-      const remaining = all.filter((u) => u.superAdmin && u._id !== me._id)
-      if (remaining.length === 0) throw new ConvexError('last_super_admin')
+      // Two rows answer "is anyone else a super-admin?" — the caller is one.
+      const admins = await ctx.db
+        .query('users')
+        .withIndex('by_superAdmin', (q) => q.eq('superAdmin', true))
+        .take(2)
+      if (admins.every((u) => u._id === me._id)) {
+        throw new ConvexError('last_super_admin')
+      }
     }
     const target = await ctx.db.get("users", userId)
     if (!target) throw new ConvexError('not_found')
@@ -280,47 +317,60 @@ export const pipelineHealth = query({
 const REPORT_CLAIM_TTL_MS = 60 * 60 * 1000
 
 /**
- * Run a stuck session's pipeline again.
+ * Run a stuck session's pipeline again, on behalf of `actorId`.
  *
- * Not a catch-up script: it is an operator naming one session and saying "go
+ * Not a catch-up script: it is a person naming one session and saying "go
  * again", it is written to the same log as everything else that happened to
  * that session, and it is idempotent — `onSessionCompleted` keeps the
- * transcripts it already has, gives another real attempt to the answers that
- * failed for good, and re-enters the fan-in from there.
+ * transcripts it already has, leaves the answers still in flight to the jobs
+ * already running them, gives another real attempt to the answers that failed
+ * for good, and re-enters the fan-in from there.
+ *
+ * Shared by the operator's `relaunchSession` below and the recruiter's
+ * `reports.relaunch`: who may ask differs, what asking does must not.
  */
+export async function relaunchPipeline(
+  ctx: GenericMutationCtx<DataModel>,
+  session: Doc<'sessions'>,
+  actorId: Id<'users'>,
+): Promise<void> {
+  if (session.status !== 'completed') {
+    throw new ConvexError('session_not_completed')
+  }
+  // A report job holds the claim until it ends. Relaunching under it would
+  // reset the claim and queue a second, paid completion beside the first.
+  const claim = session.reportJobEnqueuedAt
+  if (claim !== undefined && Date.now() - claim < REPORT_CLAIM_TTL_MS) {
+    const report = await ctx.db
+      .query('reports')
+      .withIndex('by_session', (q) => q.eq('sessionId', session._id))
+      .unique()
+    if (!report) throw new ConvexError('report_in_progress')
+  }
+
+  await ctx.db.insert('jobLog', {
+    orgId: session.orgId,
+    sessionId: session._id,
+    step: 'relaunch',
+    outcome: 'started',
+    attempt: 1,
+    // The id, not the address: recruiters read this log back.
+    actorId,
+    at: Date.now(),
+  })
+  await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {
+    sessionId: session._id,
+  })
+}
+
+/** The operator's relaunch, from the pipeline health screen. */
 export const relaunchSession = mutation({
   args: { sessionId: v.id('sessions') },
   handler: async (ctx, { sessionId }) => {
     const me = await requireSuperAdmin(ctx)
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
-    if (session.status !== 'completed') {
-      throw new ConvexError('session_not_completed')
-    }
-    // A report job holds the claim until it ends. Relaunching under it would
-    // reset the claim and queue a second, paid completion beside the first.
-    const claim = session.reportJobEnqueuedAt
-    if (claim !== undefined && Date.now() - claim < REPORT_CLAIM_TTL_MS) {
-      const report = await ctx.db
-        .query('reports')
-        .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
-        .unique()
-      if (!report) throw new ConvexError('report_in_progress')
-    }
-
-    await ctx.db.insert('jobLog', {
-      orgId: session.orgId,
-      sessionId,
-      step: 'relaunch',
-      outcome: 'started',
-      attempt: 1,
-      // The id, not the address: recruiters read this log back.
-      actorId: me._id,
-      at: Date.now(),
-    })
-    await ctx.scheduler.runAfter(0, internal.pipeline.onSessionCompleted, {
-      sessionId,
-    })
+    await relaunchPipeline(ctx, session, me._id)
     return null
   },
 })

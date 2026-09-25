@@ -6,6 +6,7 @@ import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import { publishBlockers } from '../../../../convex/lib/publishReadiness'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
@@ -17,10 +18,13 @@ import { StepCandidateForm } from '~/components/projects/wizard/StepCandidateFor
 import { StepCriteria } from '~/components/projects/wizard/StepCriteria'
 import { StepQuestions } from '~/components/projects/wizard/StepQuestions'
 import { StepReview } from '~/components/projects/wizard/StepReview'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/projects/$projectSlug/edit')(
   {
     component: ProjectWizardPage,
+    errorComponent: AppRouteError,
+    notFoundComponent: AppNotFound,
     head: () => ({
       meta: [
         {
@@ -61,7 +65,7 @@ function ProjectWizardPage() {
 
   const { project, questions, criteria } = data
   const index = STEPS.indexOf(step)
-  const canPublish = questions.length > 0 && criteria.length > 0
+  const canPublish = publishBlockers(questions, criteria).length === 0
 
   const finish = async () => {
     try {

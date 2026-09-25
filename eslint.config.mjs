@@ -40,6 +40,8 @@ export default defineConfig([
                 '~/components/data-table/*',
                 '~/components/auth/*',
                 '~/components/report/*',
+                '~/components/projects/*',
+                '~/components/candidates/*',
               ],
               message:
                 'The candidate surface must not import recruiter-app components. Use ~/components/ui/* primitives or add a component under ~/components/candidate/.',
@@ -51,6 +53,7 @@ export default defineConfig([
                 '@convex-dev/agent*',
                 'streamdown',
                 '@zxcvbn-ts/*',
+                'cmdk',
               ],
               message:
                 'This library is recruiter-app-only. Keeping it out of the candidate bundle is the point — see eslint.config.mjs.',

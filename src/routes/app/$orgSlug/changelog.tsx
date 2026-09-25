@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { CHANGELOG_ENTRIES } from '~/lib/changelog'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/changelog')({
   component: ChangelogPage,
+  errorComponent: AppRouteError,
   head: () => ({
     meta: [
       {

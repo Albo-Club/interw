@@ -464,34 +464,158 @@ describe('accepting by token', () => {
     })
     expect(invitee).toMatchObject({ orgSlug: 'acme', joined: true })
   })
+})
 
-  // T12: an invitation acts for its admin. One sent by someone who has since
-  // left, or is no longer an admin, fails like one that does not exist.
-  it('refuses an invitation whose inviter is no longer an admin', async () => {
-    const token = 'from-a-demoted-admin'
-    await t.run(async (ctx) => {
-      const member = await ctx.db
-        .query('users')
-        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_member'))
-        .unique()
-      await ctx.db.insert('invitations', {
+/**
+ * Audit T12 (h05): an invitation speaks for the admin who sent it. Once they
+ * are removed from the organisation, demoted below admin, or gone altogether,
+ * it must stop working — exactly like one that never existed.
+ */
+describe('an invitation whose inviter can no longer invite', () => {
+  let t: ReturnType<typeof newTest>
+  let w: World
+  let adminMemberId: Id<'organizationMembers'>
+
+  beforeEach(async () => {
+    t = newTest()
+    w = await seed(t)
+    adminMemberId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert('users', {
+        betterAuthId: 'ba_admin',
+        email: 'admin@example.test',
+        name: 'Adam Admin',
+        superAdmin: false,
+        createdAt: 0,
+      })
+      return await ctx.db.insert('organizationMembers', {
         orgId: w.acmeOrgId,
-        email: 'newcomer@example.test',
+        userId,
         role: 'admin',
-        token,
-        invitedBy: member!._id,
-        expiresAt: Date.now() + 60_000,
+        joinedAt: 0,
       })
     })
+  })
+
+  async function inviteAsAdmin() {
+    const invitationId = await as(t, 'admin').mutation(api.invitations.create, {
+      orgId: w.acmeOrgId,
+      email: 'newcomer@example.test',
+      role: 'member',
+    })
+    const inv = await t.run((ctx) => ctx.db.get('invitations', invitationId))
+    return { invitationId, token: inv!.token }
+  }
+
+  const removeAdmin = () =>
+    as(t, 'owner').mutation(api.organizations.removeMember, {
+      orgId: w.acmeOrgId,
+      memberId: adminMemberId,
+    })
+
+  it('works while the inviter is still an admin', async () => {
+    const { token } = await inviteAsAdmin()
+    expect(
+      await as(t, 'newcomer').query(api.invitations.listMine, {}),
+    ).toMatchObject([{ inviterName: 'Adam Admin' }])
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.accept, { token }),
+    ).resolves.toMatchObject({ joined: true })
+  })
+
+  it('fails like an unknown token once the inviter is removed', async () => {
+    const { invitationId, token } = await inviteAsAdmin()
+    await removeAdmin()
+
     expect(await t.query(api.invitations.preview, { token })).toEqual({
       kind: 'not_found',
     })
-    expect(
-      await as(t, 'newcomer').query(api.invitations.listMine, {}),
-    ).toEqual([])
     await expect(
       as(t, 'newcomer').mutation(api.invitations.accept, { token }),
     ).rejects.toThrow('not_found')
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.acceptById, { invitationId }),
+    ).rejects.toThrow('not_found')
+    expect(await as(t, 'newcomer').query(api.invitations.listMine, {})).toEqual(
+      [],
+    )
+    const members = await t.run((ctx) =>
+      ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org', (q) => q.eq('orgId', w.acmeOrgId))
+        .collect(),
+    )
+    expect(members).toHaveLength(2)
+  })
+
+  it('fails once the inviter is demoted to member', async () => {
+    const { token } = await inviteAsAdmin()
+    await as(t, 'owner').mutation(api.organizations.updateMemberRole, {
+      orgId: w.acmeOrgId,
+      memberId: adminMemberId,
+      role: 'member',
+    })
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.accept, { token }),
+    ).rejects.toThrow('not_found')
+  })
+
+  it('is marked for the admins, and is neither resent nor linked', async () => {
+    const { invitationId } = await inviteAsAdmin()
+    await removeAdmin()
+
+    const [row] = await as(t, 'owner').query(api.invitations.listForOrg, {
+      orgId: w.acmeOrgId,
+    })
+    expect(row).toMatchObject({
+      _id: invitationId,
+      invalidated: true,
+      invitedBy: { name: 'Adam Admin', removed: true },
+    })
+    await expect(
+      as(t, 'owner').mutation(api.invitations.resendInvitation, {
+        invitationId,
+      }),
+    ).rejects.toThrow('not_found')
+    await expect(
+      as(t, 'owner').query(api.invitations.link, { invitationId }),
+    ).rejects.toThrow('not_found')
+    const sends = await t.run((ctx) =>
+      ctx.db
+        .query('emailLog')
+        .withIndex('by_invitation', (q) => q.eq('invitationId', invitationId))
+        .collect(),
+    )
+    expect(sends).toHaveLength(1)
+  })
+
+  it('does not block inviting the same address again', async () => {
+    const { invitationId } = await inviteAsAdmin()
+    await removeAdmin()
+
+    const again = await as(t, 'owner').mutation(api.invitations.create, {
+      orgId: w.acmeOrgId,
+      email: 'newcomer@example.test',
+      role: 'member',
+    })
+    expect(again).not.toBe(invitationId)
+    const [row] = await as(t, 'owner').query(api.invitations.listForOrg, {
+      orgId: w.acmeOrgId,
+    })
+    expect(row).toMatchObject({ _id: again, invalidated: false })
+  })
+
+  it('an accepted one stays accepted', async () => {
+    const { token } = await inviteAsAdmin()
+    await as(t, 'newcomer').mutation(api.invitations.accept, { token })
+    await removeAdmin()
+    await expect(
+      as(t, 'newcomer').mutation(api.invitations.accept, { token }),
+    ).resolves.toMatchObject({ joined: false })
+    // The accepted-link page names nobody: it has no use for the inviter.
+    expect(await t.query(api.invitations.preview, { token })).toEqual({
+      kind: 'already_accepted',
+      orgName: 'Acme',
+    })
   })
 })
 
@@ -510,6 +634,25 @@ describe('creating a second organisation', () => {
         slug: 'too-long',
       }),
     ).rejects.toThrow('invalid_name')
+  })
+
+  // Audit T12 (h10): the name goes into email subjects.
+  it('stores the name on one line', async () => {
+    const t = newTest()
+    const w = await seed(t)
+    const { orgId } = await as(t, 'owner').mutation(api.organizations.create, {
+      name: 'Acme\r\nBcc: victim@example.test',
+      slug: 'acme-crlf',
+    })
+    await as(t, 'owner').mutation(api.organizations.updateGeneral, {
+      orgId: w.acmeOrgId,
+      name: 'Acme\nRenamed',
+    })
+    const names = await t.run(async (ctx) => [
+      (await ctx.db.get('organizations', orgId))?.name,
+      (await ctx.db.get('organizations', w.acmeOrgId))?.name,
+    ])
+    expect(names).toEqual(['Acme Bcc: victim@example.test', 'Acme Renamed'])
   })
 })
 

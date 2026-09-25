@@ -23,8 +23,8 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { isPastDeadline } from './lib/sessionState'
-import { singleLine } from './lib/singleLine'
 import { generateToken } from './lib/tokens'
+import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
@@ -146,8 +146,8 @@ function assertAcceptsCandidates(project: Doc<'projects'>) {
 }
 
 function normalizeCandidate(input: { name: string; email: string }) {
-  const name = singleLine(input.name)
-  const email = input.email.trim().toLowerCase()
+  const name = input.name.trim()
+  const email = normalizeEmail(input.email)
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
   if (!EMAIL_RE.test(email)) throw new ConvexError('invalid_email')
   return { name, email }

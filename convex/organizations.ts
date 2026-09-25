@@ -10,11 +10,11 @@ import {
   requireOrgRole,
   safeAppUser,
 } from './lib/auth'
-import { singleLine } from './lib/singleLine'
 import { setLastOrgSlug } from './lib/userPrefs'
 import { revokeMemberGrants } from './lib/projectAccess'
 import { resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 import { WRITE_URL_TTL_SECONDS } from './lib/objectStore'
+import { typedName } from './lib/names'
 import type { DataModel, Id } from './_generated/dataModel'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 
@@ -44,8 +44,6 @@ export const listMembers = query({
 })
 
 const SLUG_RE = /^[a-z0-9-]{3,40}$/
-// Same cap as the forms; enforced here because a form is only a suggestion.
-const MAX_NAME_LENGTH = 80
 
 // Reserved slugs that would clash with platform routes or have semantic
 // ambiguity (`me/admin/...`). Keep this aligned with `src/routes/` top-level
@@ -87,10 +85,7 @@ export const create = mutation({
     if (!SLUG_RE.test(normalizedSlug)) throw new ConvexError('invalid_slug')
     if (RESERVED_SLUGS.has(normalizedSlug))
       throw new ConvexError('slug_reserved')
-    const trimmedName = singleLine(name)
-    if (!trimmedName || trimmedName.length > MAX_NAME_LENGTH) {
-      throw new ConvexError('invalid_name')
-    }
+    const trimmedName = typedName(name)
 
     const conflict = await ctx.db
       .query('organizations')
@@ -165,11 +160,7 @@ export const updateGeneral = mutation({
   },
   handler: async (ctx, { orgId, name }) => {
     await requireOrgRole(ctx, orgId, 'admin')
-    const trimmedName = singleLine(name)
-    if (!trimmedName || trimmedName.length > MAX_NAME_LENGTH) {
-      throw new ConvexError('invalid_name')
-    }
-    await ctx.db.patch("organizations", orgId, { name: trimmedName })
+    await ctx.db.patch("organizations", orgId, { name: typedName(name) })
     return null
   },
 })

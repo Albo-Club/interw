@@ -15,6 +15,7 @@ import { ConvexError, v } from 'convex/values'
 import { internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { deleteObjects } from './lib/objectStore'
+import { normalizeEmail } from './lib/invitations'
 import { canSeeProject } from './lib/projectAccess'
 import type { ActionCtx } from './_generated/server'
 import type { GenericMutationCtx } from 'convex/server'
@@ -43,7 +44,7 @@ export async function hashEmail(email: string): Promise<string> {
     // carry none of the property it claims.
     throw new ConvexError('purge_hash_salt_not_configured')
   }
-  const data = new TextEncoder().encode(`${salt}:${email.trim().toLowerCase()}`)
+  const data = new TextEncoder().encode(`${salt}:${normalizeEmail(email)}`)
   const digest = await crypto.subtle.digest('SHA-256', data)
   return Array.from(new Uint8Array(digest), (b) =>
     b.toString(16).padStart(2, '0'),

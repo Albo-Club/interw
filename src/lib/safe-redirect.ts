@@ -39,3 +39,14 @@ export const internalRedirectSearch = z
   .refine(isInternalPath)
   .optional()
   .catch(undefined)
+
+/**
+ * The invitation token a return URL leads back to, when it is an accept link:
+ * `/login` then fixes the address to the invited one. Read through the URL
+ * parser, like the guard above.
+ */
+export function invitationTokenOf(redirect: string | undefined) {
+  if (!redirect) return undefined
+  const { pathname } = new URL(redirect, PROBE_ORIGIN)
+  return /^\/accept-invite\/([^/]+)$/.exec(pathname)?.[1]
+}

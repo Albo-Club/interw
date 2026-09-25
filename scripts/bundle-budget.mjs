@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { gzipSync } from 'node:zlib'
 
-// KiB (1024 bytes). Measured 265.3 KiB when set back to 270 (2026-09-25).
+// KiB (1024 bytes). Measured 265.5 KiB when set back to 270 (2026-09-25).
 const BUDGET_KIB = 270
 const ROUTES = ['__root__', '/s/$token', '/s/$token/interview']
 const SERVER_DIR = '.output/server'

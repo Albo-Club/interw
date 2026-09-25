@@ -9,6 +9,7 @@ import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { Check, Copy, RotateCw, X } from 'lucide-react'
 
 import { api } from '../../../../../convex/_generated/api'
+import { normalizeEmail } from '../../../../../convex/lib/invitations'
 import type { Id } from '../../../../../convex/_generated/dataModel'
 import { convexErrorCode } from '~/lib/convex-errors'
 import { MemberName } from '~/components/MemberName'
@@ -74,7 +75,7 @@ type InviteResult = { email: string; ok: true } | { email: string; ok: false; co
 function parseEmails(raw: string): Array<string> {
   const seen = new Set<string>()
   for (const part of raw.split(/[\s,;]+/)) {
-    const email = part.trim().toLowerCase()
+    const email = normalizeEmail(part)
     if (email) seen.add(email)
   }
   return [...seen]
@@ -399,8 +400,16 @@ function PendingRow({ inv }: { inv: PendingInvitation }) {
         <p className="flex flex-wrap items-center gap-2">
           <span className="min-w-0 break-words font-medium">{inv.email}</span>
           <Badge variant="secondary">{t(`common:roles.${inv.role}`)}</Badge>
-          {expired && (
-            <Badge variant="outline">{t('settings:invitations.expired')}</Badge>
+          {inv.invalidated ? (
+            <Badge variant="outline">
+              {t('settings:invitations.invalidated')}
+            </Badge>
+          ) : (
+            expired && (
+              <Badge variant="outline">
+                {t('settings:invitations.expired')}
+              </Badge>
+            )
           )}
         </p>
         <p className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
@@ -421,6 +430,11 @@ function PendingRow({ inv }: { inv: PendingInvitation }) {
             )}
           </span>
         </p>
+        {inv.invalidated && (
+          <p className="text-muted-foreground text-xs">
+            {t('settings:invitations.invalidatedHint')}
+          </p>
+        )}
         {undelivered && (
           <p className="text-destructive text-xs" role="status">
             {t(`settings:invitations.delivery.${inv.deliveryStatus}`)}
@@ -428,7 +442,7 @@ function PendingRow({ inv }: { inv: PendingInvitation }) {
         )}
       </div>
       <div className="flex shrink-0 flex-wrap gap-1">
-        {!expired && (
+        {!expired && !inv.invalidated && (
           <Button
             size="sm"
             variant="ghost"
@@ -439,15 +453,17 @@ function PendingRow({ inv }: { inv: PendingInvitation }) {
             {t('settings:invitations.copyLink')}
           </Button>
         )}
-        <Button
-          size="sm"
-          variant={expired || undelivered ? 'outline' : 'ghost'}
-          onClick={handleResend}
-          disabled={busy !== null}
-        >
-          {busy === 'resend' ? <Spinner /> : <RotateCw aria-hidden="true" />}
-          {t('settings:invitations.resend')}
-        </Button>
+        {!inv.invalidated && (
+          <Button
+            size="sm"
+            variant={expired || undelivered ? 'outline' : 'ghost'}
+            onClick={handleResend}
+            disabled={busy !== null}
+          >
+            {busy === 'resend' ? <Spinner /> : <RotateCw aria-hidden="true" />}
+            {t('settings:invitations.resend')}
+          </Button>
+        )}
         <RevokeButton invitationId={inv._id} email={inv.email} />
       </div>
     </li>

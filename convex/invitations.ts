@@ -4,10 +4,10 @@ import { components } from './_generated/api'
 import { invitationRoleValidator } from './schema'
 import { authComponent } from './auth'
 import {
-  hasRole,
   provisionAppUser,
   requireAppUser,
   requireOrgRole,
+  roleAtLeast,
 } from './lib/auth'
 import { emailsMatch, normalizeEmail } from './lib/invitations'
 import { memberName } from './lib/memberName'
@@ -18,10 +18,13 @@ import { consumeLimit } from './rateLimiters'
 import type { MutationCtx, QueryCtx } from './_generated/server'
 import type { Doc, Id } from './_generated/dataModel'
 import type { FunctionReference } from 'convex/server'
+import type { AppRole } from './lib/auth'
 
 const TOKEN_BYTES = 32
 const EXPIRES_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+/** The role it takes to send an invitation, and to keep one valid. */
+const INVITER_ROLE: AppRole = 'admin'
 
 function genToken(): string {
   const bytes = new Uint8Array(TOKEN_BYTES)
@@ -33,12 +36,38 @@ function acceptUrl(token: string): string {
   return `${process.env.SITE_URL!}/accept-invite/${token}`
 }
 
+/**
+ * Only read for a live invitation, whose inviter is a current admin (see
+ * `invalidated`): an invitee is never told the name of someone who has left.
+ */
 async function inviterName(
   ctx: QueryCtx,
   inv: Doc<'invitations'>,
 ): Promise<string | null> {
-  const inviter = await ctx.db.get('users', inv.invitedBy)
-  return inviter ? (inviter.name ?? inviter.email) : null
+  return (await memberName(ctx, inv.orgId, inv.invitedBy)).name
+}
+
+/**
+ * An invitation speaks for the admin who sent it, so a pending one holds only
+ * while they may still invite: once they are removed, demoted below admin or
+ * their account is gone, it fails like a token that never existed — for the
+ * invitee, and for a resend. Checked wherever an invitation is used rather
+ * than cleaned up where memberships change, so no path that ends a membership
+ * has to remember it, and invitations sent before this rule are covered too.
+ * An accepted invitation is history and is never re-judged.
+ */
+async function invalidated(
+  ctx: QueryCtx,
+  inv: Doc<'invitations'>,
+): Promise<boolean> {
+  if (inv.acceptedAt) return false
+  const inviter = await ctx.db
+    .query('organizationMembers')
+    .withIndex('by_org_and_user', (q) =>
+      q.eq('orgId', inv.orgId).eq('userId', inv.invitedBy),
+    )
+    .unique()
+  return inviter === null || !roleAtLeast(inviter.role, INVITER_ROLE)
 }
 
 async function isMemberByEmail(
@@ -140,7 +169,7 @@ export const create = mutation({
     role: invitationRoleValidator,
   },
   handler: async (ctx, { orgId, email, role }) => {
-    const { user: inviter } = await requireOrgRole(ctx, orgId, 'admin')
+    const { user: inviter } = await requireOrgRole(ctx, orgId, INVITER_ROLE)
     await consumeLimit(ctx, 'invitationCreate', inviter._id)
 
     const normalizedEmail = normalizeEmail(email)
@@ -160,11 +189,14 @@ export const create = mutation({
       .filter((q) => q.eq(q.field('acceptedAt'), undefined))
       .first()
     if (existing) {
-      if (existing.expiresAt >= Date.now()) {
+      if (
+        existing.expiresAt >= Date.now() &&
+        !(await invalidated(ctx, existing))
+      ) {
         throw new ConvexError('already_invited')
       }
-      // An expired invitation is history, not a pending one: it must not
-      // block inviting the same person again.
+      // An expired or invalidated invitation is history, not a pending one:
+      // it must not block inviting the same person again.
       await deleteInvitation(ctx, existing._id)
     }
 
@@ -193,8 +225,9 @@ export const resendInvitation = mutation({
   handler: async (ctx, { invitationId }) => {
     const inv = await ctx.db.get('invitations', invitationId)
     if (!inv) throw new ConvexError('not_found')
-    const { user } = await requireOrgRole(ctx, inv.orgId, 'admin')
+    const { user } = await requireOrgRole(ctx, inv.orgId, INVITER_ROLE)
     if (inv.acceptedAt) throw new ConvexError('already_accepted')
+    if (await invalidated(ctx, inv)) throw new ConvexError('not_found')
     await consumeLimit(ctx, 'invitationCreate', user._id)
 
     const patch = { expiresAt: Date.now() + EXPIRES_MS, invitedBy: user._id }
@@ -215,6 +248,7 @@ export const link = query({
     const inv = await ctx.db.get('invitations', invitationId)
     if (!inv) throw new ConvexError('not_found')
     await requireOrgRole(ctx, inv.orgId, 'admin')
+    if (await invalidated(ctx, inv)) throw new ConvexError('not_found')
     return { url: acceptUrl(inv.token) }
   },
 })
@@ -238,16 +272,18 @@ export const preview = query({
     if (!inv) return { kind: 'not_found' as const }
     const org = await ctx.db.get('organizations', inv.orgId)
     // A frozen org (deletion under way) is gone for invitations.
-    if (!org || org.deletingAt !== undefined) {
+    if (!org || org.deletingAt !== undefined || (await invalidated(ctx, inv))) {
       return { kind: 'not_found' as const }
     }
+    if (inv.acceptedAt) {
+      return { kind: 'already_accepted' as const, orgName: org.name }
+    }
 
+    // From here the inviter is a current admin, so naming them is current.
     const context = {
       orgName: org.name,
       inviterName: await inviterName(ctx, inv),
     }
-    if (inv.acceptedAt) return { kind: 'already_accepted' as const, ...context }
-    if (!(await issuerStillAdmin(ctx, inv))) return { kind: 'not_found' as const }
     if (inv.expiresAt < Date.now()) {
       return { kind: 'expired' as const, ...context }
     }
@@ -279,25 +315,6 @@ export const preview = query({
 })
 
 /**
- * An invitation acts for the admin who sent it. Once they have left the
- * organisation or lost admin rights, nobody accountable is behind it, and it
- * fails like one that does not exist (T12). Another admin can resend it,
- * which makes them the inviter.
- */
-async function issuerStillAdmin(
-  ctx: QueryCtx,
-  inv: Doc<'invitations'>,
-): Promise<boolean> {
-  const issuer = await ctx.db
-    .query('organizationMembers')
-    .withIndex('by_org_and_user', (q) =>
-      q.eq('orgId', inv.orgId).eq('userId', inv.invitedBy),
-    )
-    .unique()
-  return issuer !== null && hasRole(issuer.role, 'admin')
-}
-
-/**
  * Shared by both ways of accepting. `joined` tells a first acceptance from an
  * existing member re-opening the link, so the page only welcomes the former.
  */
@@ -307,7 +324,9 @@ async function acceptInvitation(
   inv: Doc<'invitations'>,
 ) {
   const org = await ctx.db.get('organizations', inv.orgId)
-  if (!org || org.deletingAt !== undefined) throw new ConvexError('not_found')
+  if (!org || org.deletingAt !== undefined || (await invalidated(ctx, inv))) {
+    throw new ConvexError('not_found')
+  }
 
   const alreadyMember = await ctx.db
     .query('organizationMembers')
@@ -316,9 +335,9 @@ async function acceptInvitation(
     )
     .unique()
 
-  // Idempotent / replayable: an existing member is always a no-op success,
-  // whatever the invite's acceptedAt state. The accept effect can fire twice
-  // (re-render, second tab) or the user can re-open the link — none of those
+  // Idempotent / replayable: an existing member is a no-op success on any
+  // valid link, whatever the invite's acceptedAt state. The accept effect can
+  // fire twice (re-render, second tab) or the user can re-open the link — none of those
   // should surface an error. Reconcile acceptedAt if it never got stamped so
   // the invite stops showing as pending — only on the member's own
   // invitation: a member holding a colleague's link must not consume it.
@@ -342,7 +361,6 @@ async function acceptInvitation(
   if (!emailsMatch(inv.email, user.email)) {
     throw new ConvexError('email_mismatch')
   }
-  if (!(await issuerStillAdmin(ctx, inv))) throw new ConvexError('not_found')
 
   await ctx.db.insert('organizationMembers', {
     orgId: inv.orgId,
@@ -423,7 +441,7 @@ export const listMine = query({
       if (member) continue
       const org = await ctx.db.get('organizations', inv.orgId)
       if (!org || org.deletingAt !== undefined) continue
-      if (!(await issuerStillAdmin(ctx, inv))) continue
+      if (await invalidated(ctx, inv)) continue
       mine.push({
         _id: inv._id,
         orgName: org.name,
@@ -451,6 +469,8 @@ export const revoke = mutation({
 /**
  * Open invitations for the settings page. Expired ones stay listed — the
  * client labels them — so an admin can see who never joined and resend.
+ * So do `invalidated` ones, whose inviter can no longer invite: they can only
+ * be revoked, or replaced by inviting the address again.
  * `deliveryStatus` is the latest send's outcome as reported by Resend.
  */
 export const listForOrg = query({
@@ -476,6 +496,7 @@ export const listForOrg = query({
             role: i.role,
             expiresAt: i.expiresAt,
             invitedBy: await memberName(ctx, orgId, i.invitedBy),
+            invalidated: await invalidated(ctx, i),
             sentAt: lastSend?.createdAt ?? i._creationTime,
             deliveryStatus: lastSend?.status ?? null,
           }

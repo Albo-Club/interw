@@ -267,8 +267,8 @@ guessing.
 `admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
 code flow creates accounts for any address. Now a **new** row is super-admin
 only when Better Auth reports its address verified and it equals
-`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
-promoted: fail closed.
+`SUPER_ADMIN_EMAIL`, both through `normalizeEmail` (trimmed, ASCII case
+folded). Unset or empty, nobody is promoted: fail closed.
 
 - Existing rows are never touched: the flag is set on insert only. Deployments
   that already have their super-admins keep them, with or without the
@@ -297,6 +297,85 @@ was removed. Two things from that era still matter:
   (and keeps the form on screen) until the form calls `onDone`
   (`onBusyChange` in `src/components/auth/email-sign-in.tsx`). `/login` holds
   its "already signed in" redirect the same way.
+- **`/login` locks the address too when it is on the way to an invitation.**
+  `/register?redirect=/accept-invite/<token>` lands on `/login`, which reads
+  the token out of `redirect` (`invitationTokenOf`), previews the invitation
+  and fixes the field to its address — the same `lockedEmail` the accept page
+  passes. A signed-up address that differs from the invited one could only
+  end on the accept page's "wrong account" card.
+
+## An invitation lives only as long as its sender may invite
+
+A pending invitation speaks for the admin who sent it. Once that person is
+removed from the organisation, demoted below admin, or deletes their account,
+the invitation is dead: `preview` answers `not_found`, `accept` and
+`acceptById` throw `not_found` — exactly what an unknown token gets — and
+`listMine` drops it. The settings list keeps it, flagged `invalidated`
+("No longer valid"), without Resend or Copy link: a resend would mail the
+invitee a link its sender no longer stands behind. Inviting the address again
+replaces it, like an expired one.
+
+It is decided where the invitation is **used** (`invalidated` in
+`convex/invitations.ts`), not by deleting rows where memberships change. Three
+paths end or lower a membership today (`removeMember`, `updateMemberRole`,
+`cascadeDelete`) and a fourth would have to remember to clean up; a check at
+use cannot be forgotten, and it also covers invitations sent before the rule
+existed. The price: an admin demoted and later promoted again finds their
+still-unexpired invitations working again. They are once more entitled to
+send them, so that is accepted. An accepted invitation is history and is never
+re-judged.
+
+## Who can change whose role
+
+Documented as the code behaves (`convex/organizations.ts`); no product
+decision has changed it.
+
+- `updateMemberRole` and `removeMember` need **admin** or above.
+- Anything that touches an owner — changing an owner's role, making someone
+  owner, removing an owner — needs **owner**.
+- The last owner can be neither demoted nor removed, by anyone, themselves
+  included (`last_owner`).
+- Otherwise **admins are peers**: an admin can make a member admin, demote
+  another admin (or themself) to member, and remove another admin. Nothing
+  stops two admins from demoting each other; an owner is the tie-breaker.
+- Demoting or removing an admin voids the invitations they sent (above).
+
+## Addresses fold ASCII case only
+
+`normalizeEmail` (`convex/lib/invitations.ts`) is the one normalisation for
+an address this app compares or stores itself: invitations, the operator's
+`SUPER_ADMIN_EMAIL`, candidate addresses and their erasure hash. It trims and
+lowercases **ASCII letters only**. `toLowerCase()` folds all of Unicode: the
+Kelvin sign U+212A becomes `k` and a dotted capital `İ` becomes `i` plus a
+combining dot, so two different mailboxes compared equal and an invitation
+for one could be accepted by the other.
+
+- **Better Auth's own fold stays where a value must equal what Better Auth
+  keys on.** It stores `email.toLowerCase()`. The per-address quota key in
+  `convex/auth.ts`, the account-lifecycle hooks, and the client checks
+  against the signed-in address mirror that fold on purpose: an ASCII-only key
+  there would give a Unicode case variant of an address a second quota for
+  the same mailbox.
+- **The consequence.** An invitation typed with a non-ASCII capital
+  (`ÉLODIE@…`) is stored as typed, while Better Auth stores the account as
+  `élodie@…`: the two no longer match, and the invitee sees the "wrong
+  account" card. Invite the address in lower case.
+- Erasure hashes (`purgeLog`) written before this change used the Unicode
+  fold; for an address with a non-ASCII capital, asking for it now computes a
+  different hash. Pre-launch, no such row is expected.
+
+## Typed names are one line, and bounded
+
+A display name and an organisation name are typed by users and end up in
+email subjects and one-line UI. `convex/lib/names.ts` turns every run of
+control characters and line or paragraph separators into one space
+(`singleLine`) and caps the length at `NAME_MAX` (80, the forms' cap). Our
+own mutations (`users.updateProfile`, `organizations.create` /
+`updateGeneral`) refuse a name still too long (`typedName`); the Better Auth paths
+(`provisionAppUser`, `syncBetterAuthUser`) cannot refuse, so they cut it
+(`clampLine`). Email subjects clamp every user-supplied value again at render
+(`inSubject` in `convex/emailTemplates.ts`), which also covers role titles,
+candidate names and rows written before the rule.
 
 ## Google OAuth (template — opt-in)
 
@@ -1244,11 +1323,15 @@ auto-apply the UI language on device B until the user switches there too (the
 cookie is per-browser). The email locale is always correct regardless. Restore
 on login is a deliberate follow-up, not a bug.
 
-**`<Trans>` escapes its values.** `escapeValue` is off because React escapes
-text, but `<Trans>` parses the interpolated string for tags: an org name or
-an address like `<strong>x</strong>` rendered as markup. `createI18n` sets
-`react.transDefaultProps` so every `<Trans>` escapes its values and unescapes
-its text nodes; a new call site needs nothing (`src/lib/trans-escaping.test.ts`).
+**`<Trans>` escapes its values; `t()` does not.** `interpolation.escapeValue`
+is `false` because `t()` returns text React escapes when it renders it —
+escaping there would print `&amp;`. `<Trans>` is different: it parses the
+interpolated string for tags (`<strong>`, `<0>`, `<br/>`), so a value holding
+one became markup. `react.transDefaultProps` in `src/lib/i18n.ts` sets
+`escapeValue: true` for `<Trans>` only, with `shouldUnescape` to decode each
+value once after the parse. Never pass a per-call `tOptions.interpolation` to
+`<Trans>` without keeping `escapeValue: true`, and never write an HTML entity
+into a locale string: `shouldUnescape` would decode it.
 
 **zxcvbn feedback strings** (password strength warnings) come from the zxcvbn
 English wordlist and are not translated — only our own labels around the meter
@@ -1376,21 +1459,7 @@ itself. Authorisation does not read that flag, nor `createdBy` itself: the
 creator's seat on the team is a `projectShares` row (audit T17-2), deleted
 with the others, so a creator re-invited as a plain member gets `not_found` on
 their own roles until someone puts them back on the team. Credit survives
-removal; rights do not. The invitations they sent and nobody accepted stop
-working too (`issuerStillAdmin`, also on demotion): an invitation acts for an
-admin, and another admin revives it by resending it.
-
-**Admins manage admins.** An admin can change the role of, or remove, any
-member or admin; only an owner can touch an owner, and the last owner can be
-neither demoted nor removed (`convex/organizations.ts`). Deliberate: two
-admins are peers, and an owner is the one who can settle a dispute.
-
-## `normalizeEmail` folds Unicode case, on purpose (T12)
-
-The audit asked for ASCII-only folding. Better Auth lowercases addresses with
-the same `toLowerCase()`, so both sides agree on which address an invitation
-names. Folding only ASCII on our side would make them disagree for the rare
-non-ASCII address — a worse bug than the one it closes.
+removal; rights do not.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -2799,7 +2868,7 @@ Start lists for `__root__`, `/s/$token` and `/s/$token/interview` in
 `.output/server/_tanstack-start-manifest*.mjs`, plus their static imports.
 Lazy `import()` chunks are not counted.
 
-- **Back to 270 KiB on 2026-09-25, at 265.3 KiB.** It had been raised to 280
+- **Back to 270 KiB on 2026-09-25, at 265.5 KiB.** It had been raised to 280
   when the audit stack met #38 (276.3 KiB). The changelog's entries were in the
   i18n resources, which every page bundles: 11 KiB of release notes shipped to
   each candidate, growing with every release. They now live in

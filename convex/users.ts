@@ -10,16 +10,11 @@ import {
 import { internal } from './_generated/api'
 import { authComponent, createAuth } from './auth'
 import { countOwners } from './organizations'
-import {
-  USER_NAME_MAX,
-  cleanUserName,
-  provisionAppUser,
-  requireAppUser,
-  safeAppUser,
-} from './lib/auth'
-import { singleLine } from './lib/singleLine'
+import { provisionAppUser, requireAppUser, safeAppUser } from './lib/auth'
 import { setPasswordWithFreshSession } from './lib/accountLifecycle'
 import { getLastOrgSlug, setEmailChange } from './lib/userPrefs'
+import { emailsMatch, normalizeEmail } from './lib/invitations'
+import { NAME_MAX, clampLine, typedName } from './lib/names'
 import { revokeMemberGrants } from './lib/projectAccess'
 import { release, resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
 import type { EmailChange } from './lib/userPrefs'
@@ -94,11 +89,7 @@ export const updateProfile = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
     const user = await requireAppUser(ctx)
-    const trimmed = singleLine(name)
-    if (!trimmed || trimmed.length > USER_NAME_MAX) {
-      throw new ConvexError('invalid_name')
-    }
-    await ctx.db.patch("users", user._id, { name: trimmed })
+    await ctx.db.patch("users", user._id, { name: typedName(name) })
     return null
   },
 })
@@ -125,7 +116,7 @@ export const localeForEmail = internalQuery({
     fallback: v.optional(v.union(v.literal('en'), v.literal('fr'))),
   },
   handler: async (ctx, { email, fallback }): Promise<'en' | 'fr'> => {
-    const normalized = email.trim().toLowerCase()
+    const normalized = normalizeEmail(email)
     const user =
       (await ctx.db
         .query('users')
@@ -162,10 +153,11 @@ export const syncBetterAuthUser = internalMutation({
 
     const patch: { email?: string; name?: string } = {}
     if (email && email !== appUser.email) patch.email = email
-    // Better Auth takes any name `updateUser` is handed; ours is a single line.
-    const cleanName = name === undefined ? undefined : cleanUserName(name)
-    if (cleanName !== undefined && cleanName !== appUser.name) {
-      patch.name = cleanName
+    // Better Auth's profile has no length or line rule of its own, and a
+    // sync cannot refuse: the name is made safe rather than rejected.
+    const safeName = name === undefined ? undefined : clampLine(name, NAME_MAX)
+    if (safeName !== undefined && safeName !== appUser.name) {
+      patch.name = safeName
     }
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch('users', appUser._id, patch)
@@ -311,7 +303,7 @@ export const recordEmailChangeApproved = internalMutation({
     { betterAuthId, newEmail },
   ): Promise<{ oldEmail: string; locale: 'en' | 'fr' } | null> => {
     const appUser = await userByBetterAuthId(ctx, betterAuthId)
-    if (!appUser || appUser.email.toLowerCase() === newEmail.toLowerCase()) {
+    if (!appUser || emailsMatch(appUser.email, newEmail)) {
       return null
     }
     await setEmailChange(ctx, appUser._id, {

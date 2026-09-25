@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { CHANGELOG_ENTRIES, LATEST_CHANGELOG_ID } from './changelog'
-import { resources } from './i18n'
+import { CHANGELOG_ENTRIES, ENTRY_COPY, LATEST_CHANGELOG_ID } from './changelog'
 
 /**
  * Audit 2026-09-15, B10: the two Interw entries were written at the top level
@@ -18,7 +17,7 @@ const locales = ['en', 'fr'] as const
 
 describe('changelog', () => {
   it.each(locales)('every entry has a title and a body in %s', (locale) => {
-    const entries: Record<string, unknown> = resources[locale].changelog.entries
+    const entries: Record<string, unknown> = ENTRY_COPY[locale]
     const missing = CHANGELOG_ENTRIES.filter(({ id }) => {
       const entry = entries[id] as { title?: string; body?: string } | undefined
       return !entry?.title || !entry.body
@@ -28,7 +27,7 @@ describe('changelog', () => {
 
   it.each(locales)('%s has no copy for an entry that is gone', (locale) => {
     const ids = new Set<string>(CHANGELOG_ENTRIES.map(({ id }) => id))
-    const orphans = Object.keys(resources[locale].changelog.entries).filter(
+    const orphans = Object.keys(ENTRY_COPY[locale]).filter(
       (id) => !ids.has(id),
     )
     expect(orphans).toEqual([])

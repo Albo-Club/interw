@@ -18,10 +18,10 @@ import type { Doc, Id } from './_generated/dataModel'
 type DeliveryStatus = Doc<'emailLog'>['status']
 
 /**
- * Resend's event names → the outcomes worth distinguishing. A Map, not an
- * object literal: Resend adds event types over time, and an unrecognised one
- * must fall through rather than be mapped to something wrong — including one
- * named like an `Object.prototype` member.
+ * Resend's event names → the outcomes worth distinguishing. A `Map`, not an
+ * object literal (h07): indexing a literal with `constructor` returns a
+ * function, and Resend adds event types over time — an unrecognised one must
+ * fall through rather than be mapped to something wrong.
  */
 const STATUS_BY_EVENT = new Map<string, DeliveryStatus>([
   ['email.sent', 'sent'],
@@ -32,17 +32,14 @@ const STATUS_BY_EVENT = new Map<string, DeliveryStatus>([
   ['email.failed', 'failed'],
 ])
 
-export function statusForEvent(type: string): DeliveryStatus | undefined {
-  return STATUS_BY_EVENT.get(type)
-}
-
 /**
- * How far along a mail is. A status only moves forward: Svix retries a failed
- * delivery for up to a day, so a `sent` can arrive after the bounce it
- * preceded, and must not erase it. The outcomes share the top rank, so a
- * complaint still lands on a delivered mail.
+ * How far along an email is. The status only ever moves up (Pipe F9, h07):
+ * Svix redelivers for up to a day and in no particular order, so a retried
+ * `email.sent` landing after `email.bounced` used to turn a dead address back
+ * into a sent invitation — and clear the error the recruiter needed to see.
+ * The three failures share the top rank: the first one recorded stands.
  */
-const PROGRESS: Record<DeliveryStatus, number> = {
+const RANK: Record<DeliveryStatus, number> = {
   sent: 0,
   delivered: 1,
   bounced: 2,
@@ -53,7 +50,7 @@ const PROGRESS: Record<DeliveryStatus, number> = {
 export const record = internalMutation({
   args: vOnEmailEventArgs,
   handler: async (ctx, { id, event }) => {
-    const status = statusForEvent(event.type)
+    const status = STATUS_BY_EVENT.get(event.type)
     if (!status) return null
 
     const entry = await ctx.db
@@ -63,14 +60,11 @@ export const record = internalMutation({
     // No row means the mail was sent by something that does not log here
     // (Better Auth's own transactional mail, for instance). Nothing to update.
     if (!entry) return null
-    if (PROGRESS[status] < PROGRESS[entry.status]) return null
+    if (RANK[status] <= RANK[entry.status]) return null
 
     await ctx.db.patch('emailLog', entry._id, {
       status,
-      error:
-        status === 'bounced' || status === 'failed' || status === 'complained'
-          ? event.type
-          : undefined,
+      error: RANK[status] === RANK.failed ? event.type : undefined,
     })
     return null
   },

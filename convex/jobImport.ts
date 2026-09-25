@@ -10,34 +10,37 @@
 import { ConvexError, v } from 'convex/values'
 import { z } from 'zod'
 
-import { action, internalQuery } from './_generated/server'
+import { action, internalQuery, mutation } from './_generated/server'
 import { internal } from './_generated/api'
 import { complete } from './lib/ai'
 import { htmlToText, jobPostingText } from './lib/htmlText'
 import { jobImportPrompt } from './lib/prompts'
 import { requireProjectEditable } from './lib/projectAccess'
 import { consumeLimit } from './rateLimiters'
+import { appendQuestions } from './questions'
+import { appendCriteria } from './criteria'
 
 const DEFAULT_QUESTION_COUNT = 6
 const DEFAULT_CRITERIA_COUNT = 4
 const MIN_USABLE_TEXT = 400
 
-/** What the draft schema accepts, and so what a caller may ask the model for. */
-const QUESTIONS = { min: 3, max: 15 }
-const CRITERIA = { min: 2, max: 8 }
+/** Bounds `draftSchema` enforces, shared with the prompt so it never asks for
+ *  a draft that is bound to fail validation. */
+const QUESTION_RANGE = { min: 3, max: 15 } as const
+const CRITERIA_RANGE = { min: 2, max: 8 } as const
 
 /**
- * A requested count, brought inside what the schema will accept. Asking the
- * model for a draft the schema then refuses only burns a paid call.
+ * The count the prompt asks for. Clamped rather than refused: the UI sends
+ * none, and an out-of-range number used to reach the prompt as is, which
+ * guaranteed a billed completion that then failed `draftSchema`.
  */
-function boundedCount(
+export function draftCount(
   requested: number | undefined,
   fallback: number,
-  bounds: { min: number; max: number },
+  range: { min: number; max: number },
 ): number {
-  if (requested === undefined) return fallback
-  if (!Number.isFinite(requested)) throw new ConvexError('invalid_count')
-  return Math.min(bounds.max, Math.max(bounds.min, Math.round(requested)))
+  if (requested === undefined || !Number.isFinite(requested)) return fallback
+  return Math.min(range.max, Math.max(range.min, Math.round(requested)))
 }
 
 const draftSchema = z.object({
@@ -50,8 +53,8 @@ const draftSchema = z.object({
         content: z.string().min(10).max(1000),
       }),
     )
-    .min(QUESTIONS.min)
-    .max(QUESTIONS.max),
+    .min(QUESTION_RANGE.min)
+    .max(QUESTION_RANGE.max),
   criteria: z
     .array(
       z.object({
@@ -60,8 +63,8 @@ const draftSchema = z.object({
         weight: z.number().int().min(1).max(100),
       }),
     )
-    .min(CRITERIA.min)
-    .max(CRITERIA.max),
+    .min(CRITERIA_RANGE.min)
+    .max(CRITERIA_RANGE.max),
 })
 
 export type InterviewDraft = z.infer<typeof draftSchema>
@@ -87,16 +90,6 @@ export const importFromUrl = action({
       internal.jobImport.resolveImportContext,
       { projectId: args.projectId },
     )
-    const questionCount = boundedCount(
-      args.questionCount,
-      DEFAULT_QUESTION_COUNT,
-      QUESTIONS,
-    )
-    const criteriaCount = boundedCount(
-      args.criteriaCount,
-      DEFAULT_CRITERIA_COUNT,
-      CRITERIA,
-    )
     await consumeLimit(ctx, 'jobImport', context.actorId)
 
     // Fetching happens in the Node runtime, which is the only place with a
@@ -118,6 +111,16 @@ export const importFromUrl = action({
     // and a model handed 80 characters will invent an entire role.
     if (pageText.length < MIN_USABLE_TEXT) throw new ConvexError('page_too_thin')
 
+    const questionCount = draftCount(
+      args.questionCount,
+      DEFAULT_QUESTION_COUNT,
+      QUESTION_RANGE,
+    )
+    const criteriaCount = draftCount(
+      args.criteriaCount,
+      DEFAULT_CRITERIA_COUNT,
+      CRITERIA_RANGE,
+    )
     const { system, user } = jobImportPrompt({
       language: context.language,
       pageText,
@@ -135,5 +138,32 @@ export const importFromUrl = action({
       temperature: 0.4,
     })
     return value
+  },
+})
+
+/**
+ * Write the draft the recruiter accepted, in one transaction. The dialog used
+ * to create each question and criterion in its own call, so a failure on the
+ * fifth left a role half-imported with nothing saying what had been written
+ * (audit 2026-09-15, recruiter F9). Every row passes the same rules as one
+ * added by hand, and either all of them land or none does.
+ */
+export const applyDraft = mutation({
+  args: {
+    projectId: v.id('projects'),
+    questions: v.array(v.object({ title: v.string(), content: v.string() })),
+    criteria: v.array(
+      v.object({
+        label: v.string(),
+        description: v.string(),
+        weight: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, { projectId, questions, criteria }) => {
+    const { project } = await requireProjectEditable(ctx, projectId)
+    await appendQuestions(ctx, project, questions)
+    await appendCriteria(ctx, project, criteria)
+    return null
   },
 })

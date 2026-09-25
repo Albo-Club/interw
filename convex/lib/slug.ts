@@ -21,17 +21,25 @@ export function slugify(input: string): string {
 }
 
 /**
- * A slug not already in `taken`, by suffixing `-2`, `-3`, … Falls back to
- * `project` when the title has no usable characters at all (a title in a
- * non-Latin script, or only punctuation) — an empty slug would produce a
+ * A slug for which `isTaken` answers false, by suffixing `-2`, `-3`, … Falls
+ * back to `project` when the title has no usable characters at all (a title
+ * in a non-Latin script, or only punctuation) — an empty slug would produce a
  * double slash in every link.
+ *
+ * A predicate rather than a set of taken slugs (Back M4): the caller asks the
+ * `by_org_and_slug` index about each candidate, so uniqueness holds however
+ * many roles the organisation has. A set had to be materialised first, and
+ * was capped at 200 rows — past that a duplicate slug was insertable.
  */
-export function uniqueSlug(base: string, taken: ReadonlySet<string>): string {
+export async function uniqueSlug(
+  base: string,
+  isTaken: (slug: string) => Promise<boolean>,
+): Promise<string> {
   const root = slugify(base) || 'project'
-  if (!taken.has(root)) return root
+  if (!(await isTaken(root))) return root
   for (let suffix = 2; suffix < 1000; suffix++) {
     const candidate = `${root.slice(0, MAX_LENGTH - 5)}-${suffix}`
-    if (!taken.has(candidate)) return candidate
+    if (!(await isTaken(candidate))) return candidate
   }
   throw new Error('could not derive a unique slug')
 }

@@ -11,5 +11,13 @@ export default defineConfig({
     environment: 'edge-runtime',
     include: ['src/**/*.test.ts', 'convex/**/*.test.ts'],
     server: { deps: { inline: ['convex-test'] } },
+    // `pnpm test:coverage`. A report, not a gate: no threshold until the
+    // numbers have been read once and a floor chosen on purpose.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}', 'convex/**/*.ts'],
+      exclude: ['**/*.test.ts', 'convex/_generated/**', 'src/routeTree.gen.ts'],
+      reporter: ['text-summary', 'html'],
+    },
   },
 })

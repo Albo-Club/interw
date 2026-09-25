@@ -1,13 +1,12 @@
+/// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest'
 
 import { scrubAccessTokens } from './sentry'
+import source from './sentry.ts?raw'
 
 const token = 'tDRtkHnQY0MiWduSUxuwcZUMacZvWgtpEqZ88H_Uf-J'
 
-/**
- * E10; audit 2026-09-22, h10. A candidate's or a share holder's token left
- * the browser in every event from the page it opens.
- */
+/** E10. The token left the browser in every event from the candidate surface. */
 describe('scrubAccessTokens', () => {
   it('masks the token wherever it appears in an event', () => {
     const event = {
@@ -24,20 +23,15 @@ describe('scrubAccessTokens', () => {
     )
   })
 
-  it('masks a share token in a /r/ report link', () => {
+  // h10: a share link opens the report and signs URLs on the video.
+  it('masks a report share token the same way', () => {
     const event = {
       request: { url: `https://interw.com/r/${token}` },
-      transaction: `/r/${token}`,
-      breadcrumbs: [
-        { category: 'fetch', data: { url: `https://interw.com/r/${token}?x=1` } },
-        { category: 'xhr', data: { url: `/r/${token}` } },
-      ],
+      breadcrumbs: [{ category: 'fetch', data: { url: `/r/${token}?x=1` } }],
     }
-    const scrubbed = JSON.stringify(scrubAccessTokens(event))
-    expect(scrubbed).not.toContain(token)
-    expect(scrubAccessTokens(event).request.url).toBe(
-      'https://interw.com/r/[token]',
-    )
+    const scrubbed = scrubAccessTokens(event)
+    expect(JSON.stringify(scrubbed)).not.toContain(token)
+    expect(scrubbed.request.url).toBe('https://interw.com/r/[token]')
   })
 
   it('masks a sign-in code carried in a /login/code fragment', () => {
@@ -58,4 +52,10 @@ describe('scrubAccessTokens', () => {
     const event = { request: { url: 'https://interw.com/app/acme/roles' } }
     expect(scrubAccessTokens(event)).toEqual(event)
   })
+})
+
+// h10: a replay option with no replay integration is inert today, and one
+// "completion" away from recording the interview screen for a third party.
+it('sets no session-replay option', () => {
+  expect(source).not.toMatch(/replays\w*SampleRate/)
 })

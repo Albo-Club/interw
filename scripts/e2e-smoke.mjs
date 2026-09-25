@@ -135,6 +135,21 @@ async function checkHeaders() {
   } else {
     ko('CSP media-src', csp ? 'missing, or without blob:' : 'no CSP header')
   }
+
+  // Third: `img-src` names the hosts that serve our images and no others
+  // (audit 2026-09-22, lead 5). Convex storage serves avatars and logos; its
+  // origin comes from VITE_CONVEX_URL at build time, and a build without it
+  // ships a policy that blocks every one of them.
+  const imgSrc = (/img-src ([^;]+)/.exec(csp)?.[1] ?? '').trim().split(/\s+/)
+  if (imgSrc.includes('https:')) {
+    ko('CSP img-src', `allows any https host: ${imgSrc.join(' ')}`)
+  } else if (
+    !imgSrc.some((s) => /^https?:\/\//.test(s) && !s.includes('googleusercontent'))
+  ) {
+    ko('CSP img-src', `no Convex storage origin (VITE_CONVEX_URL at build?): ${imgSrc.join(' ')}`)
+  } else {
+    ok('CSP img-src', imgSrc.join(' '))
+  }
 }
 
 async function checkPublicRoutes() {

@@ -26,11 +26,16 @@ export const projectStatusValidator = v.union(
 
 export const languageValidator = v.union(v.literal('fr'), v.literal('en'))
 
-export const introModeValidator = v.union(
-  v.literal('none'),
+/** What a role opens on: nothing, or a video the recruiter filmed. */
+export const introModeValidator = v.union(v.literal('none'), v.literal('video'))
+
+/** What a stored row may still hold. `text` and `audio` are retired: read as
+ *  `none` everywhere, rewritten by `media.migrateLegacyIntroModes`, and
+ *  dropped from here once that has run on every deployment. */
+const storedIntroModeValidator = v.union(
+  introModeValidator,
   v.literal('text'),
   v.literal('audio'),
-  v.literal('video'),
 )
 
 export const mediaKindValidator = v.union(
@@ -97,27 +102,6 @@ export const depthLevelValidator = v.union(
   v.literal('expert'),
 )
 
-/**
- * The six para-verbal dimensions — HOW an answer was delivered, as opposed to
- * what it said.
- *
- * All six are computed from the timestamped transcript, deterministically, by
- * convex/lib/paraverbal.ts. No model is asked to score them. The stack has no
- * audio-capable model, so a "vocal warmth" or "confidence" score would be an
- * invention dressed as a measurement — and this product must not invent
- * anything about a candidate. Speaking rate, hesitation, pausing and length
- * discipline are genuinely measurable from what we already hold, and they are
- * the substance of para-verbal analysis anyway.
- */
-export const paraverbalDimensionValidator = v.union(
-  v.literal('pace'),
-  v.literal('fluency'),
-  v.literal('pauses'),
-  v.literal('concision'),
-  v.literal('consistency'),
-  v.literal('engagement'),
-)
-
 export const highlightKindValidator = v.union(
   v.literal('strength'),
   v.literal('personality'),
@@ -157,6 +141,8 @@ export const sessionEventKindValidator = v.union(
   v.literal('interview_resumed'),
   v.literal('recording_recovered'),
   v.literal('render_error'),
+  /** The candidate left the page with an answer recorded but not sent. */
+  v.literal('recording_abandoned'),
 )
 
 /**
@@ -207,21 +193,6 @@ export const fitMatrixValidator = v.object({
   ),
 })
 
-/** Computed, not generated — see paraverbalDimensionValidator. */
-export const paraverbalValidator = v.object({
-  dimensions: v.array(
-    v.object({
-      key: paraverbalDimensionValidator,
-      /** 0..10. */
-      score: v.number(),
-      /** The measurement behind the score, e.g. words per minute. */
-      measure: v.number(),
-    }),
-  ),
-  wordsPerMinute: v.number(),
-  totalSpeakingSeconds: v.number(),
-})
-
 /** One scored criterion, with the quotes behind the score. */
 export const criteriaScoresValidator = v.array(
   v.object({
@@ -251,7 +222,9 @@ export default defineSchema({
   })
     .index('by_betterAuthId', ['betterAuthId'])
     .index('by_email', ['email'])
-    .index('by_avatarStorageId', ['avatarStorageId']),
+    .index('by_avatarStorageId', ['avatarStorageId'])
+    // "Is anyone else a super-admin?" without reading every user (Back F8).
+    .index('by_superAdmin', ['superAdmin']),
 
   // Frequently-written per-user state, isolated from `users` on purpose:
   // every query reads the caller's `users` row (requireAppUser), so writes
@@ -335,8 +308,8 @@ export default defineSchema({
     status: projectStatusValidator,
     language: languageValidator,
     personaName: v.optional(v.string()),
-    personaAvatarKey: v.optional(v.string()),
-    introMode: introModeValidator,
+    introMode: storedIntroModeValidator,
+    /** Retired with the `text` intro mode: written and read by nothing. */
     introText: v.optional(v.string()),
     introMediaKey: v.optional(v.string()),
     maxDurationMinutes: v.number(),
@@ -345,9 +318,10 @@ export default defineSchema({
     createdBy: v.id('users'),
     createdAt: v.number(),
     archivedAt: v.optional(v.number()),
-    /** True once `projectShares` rows exist for this project. Denormalised so
-     *  listing projects does not need one "is this restricted?" query per row. */
-    restricted: v.boolean(),
+    /** Legacy, read by nothing. Every role is now visible to its team only
+     *  (see `projectShares`), so the open/restricted switch is gone; the field
+     *  stays optional only because existing rows still carry it. */
+    restricted: v.optional(v.boolean()),
     /** Denormalised counters, maintained in the same mutation as every session
      *  insert and status change. Convex has no count operator, and
      *  `.collect().length` over a project's sessions does not scale. */
@@ -356,6 +330,8 @@ export default defineSchema({
   })
     .index('by_org', ['orgId'])
     .index('by_org_and_status', ['orgId', 'status'])
+    // Read by the expiry cron (B6): the roles whose deadline has passed.
+    .index('by_expires_at', ['expiresAt'])
     // Slugs are unique per organisation, not globally: two customers may both
     // be hiring a "senior-backend-engineer".
     .index('by_org_and_slug', ['orgId', 'slug']),
@@ -371,8 +347,6 @@ export default defineSchema({
     mediaKind: v.optional(mediaKindValidator),
     hintText: v.optional(v.string()),
     maxResponseSeconds: v.number(),
-    /** Per-question override of criteria weighting, criterion id → weight. */
-    criteriaWeights: v.optional(v.record(v.id('criteria'), v.number())),
   })
     .index('by_project', ['projectId', 'orderIndex'])
     .index('by_org', ['orgId']),
@@ -451,6 +425,8 @@ export default defineSchema({
   })
     .index('by_token', ['accessToken'])
     .index('by_project', ['projectId'])
+    // The expiry cron (B6) reads a role's still-open sessions, not all of them.
+    .index('by_project_and_status', ['projectId', 'status'])
     .index('by_project_and_email', ['projectId', 'candidateEmail'])
     // Deployment-wide, for the super-admin health screen: "which interviews
     // finished and never produced a report?" is not a per-organisation
@@ -458,6 +434,9 @@ export default defineSchema({
     .index('by_status_and_completed', ['status', 'completedAt'])
     .index('by_org_and_status', ['orgId', 'status'])
     .index('by_org', ['orgId'])
+    // The dashboard's "invited in the last 30 days" (Back M3), read as a range
+    // that stops at the window's edge.
+    .index('by_org_and_invited', ['orgId', 'invitedAt'])
     // `mediaPurgedAt` leads so the range can exclude sessions already purged
     // without a JS filter. Filtering them afterwards would let them pile up in
     // the range and saturate the batch all over again — the shape of the bug
@@ -480,7 +459,6 @@ export default defineSchema({
     questionIndex: v.number(),
     videoKey: v.optional(v.string()),
     audioKey: v.optional(v.string()),
-    thumbnailKey: v.optional(v.string()),
     /** False from reservation until the video PUT is confirmed. The key is
      *  written first so erasure can name it, which means a key alone does not
      *  say an object sits behind it. Absent on rows older than the field,
@@ -495,7 +473,7 @@ export default defineSchema({
      *  to the report. */
     durationSeconds: v.optional(v.number()),
     /** The answer's length as the server observed it at transcription. What
-     *  the para-verbal measures and the quote anchors are computed from. */
+     *  the duration the recruiter is served and the quote anchors come from. */
     measuredSeconds: v.optional(v.number()),
     uploadState: uploadStateValidator,
     uploadAttempts: v.number(),
@@ -543,8 +521,19 @@ export default defineSchema({
     /** Criterion × question grid. Typed rather than `v.any()`: an untyped
      *  blob here is how a model's malformed output reaches the UI. */
     fitMatrix: v.optional(fitMatrixValidator),
-    /** Computed, not generated — see paraverbalDimensionValidator. */
-    paraverbal: v.optional(paraverbalValidator),
+    /** Retired: the para-verbal figures are no longer computed, written or
+     *  read (see KNOWN_ISSUES.md § "Para-verbal analysis was removed"). Kept
+     *  optional only so reports written before the removal still validate;
+     *  the field can go once a migration has cleared it. */
+    paraverbal: v.optional(
+      v.object({
+        dimensions: v.array(
+          v.object({ key: v.string(), score: v.number(), measure: v.number() }),
+        ),
+        wordsPerMinute: v.number(),
+        totalSpeakingSeconds: v.number(),
+      }),
+    ),
     highlights: v.optional(
       v.array(
         v.object({
@@ -575,10 +564,16 @@ export default defineSchema({
   })
     .index('by_token', ['token'])
     .index('by_report', ['reportId'])
-    .index('by_org', ['orgId']),
+    .index('by_org', ['orgId'])
+    // A share link acts for whoever created it: when that person leaves the
+    // org or deletes their account, their links are revoked with them.
+    .index('by_creator_and_org', ['createdBy', 'orgId']),
 
-  /** Restricts a project to named colleagues. Absence of any row means the
-   *  project is visible to the whole organisation. */
+  /** A role's team: the colleagues who follow it. One row per member, on top
+   *  of the creator, who is always on the team and never stored here. The
+   *  team decides both who sees the role (with org admins/owners) and who is
+   *  emailed when a report is ready. Named `projectShares` for history: the
+   *  rows of the former "restricted" roles already meant exactly this. */
   projectShares: defineTable({
     orgId: v.id('organizations'),
     projectId: v.id('projects'),
@@ -693,6 +688,19 @@ export default defineSchema({
     sessionId: v.id('sessions'),
     kind: sessionEventKindValidator,
     detail: v.optional(v.string()),
+    at: v.number(),
+  }).index('by_session', ['sessionId', 'at']),
+
+  /** Every change to a candidate's decision, newest last. `sessions` holds
+   *  only the current one, so "who shortlisted them, and who rejected them
+   *  after?" had no answer. Written by `reports.setDecision`, purged with the
+   *  session. `decision` absent means the decision was cleared. */
+  decisionEvents: defineTable({
+    orgId: v.id('organizations'),
+    sessionId: v.id('sessions'),
+    decision: v.optional(recruiterDecisionValidator),
+    /** An id, never an address, like `jobLog.actorId`. */
+    actorId: v.id('users'),
     at: v.number(),
   }).index('by_session', ['sessionId', 'at']),
 })

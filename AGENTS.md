@@ -11,3 +11,8 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+The block above is written by the Convex CLI and rewritten by
+`npx convex ai-files update`, so it is left verbatim. Its last line does not
+apply here: do **not** install Convex agent skills — they were pruned on
+purpose, see `KNOWN_ISSUES.md` § "Convex skills were pruned".

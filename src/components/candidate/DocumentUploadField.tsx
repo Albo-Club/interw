@@ -56,7 +56,7 @@ export function DocumentUploadField({
         blob: file,
         contentType: slot.contentType,
       })
-      await attach({ token, kind, key: slot.key })
+      await attach({ token, kind, mimeType: file.type })
       onUploaded()
     } catch (cause) {
       const { key, fallbackKey } = errorMessageKey(cause, 'interview')

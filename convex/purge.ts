@@ -68,7 +68,6 @@ export const collectSessionObjects = internalQuery({
         [
           segment.videoKey,
           segment.audioKey,
-          segment.thumbnailKey,
           ...(segment.supersededKeys ?? []),
         ].filter((key): key is string => key !== undefined),
       ),
@@ -157,6 +156,7 @@ async function deleteChildRows(
     'transcripts',
     'segments',
     'sessionEvents',
+    'decisionEvents',
     'jobLog',
     'emailLog',
   ] as const) {
@@ -286,7 +286,6 @@ export const clearSessionMedia = internalMutation({
       await ctx.db.patch('segments', segment._id, {
         videoKey: undefined,
         audioKey: undefined,
-        thumbnailKey: undefined,
         supersededKeys: undefined,
       })
     }
@@ -337,8 +336,3 @@ export const sessionsDueForPurge = internalQuery({
     return due.map((session) => session._id)
   },
 })
-
-export function assertSessionId(value: string): Id<'sessions'> {
-  if (!value) throw new ConvexError('not_found')
-  return value as Id<'sessions'>
-}

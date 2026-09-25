@@ -5,9 +5,53 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
-    "hardening-sep-25": {
-      "title": "Encore plus de robustesse",
-      "body": "Nous avons renforcé la façon dont les liens de partage de rapports, les liens candidats et notre suivi des erreurs traitent les accès, et resserré quelques limites : un message à l’assistant a désormais une longueur maximale, et un lien de partage dure au plus un an. Un e-mail rejeté reste aussi signalé comme tel dans votre suivi des envois."
+    "calmer-interface": {
+      "title": "Une interface plus calme et plus cohérente",
+      "body": "Interw utilise désormais sa propre police partout, respecte le réglage « réduire les animations » de votre système et montre la forme de la page pendant le chargement plutôt qu'une ligne de texte. La recherche de candidats (⌘K) s'ouvre en une liste parcourable aux flèches, et elle est accessible depuis un téléphone. Les dates suivent la langue de l'application, la liste des postes signale ceux dont vous êtes dans l'équipe, et l'import d'une offre ajoute tout ou rien."
+    },
+    "candidate-leave-guard": {
+      "title": "Le candidat est prévenu avant de perdre une réponse",
+      "body": "Un candidat qui fait Retour ou ferme l'onglet pendant qu'une réponse s'enregistre, s'envoie ou attend un nouvel essai doit désormais confirmer ; s'il part quand même, le journal de l'entretien le note, et une réponse manquante ne passe plus pour une question sautée. Un lien ouvert sans https le dit, au lieu d'accuser le navigateur, chaque écran de l'entretien a son propre titre, et nos rapports d'erreur ne conservent plus rien des liens de partage de rapport."
+    },
+    "data-correctness": {
+      "title": "Des chiffres justes, et des invitations qui se ferment à temps",
+      "body": "Le tableau de bord ne réduit plus ses chiffres à mesure que votre organisation grandit : un nombre qui atteint notre limite de comptage s’affiche désormais « 400+ ». Les invitations d’un poste dont la date limite est passée depuis plus d’un jour sont marquées expirées. Un renvoi vers une adresse qui a rejeté l’e-mail est refusé au lieu d’être renvoyé, et un rejet ne peut plus redevenir « envoyé ». Deux postes au même intitulé ont toujours des liens distincts."
+    },
+    "backend-hardening": {
+      "title": "Des limites resserrées autour des liens et des envois",
+      "body": "Nous avons renforcé ce que permettent un lien candidat, un lien de partage de rapport et les envois de fichiers : les vérifications d’expiration et d’horloge ne reposent plus que sur nos serveurs, les fenêtres et tailles d’envoi suivent la durée de chaque question, et les liens de partage suivent les mêmes limites de débit que le reste du produit. Sur un rapport partagé, une réponse enregistrée sans caméra se lit désormais en audio plutôt qu’en vidéo noire, et l’intitulé interne du poste n’apparaît jamais."
+    },
+    "assistant-panel": {
+      "title": "Un assistant plus léger et plus discret",
+      "body": "L’assistant IA reste fermé tant que vous ne l’ouvrez pas, et ne se charge qu’à ce moment-là : les pages recruteur s’ouvrent plus vite. Sur téléphone ou dans une fenêtre étroite, il s’ouvre dans une vraie fenêtre de dialogue, que l’on quitte avec Échap ou en touchant à côté. La zone de saisie indique la longueur de votre message face à la limite de 8 000 caractères, et le dit clairement quand il est trop long. Nous avons aussi resserré les liens et les images vers lesquels les réponses de l’assistant peuvent pointer."
+    },
+    "recruiter-routes": {
+      "title": "Des erreurs plus claires, une publication plus sûre",
+      "body": "Un lien mal saisi ou supprimé affiche désormais une page claire dans l'application, avec un retour vers vos postes, et une action refusée dit pourquoi. Un poste ne peut plus être publié avec la question d'exemple ou un critère sans nom, et vous pouvez supprimer un poste créé par erreur. Les CV et lettres de motivation téléchargés sont nommés dans votre langue."
+    },
+    "candidate-page": {
+      "title": "Une fiche candidat qui suit votre rythme",
+      "body": "Les vidéos ne repartent plus de zéro quand vous enregistrez une note, et restent lisibles après une heure sur la page ; si un enregistrement ne se charge pas, vous le voyez et pouvez réessayer. Les moments à regarder s'affichent sous le lecteur, les décisions gardent leur historique, et quand une analyse n'aboutit pas, la personne qui a créé le poste ou un admin peut la relancer. Révoquer un lien de partage demande désormais confirmation, et la lettre de motivation a son propre bouton."
+    },
+    "candidate-table": {
+      "title": "Comparez les candidats d’un coup d’œil",
+      "body": "Le tableau des candidats affiche désormais le score et la recommandation IA de chacun. Triez par score, recommandation, date ou durée, et filtrez par statut ou par votre décision. Une invitation rejetée ou signalée comme spam est signalée sur sa ligne, et les propriétaires, administrateurs et le créateur du poste peuvent copier le lien d’un candidat pour l’envoyer eux-mêmes. Quand vous collez une liste, les adresses en double sont affichées avant tout envoi."
+    },
+    "video-intro": {
+      "title": "Filmez votre introduction, réécoutez vos questions",
+      "body": "Vous pouvez désormais filmer une courte vidéo d'introduction depuis l'étape « Le poste » : les candidats la voient avant la première question. L'introduction est une vidéo, ou rien — les introductions écrites et audio disparaissent, et un poste qui en avait une commence désormais directement par sa première question. Chaque question enregistrée se réécoute à l'endroit même où vous l'avez enregistrée, et un enregistrement fait sans caméra se lit en audio, pour vous comme pour les candidats."
+    },
+    "role-team": {
+      "title": "Choisissez qui suit chaque poste",
+      "body": "Chaque poste a désormais une équipe : vous, plus les collègues que vous choisissez à la création ou ensuite depuis Équipe. L’équipe voit le poste et reçoit l’e-mail quand le rapport d’un candidat est prêt — plus personne d’autre dans votre organisation n’est notifié. Les administrateurs et propriétaires voient toujours tous les postes. Un poste ouvert à tous n’est plus visible que de son créateur, des administrateurs et des propriétaires, jusqu’à ce que vous ajoutiez son équipe."
+    },
+    "evaluation-hardening": {
+      "title": "Évaluation par l’IA renforcée",
+      "body": "Nous avons renforcé la production des rapports : les propos du candidat et le texte d’une offre importée sont toujours traités comme la matière à évaluer. Un rapport couvre désormais chacune des réponses du candidat, sinon il est produit à nouveau, et il n’a plus à citer un point fort que l’entretien n’a pas montré."
+    },
+    "delivery-figures-removed": {
+      "title": "Les indicateurs d’élocution quittent les rapports",
+      "body": "Les rapports n’affichent plus la section Élocution (débit, hésitations, silences, etc.). Ces indicateurs n’étaient pas assez fiables pour éclairer une décision de recrutement : nous les avons retirés. Scores, citations, réponses et enregistrements ne changent pas, y compris sur les rapports déjà reçus."
     },
     "interview-survives-crash": {
       "title": "Une réponse survit à un plantage, et les candidats peuvent s’écouter avant de commencer",
@@ -78,8 +122,8 @@
       "body": "Deux corrections sur la création d’un poste. « Ajouter une question » ouvre désormais une carte modifiable au lieu de refuser avec « une question doit contenir du texte » avant même que vous ayez pu en saisir. Et l’import depuis une offre fonctionne sur les sites qui affichent leurs annonces dans le navigateur — Welcome to the Jungle, Indeed, les pages carrières d’ATS — qui répondaient jusqu’ici « pas assez de texte sur cette page ». Quand un site refuse d’être lu autrement que par un navigateur, l’application le dit, au lieu de laisser penser que votre lien est mauvais."
     },
     "european-ai": {
-      "title": "L\u2019analyse des entretiens tourne d\u00e9sormais en Europe",
-      "body": "La transcription et l\u2019\u00e9valuation passent toutes deux par Mistral, fournisseur fran\u00e7ais, sur une infrastructure europ\u00e9enne. L\u2019\u00e9tape d\u2019\u00e9valuation transitait auparavant par un routeur qui choisissait un fournisseur au meilleur prix ; nous l\u2019avions encadr\u00e9, mais la garantie tenait \u00e0 un r\u00e9glage plut\u00f4t qu\u2019\u00e0 la destination r\u00e9elle de la requ\u00eate. Il n\u2019y a d\u00e9sormais qu\u2019un fournisseur et une destination, et l\u2019entretien d\u2019un candidat n\u2019en sort pas."
+      "title": "L’analyse des entretiens tourne désormais en Europe",
+      "body": "La transcription et l’évaluation passent toutes deux par Mistral, fournisseur français, sur une infrastructure européenne. L’étape d’évaluation transitait auparavant par un routeur qui choisissait un fournisseur au meilleur prix ; nous l’avions encadré, mais la garantie tenait à un réglage plutôt qu’à la destination réelle de la requête. Il n’y a désormais qu’un fournisseur et une destination, et l’entretien d’un candidat n’en sort pas."
     },
     "reliable-reports": {
       "title": "Des rapports sur lesquels s’appuyer",

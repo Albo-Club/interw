@@ -18,7 +18,6 @@ import {
   mutation,
 } from './_generated/server'
 import { internal } from './_generated/api'
-import { mediaKindValidator } from './schema'
 import {
   deleteObjects,
   extensionForMimeType,
@@ -27,7 +26,9 @@ import {
   projectMediaKey,
 } from './lib/objectStore'
 import { requireProjectAccess, requireProjectEditable } from './lib/projectAccess'
-import type { Id } from './_generated/dataModel'
+import type { Doc, Id } from './_generated/dataModel'
+
+type MediaKind = NonNullable<Doc<'questions'>['mediaKind']>
 
 /** A recruiter recording a question or an intro, in the browser. */
 const ALLOWED_RECORDING_TYPES = [
@@ -37,12 +38,18 @@ const ALLOWED_RECORDING_TYPES = [
   'audio/mp4',
 ]
 
+/** The intro is filmed: a role opens on the recruiter's face or on nothing. */
+const INTRO_RECORDING_TYPES = ['video/webm', 'video/mp4']
+
 /** ~2 minutes of 720p WebM leaves plenty of headroom. */
 const MAX_PROJECT_MEDIA_BYTES = 100 * 1024 * 1024
 
-function normalizeMimeType(mimeType: string): string {
+function normalizeMimeType(
+  mimeType: string,
+  allowed: ReadonlyArray<string> = ALLOWED_RECORDING_TYPES,
+): string {
   const base = mimeType.split(';')[0].trim().toLowerCase()
-  if (!ALLOWED_RECORDING_TYPES.includes(base)) {
+  if (!allowed.includes(base)) {
     throw new ConvexError('unsupported_media_type')
   }
   return base
@@ -69,7 +76,7 @@ export const resolveIntroUpload = internalQuery({
   },
   handler: async (ctx, { projectId, mimeType, contentLength }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    const contentType = normalizeMimeType(mimeType)
+    const contentType = normalizeMimeType(mimeType, INTRO_RECORDING_TYPES)
     validateSize(contentLength)
     return {
       key: projectMediaKey(
@@ -166,14 +173,34 @@ export const requestQuestionUpload = action({
 
 /* ───────────────────────────── Attach ──────────────────────────────────── */
 
+/**
+ * The content type `key` was issued for in this slot, or null when it is not
+ * a key this slot can be issued at all.
+ *
+ * Re-derive rather than trust: the client is telling us which object it just
+ * wrote, and the only acceptable answers are the keys an upload slot could
+ * have named. A prefix match accepted `intro.zzz`, and the object it replaced
+ * was deleted.
+ */
+function issuedType(
+  key: string,
+  slotKey: (extension: string) => string,
+  types: ReadonlyArray<string>,
+): string | null {
+  return (
+    types.find((type) => slotKey(extensionForMimeType(type)) === key) ?? null
+  )
+}
+
 export const swapIntroKey = internalMutation({
   args: { projectId: v.id('projects'), key: v.string() },
   handler: async (ctx, { projectId, key }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    // Re-derive rather than trust: the client is telling us which object it
-    // just wrote, and the only acceptable answer is "the one we issued".
-    const expectedPrefix = projectMediaKey(project.orgId, projectId, 'intro', '')
-    if (!key.startsWith(expectedPrefix)) throw new ConvexError('key_mismatch')
+    const slotKey = (extension: string) =>
+      projectMediaKey(project.orgId, projectId, 'intro', extension)
+    if (!issuedType(key, slotKey, INTRO_RECORDING_TYPES)) {
+      throw new ConvexError('key_mismatch')
+    }
     const previous = project.introMediaKey
     await ctx.db.patch('projects', projectId, { introMediaKey: key })
     return { previous: previous && previous !== key ? previous : null }
@@ -181,22 +208,23 @@ export const swapIntroKey = internalMutation({
 })
 
 export const swapQuestionKey = internalMutation({
-  args: {
-    questionId: v.id('questions'),
-    key: v.string(),
-    mediaKind: mediaKindValidator,
-  },
-  handler: async (ctx, { questionId, key, mediaKind }) => {
+  args: { questionId: v.id('questions'), key: v.string() },
+  handler: async (ctx, { questionId, key }) => {
     const question = await ctx.db.get('questions', questionId)
     if (!question) throw new ConvexError('not_found')
     await requireProjectEditable(ctx, question.projectId)
-    const expectedPrefix = projectMediaKey(
-      question.orgId,
-      question.projectId,
-      `q-${questionId}`,
-      '',
-    )
-    if (!key.startsWith(expectedPrefix)) throw new ConvexError('key_mismatch')
+    const slotKey = (extension: string) =>
+      projectMediaKey(
+        question.orgId,
+        question.projectId,
+        `q-${questionId}`,
+        extension,
+      )
+    const type = issuedType(key, slotKey, ALLOWED_RECORDING_TYPES)
+    if (!type) throw new ConvexError('key_mismatch')
+    // Read off the key, like the key itself: it decides whether the prompt is
+    // played in <audio> or <video>, and the client's word is not needed.
+    const mediaKind = type.startsWith('video/') ? 'video' : 'audio'
     const previous = question.mediaKey
     await ctx.db.patch('questions', questionId, { mediaKey: key, mediaKind })
     return { previous: previous && previous !== key ? previous : null }
@@ -218,11 +246,7 @@ export const attachIntroMedia = action({
 })
 
 export const attachQuestionMedia = action({
-  args: {
-    questionId: v.id('questions'),
-    key: v.string(),
-    mediaKind: mediaKindValidator,
-  },
+  args: { questionId: v.id('questions'), key: v.string() },
   handler: async (ctx, args): Promise<null> => {
     const { previous } = await ctx.runMutation(
       internal.media.swapQuestionKey,
@@ -289,7 +313,9 @@ export const resolvePlayback = internalQuery({
     return {
       introKey: project.introMediaKey ?? null,
       questionKeys: questions.flatMap((q) =>
-        q.mediaKey ? [{ questionId: q._id, key: q.mediaKey }] : [],
+        q.mediaKey
+          ? [{ questionId: q._id, key: q.mediaKey, kind: q.mediaKind ?? 'video' }]
+          : [],
       ),
     }
   },
@@ -308,7 +334,11 @@ export const playbackUrls = action({
     { projectId },
   ): Promise<{
     intro: string | null
-    questions: Array<{ questionId: Id<'questions'>; url: string }>
+    questions: Array<{
+      questionId: Id<'questions'>
+      url: string
+      kind: MediaKind
+    }>
   }> => {
     const target = await ctx.runQuery(internal.media.resolvePlayback, {
       projectId,
@@ -319,8 +349,52 @@ export const playbackUrls = action({
         target.questionKeys.map(async (q) => ({
           questionId: q.questionId,
           url: await presignGet(q.key),
+          kind: q.kind,
         })),
       ),
     }
+  },
+})
+
+/* ───────────────────────────── Migration ───────────────────────────────── */
+
+/**
+ * One-off: move roles still on a retired intro mode (`text`, `audio`) to
+ * `none`. They already read as `none` everywhere (`effectiveIntroMode`), so
+ * this changes nothing a user sees; it exists so the schema can drop the two
+ * literals. An audio intro's object goes with it — it is not a video, so it
+ * can never become the intro. The text stays in `introText`, read by nothing.
+ *
+ * Not run by any deploy: `npx convex run media:migrateLegacyIntroModes` once
+ * per deployment. It pages through the table by rescheduling itself.
+ */
+export const migrateLegacyIntroModes = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }) => {
+    const page = await ctx.db
+      .query('projects')
+      .paginate({ cursor: cursor ?? null, numItems: 100 })
+    const keys: Array<string> = []
+    let migrated = 0
+    for (const project of page.page) {
+      if (project.introMode === 'none' || project.introMode === 'video') continue
+      const audioKey =
+        project.introMode === 'audio' ? project.introMediaKey : undefined
+      if (audioKey) keys.push(audioKey)
+      await ctx.db.patch('projects', project._id, {
+        introMode: 'none',
+        ...(audioKey ? { introMediaKey: undefined } : {}),
+      })
+      migrated++
+    }
+    if (keys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.media.migrateLegacyIntroModes, {
+        cursor: page.continueCursor,
+      })
+    }
+    return { migrated, done: page.isDone }
   },
 })

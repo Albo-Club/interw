@@ -44,9 +44,14 @@
   },
   "errors": {
     "rate_limited": "Slow down — too many messages",
-    "prompt_too_long": "Message too long — shorten it and try again",
-    "default": "Could not send message"
+    "default": "Could not send message",
+    "prompt_too_long": "Messages are limited to {{max}} characters. Shorten yours and send it again."
   },
   "imageNotShown": "[Image not shown]",
-  "imageNotShownAlt": "[Image not shown: {{alt}}]"
+  "imageNotShownAlt": "[Image not shown: {{alt}}]",
+  "counter": {
+    "limit": "{{length}} of {{max}} characters",
+    "overLimit": "Too long to send."
+  },
+  "loading": "Loading the assistant…"
 }

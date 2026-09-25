@@ -9,7 +9,6 @@ import {
   resolveTarget,
   segmentKey,
   sessionPrefix,
-  thumbnailKey,
 } from './objectStore'
 
 const CONFIG = {
@@ -43,6 +42,14 @@ describe('resolveTarget', () => {
       '/orgs/o%201/a%2Bb.webm',
     )
   })
+
+  // Pipe F1. `encodeURIComponent` leaves `!'()*` alone, which SigV4 requires
+  // encoded: such a key signed one path and fetched another, answering 403.
+  it('encodes the characters SigV4 wants encoded and encodeURIComponent keeps', () => {
+    expect(resolveTarget(CONFIG, "orgs/o1/a!'()*.webm").path).toBe(
+      '/orgs/o1/a%21%27%28%29%2A.webm',
+    )
+  })
 })
 
 describe('key conventions', () => {
@@ -53,7 +60,6 @@ describe('key conventions', () => {
     expect(prefix).toBe('orgs/o1/sessions/s1')
     for (const key of [
       segmentKey('o1', 's1', 0, 'webm'),
-      thumbnailKey('o1', 's1', 0),
       candidateDocumentKey('o1', 's1', 'cv', 'pdf'),
       candidateDocumentKey('o1', 's1', 'cover', 'pdf'),
     ]) {

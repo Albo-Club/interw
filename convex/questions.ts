@@ -3,7 +3,7 @@ import { ConvexError, v } from 'convex/values'
 import { mutation } from './_generated/server'
 import { requireProjectEditable } from './lib/projectAccess'
 import type { GenericMutationCtx } from 'convex/server'
-import type { DataModel, Id } from './_generated/dataModel'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const CONTENT_MAX = 1_000
 const TITLE_MAX = 120
@@ -53,6 +53,61 @@ function validateResponseSeconds(seconds: number): number {
   return seconds
 }
 
+export type QuestionInput = {
+  content: string
+  title?: string
+  hintText?: string
+  maxResponseSeconds?: number
+}
+
+/**
+ * Validate every question, then append them after the role's existing ones.
+ * Shared by `create` and the job-ad import, so a question enters the trame
+ * through one set of rules whichever button wrote it. Throws before the first
+ * insert on a count overflow; a later validation failure aborts the enclosing
+ * mutation, so nothing is half-written either way.
+ */
+export async function appendQuestions(
+  ctx: GenericMutationCtx<DataModel>,
+  project: Doc<'projects'>,
+  inputs: Array<QuestionInput>,
+): Promise<Array<Id<'questions'>>> {
+  const existing = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', project._id))
+    .collect()
+  if (existing.length + inputs.length > MAX_QUESTIONS) {
+    throw new ConvexError('too_many_questions')
+  }
+
+  const ids: Array<Id<'questions'>> = []
+  for (const input of inputs) {
+    const content = input.content.trim()
+    if (!content || content.length > CONTENT_MAX) {
+      throw new ConvexError('invalid_content')
+    }
+    const title = input.title?.trim()
+    if (title && title.length > TITLE_MAX) throw new ConvexError('invalid_title')
+    const hint = input.hintText?.trim()
+    if (hint && hint.length > HINT_MAX) throw new ConvexError('hint_too_long')
+
+    ids.push(
+      await ctx.db.insert('questions', {
+        orgId: project.orgId,
+        projectId: project._id,
+        orderIndex: existing.length + ids.length,
+        title: title || undefined,
+        content,
+        hintText: hint || undefined,
+        maxResponseSeconds: validateResponseSeconds(
+          input.maxResponseSeconds ?? DEFAULT_RESPONSE_SECONDS,
+        ),
+      }),
+    )
+  }
+  return ids
+}
+
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -61,35 +116,10 @@ export const create = mutation({
     hintText: v.optional(v.string()),
     maxResponseSeconds: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const { project } = await requireProjectEditable(ctx, args.projectId)
-
-    const existing = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
-      .collect()
-    if (existing.length >= MAX_QUESTIONS) throw new ConvexError('too_many_questions')
-
-    const content = args.content.trim()
-    if (!content || content.length > CONTENT_MAX) {
-      throw new ConvexError('invalid_content')
-    }
-    const title = args.title?.trim()
-    if (title && title.length > TITLE_MAX) throw new ConvexError('invalid_title')
-    const hint = args.hintText?.trim()
-    if (hint && hint.length > HINT_MAX) throw new ConvexError('hint_too_long')
-
-    return await ctx.db.insert('questions', {
-      orgId: project.orgId,
-      projectId: args.projectId,
-      orderIndex: existing.length,
-      title: title || undefined,
-      content,
-      hintText: hint || undefined,
-      maxResponseSeconds: validateResponseSeconds(
-        args.maxResponseSeconds ?? DEFAULT_RESPONSE_SECONDS,
-      ),
-    })
+  handler: async (ctx, { projectId, ...input }) => {
+    const { project } = await requireProjectEditable(ctx, projectId)
+    const [id] = await appendQuestions(ctx, project, [input])
+    return id
   },
 })
 
@@ -183,43 +213,6 @@ export const reorder = mutation({
     for (const [index, id] of orderedIds.entries()) {
       await ctx.db.patch('questions', id, { orderIndex: index })
     }
-    return null
-  },
-})
-
-/**
- * Per-question criterion weighting: which criteria this answer speaks to, and
- * how strongly. Absent means "all criteria, evenly".
- */
-export const setCriteriaWeights = mutation({
-  args: {
-    questionId: v.id('questions'),
-    weights: v.array(
-      v.object({ criterionId: v.id('criteria'), weight: v.number() }),
-    ),
-  },
-  handler: async (ctx, { questionId, weights }) => {
-    const question = await loadQuestionForEdit(ctx, questionId)
-
-    if (weights.length === 0) {
-      await ctx.db.patch('questions', questionId, {
-        criteriaWeights: undefined,
-      })
-      return null
-    }
-
-    const record: Record<Id<'criteria'>, number> = {}
-    for (const { criterionId, weight } of weights) {
-      const criterion = await ctx.db.get('criteria', criterionId)
-      if (!criterion || criterion.projectId !== question.projectId) {
-        throw new ConvexError('unknown_criterion')
-      }
-      if (!Number.isFinite(weight) || weight < 0 || weight > 100) {
-        throw new ConvexError('invalid_weight')
-      }
-      record[criterionId] = weight
-    }
-    await ctx.db.patch('questions', questionId, { criteriaWeights: record })
     return null
   },
 })

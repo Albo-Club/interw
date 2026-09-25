@@ -16,12 +16,24 @@
       "candidate": "Candidat",
       "status": "Statut",
       "score": "Score",
+      "recommendation": "Recommandation IA",
       "decision": "Décision",
       "invited": "Invité le",
       "completed": "Terminé le",
-      "duration": "Durée"
+      "duration": "Durée",
+      "actions": "Actions"
     },
-    "loadMore": "Charger plus"
+    "loadMore": "Charger plus",
+    "filters": {
+      "status": "Filtrer par statut",
+      "decision": "Filtrer par décision",
+      "allStatuses": "Tous les statuts",
+      "allDecisions": "Toutes les décisions",
+      "noMatch": "Aucun candidat ne correspond à ces filtres.",
+      "clear": "Effacer les filtres"
+    },
+    "partial": "{{count}} candidat chargé. Le tri et les filtres ne portent que sur les candidats chargés.",
+    "partial_other": "{{count}} candidats chargés. Le tri et les filtres ne portent que sur les candidats chargés."
   },
   "status": {
     "pending": "Pas commencé",
@@ -37,7 +49,10 @@
     "shortlisted": "Retenu",
     "hired": "Recruté",
     "set": "Votre décision",
-    "saved": "Décision enregistrée"
+    "saved": "Décision enregistrée",
+    "history": "Historique",
+    "cleared": "Décision retirée",
+    "formerMember": "Un ancien membre"
   },
   "invite": {
     "title": "Inviter des candidats",
@@ -59,7 +74,9 @@
     "sent": "{{count}} invitation envoyée",
     "sent_other": "{{count}} invitations envoyées",
     "duplicates": "{{count}} avaient déjà une invitation en cours — leur lien a été renvoyé.",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "repeated": "{{count}} adresse apparaît plusieurs fois. Seule sa première ligne est gardée :",
+    "repeated_other": "{{count}} adresses apparaissent plusieurs fois. Seule leur première ligne est gardée :"
   },
   "actions": {
     "copyLink": "Copier le lien",
@@ -69,7 +86,8 @@
     "cancel": "Annuler cette invitation",
     "cancelled": "Invitation annulée",
     "open": "Ouvrir le rapport",
-    "delete": "Supprimer les données de ce candidat"
+    "delete": "Supprimer les données de ce candidat",
+    "copyFailed": "Le lien n'a pas pu être copié. Réessayez."
   },
   "cancelConfirm": {
     "title": "Annuler cette invitation ?",
@@ -92,9 +110,24 @@
     "no_candidates": "Ajoutez au moins un candidat.",
     "too_many_candidates": "Invitez au maximum 100 personnes à la fois.",
     "project_not_active": "Publiez le poste avant d'inviter des candidats.",
-    "session_closed": "Cet entretien est déjà terminé ou annulé.",
+    "session_closed": "Cet entretien est déjà terminé, annulé ou expiré.",
+    "address_undeliverable": "Cette adresse a rejeté l'e-mail ou l'a signalé comme spam. Invitez de nouveau le candidat avec une adresse corrigée.",
     "site_url_not_configured": "L'adresse du site n'est pas configurée : les liens d'invitation ne peuvent pas être construits.",
     "note_too_long": "Cette note est trop longue.",
-    "rate_limited": "Beaucoup d'invitations d'un coup. Patientez un instant et réessayez."
+    "rate_limited": "Beaucoup d'invitations d'un coup. Patientez un instant et réessayez.",
+    "insufficient_role": "Seuls les admins, les propriétaires et le créateur du poste peuvent copier le lien d'un candidat."
+  },
+  "recommendation": {
+    "none": "Pas encore analysé",
+    "strong_no": "Non franc",
+    "no": "Non",
+    "maybe": "À creuser",
+    "yes": "Oui",
+    "strong_yes": "Oui franc"
+  },
+  "delivery": {
+    "bounced": "Invitation rejetée",
+    "complained": "Signalée comme spam",
+    "failed": "Invitation non envoyée"
   }
 }

@@ -1962,8 +1962,12 @@ check, the page took one of two branches, and only these two render no
 - **The browser encodes no format the product records.** No video format
   (`detectRecorderSupport().video === null`) opens the devices audio only;
   no audio format shows "This browser can't record video interviews".
-  `expectRecordableFormats` now asserts this first and prints what the
-  browser encodes, so this case names itself in the CI log.
+  `recordsVideo` reads the formats first and attaches them to the report as
+  the `recording formats` annotation. An audio format is required
+  everywhere. A missing video format is accepted from WebKit alone, and the
+  test then verifies the audio-only path instead: the "Audio only" notice, no
+  `<video>`, and two answers uploaded. Chromium without a video format fails,
+  with the list in the message.
 - **The camera failed as busy or missing while the microphone worked.**
   `openInterviewStream` falls back to audio only, and the page shows "Audio
   only — your camera isn't available".

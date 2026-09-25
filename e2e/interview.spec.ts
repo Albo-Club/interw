@@ -16,34 +16,48 @@ function convexRun<T>(fn: string, args: Record<string, unknown>): T {
 }
 
 /**
- * The premise of this test: the browser can encode the formats the product
- * records. Without a video format the device check rightly opens audio only,
- * and without an audio format it says the browser is unsupported — either
- * way the preview assertion would only report that no <video> exists. See
- * KNOWN_ISSUES.md § "The WebKit e2e leg: what removes the preview".
+ * Whether this browser records video, which decides the path under test: the
+ * product opens the devices audio only when the browser encodes no video
+ * format. Chromium must record video. WebKit may not: Playwright's Linux
+ * build is not Safari, and its encoders are its own. An audio format is
+ * required everywhere, since without one the page only says the browser is
+ * unsupported. See KNOWN_ISSUES.md § "The WebKit e2e leg: what removes the
+ * preview".
  */
-async function expectRecordableFormats(page: Page) {
+async function recordsVideo(page: Page, browserName: string) {
   const formats = await page.evaluate(
     (types) => types.filter((type) => MediaRecorder.isTypeSupported(type)),
     [...VIDEO_MIME_PREFERENCES, ...AUDIO_MIME_PREFERENCES],
   )
-  const message = `MediaRecorder formats this browser encodes: ${JSON.stringify(formats)}`
-  expect(formats.some((type) => type.startsWith('video/')), message).toBe(true)
-  expect(formats.some((type) => type.startsWith('audio/')), message).toBe(true)
+  const description = `MediaRecorder formats this browser encodes: ${JSON.stringify(formats)}`
+  test.info().annotations.push({ type: 'recording formats', description })
+  const video = formats.some((type) => type.startsWith('video/'))
+  expect(formats.some((type) => type.startsWith('audio/')), description).toBe(true)
+  expect(video || browserName === 'webkit', description).toBe(true)
+  return video
 }
 
-/** A black preview is the bug this guards against: frames must be arriving. */
-async function expectLivePreview(page: Page) {
+/**
+ * What the candidate sees of their own capture. With video, a black preview
+ * is the bug this guards against: frames must be arriving. Audio only, the
+ * page must say so rather than show an empty frame.
+ */
+async function expectCapture(page: Page, video: boolean) {
   const preview = page.locator('video')
+  if (!video) {
+    await expect(page.getByText(/^Audio only/)).toBeVisible()
+    await expect(preview).toHaveCount(0)
+    return
+  }
   await expect(preview).toBeVisible()
   await expect
-    .poll(() => preview.evaluate((video: HTMLVideoElement) => video.videoWidth))
+    .poll(() => preview.evaluate((element: HTMLVideoElement) => element.videoWidth))
     .toBeGreaterThan(0)
 }
 
-async function recordAnswer(page: Page) {
+async function recordAnswer(page: Page, video: boolean) {
   await page.getByRole('button', { name: 'Start my answer' }).click()
-  await expectLivePreview(page)
+  await expectCapture(page, video)
   await page.waitForTimeout(1_500)
   await test.info().attach('recording screen', {
     body: await page.screenshot(),
@@ -54,6 +68,7 @@ async function recordAnswer(page: Page) {
 
 test('a candidate records two answers, gets through a failed upload, and finishes', async ({
   page,
+  browserName,
 }) => {
   const { token } = convexRun<{ token: string }>(
     'interview:seedE2eSession',
@@ -61,7 +76,7 @@ test('a candidate records two answers, gets through a failed upload, and finishe
   )
   try {
     await page.goto(`/s/${token}`)
-    await expectRecordableFormats(page)
+    const video = await recordsVideo(page, browserName)
     await page
       .getByRole('checkbox', { name: 'I understand and agree to be recorded' })
       .check()
@@ -72,13 +87,13 @@ test('a candidate records two answers, gets through a failed upload, and finishe
         name: "Let's check your camera and microphone",
       }),
     ).toBeVisible()
-    await expectLivePreview(page)
+    await expectCapture(page, video)
     await page
       .getByRole('button', { name: /start the interview|Start anyway/ })
       .click()
 
     await expect(page.getByText('Question 1 of 2')).toBeVisible()
-    await recordAnswer(page)
+    await recordAnswer(page, video)
 
     // The bucket drops out during the second upload: the failure is on
     // screen, and "Try again" sends the answer the page still holds.
@@ -88,7 +103,7 @@ test('a candidate records two answers, gets through a failed upload, and finishe
       (url) => url.origin === bucket,
       (route) => route.abort(),
     )
-    await recordAnswer(page)
+    await recordAnswer(page, video)
     await expect(page.getByText("Your last answer didn't save")).toBeVisible()
     await page.unrouteAll()
     await page.getByRole('button', { name: 'Try again' }).click()

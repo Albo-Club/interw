@@ -193,6 +193,17 @@ export const fitMatrixValidator = v.object({
   ),
 })
 
+/** The moments of the recording worth watching first. */
+export const highlightsValidator = v.array(
+  v.object({
+    segmentId: v.id('segments'),
+    startSeconds: v.number(),
+    endSeconds: v.number(),
+    kind: highlightKindValidator,
+    label: v.string(),
+  }),
+)
+
 /** One scored criterion, with the quotes behind the score. */
 export const criteriaScoresValidator = v.array(
   v.object({
@@ -534,17 +545,7 @@ export default defineSchema({
         totalSpeakingSeconds: v.number(),
       }),
     ),
-    highlights: v.optional(
-      v.array(
-        v.object({
-          segmentId: v.id('segments'),
-          startSeconds: v.number(),
-          endSeconds: v.number(),
-          kind: highlightKindValidator,
-          label: v.string(),
-        }),
-      ),
-    ),
+    highlights: v.optional(highlightsValidator),
     model: v.string(),
     generatedAt: v.number(),
   })

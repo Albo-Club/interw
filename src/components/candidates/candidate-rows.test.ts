@@ -5,7 +5,7 @@ import {
   getSortedRowModel,
 } from '@tanstack/react-table'
 
-import { SORT_SPECS, deliveryIssues, matchesFilters } from './candidate-rows'
+import { SORT_SPECS, matchesFilters } from './candidate-rows'
 import type { CandidateRow } from './candidate-rows'
 import type { SortingState } from '@tanstack/react-table'
 import type { Id } from '../../../convex/_generated/dataModel'
@@ -28,6 +28,7 @@ function row(n: number, patch: Partial<CandidateRow> = {}): CandidateRow {
     recommendation: null,
     recruiterDecision: null,
     lastQuestionIndex: 0,
+    deliveryIssue: null,
     ...patch,
   }
 }
@@ -109,48 +110,5 @@ describe('filtering the candidate table', () => {
     expect(keep('pending', 'all')).toEqual([sid(1)])
     expect(keep('all', 'shortlisted')).toEqual([sid(2)])
     expect(keep('completed', 'none')).toEqual([sid(3)])
-  })
-})
-
-/** Audit C6.3: delivery failures were recorded and never shown. */
-describe('delivery issues', () => {
-  const event = (
-    n: number,
-    session: number,
-    status: 'sent' | 'delivered' | 'bounced' | 'complained' | 'failed',
-    template = 'candidate-invitation',
-  ) => ({
-    _id: `log_${n}` as Id<'emailLog'>,
-    template,
-    recipient: `c${session}@example.test`,
-    status,
-    error: null,
-    sessionId: sid(session),
-    createdAt: n,
-  })
-
-  it('flags an invitation whose latest send bounced or was marked as spam', () => {
-    const issues = deliveryIssues([
-      event(3, 1, 'bounced'),
-      event(2, 2, 'complained'),
-      event(1, 3, 'delivered'),
-    ])
-    expect(Object.fromEntries(issues)).toEqual({
-      [sid(1)]: 'bounced',
-      [sid(2)]: 'complained',
-    })
-  })
-
-  it('clears a bounce once a later send was delivered', () => {
-    const issues = deliveryIssues([
-      event(2, 1, 'delivered'),
-      event(1, 1, 'bounced'),
-    ])
-    expect(issues.size).toBe(0)
-  })
-
-  it('ignores mail that is not the invitation', () => {
-    const issues = deliveryIssues([event(1, 1, 'bounced', 'report-ready')])
-    expect(issues.size).toBe(0)
   })
 })

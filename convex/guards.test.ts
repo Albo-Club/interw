@@ -478,6 +478,25 @@ describe('removing a member revokes what was granted through them', () => {
     expect(recipients).toContain('acmeMember@example.test')
   })
 
+  /** PR #43: a creator who left alone on their role left it mailing nobody. */
+  it('hands the reports of a role left with nobody to the admins', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) => {
+      await ctx.db.patch('projects', w.backendProjectId, { createdBy: userId })
+      for (const row of await ctx.db
+        .query('projectShares')
+        .withIndex('by_project', (q) => q.eq('projectId', w.backendProjectId))
+        .collect()) {
+        await ctx.db.delete('projectShares', row._id)
+      }
+    })
+    const recipients = await completeInterviewOn(t, w, w.backendProjectId)
+    expect(recipients.sort()).toEqual([
+      'acmeAdmin@example.test',
+      'acmeOwner@example.test',
+    ])
+  })
+
   it('does not put them back on the team on re-invitation', async () => {
     const userId = await removeShared()
     await t.run(async (ctx) =>

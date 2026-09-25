@@ -292,6 +292,31 @@ describe("sessions past their role deadline (B6)", () => {
       }),
     ).rejects.toThrow(/session_closed/);
   });
+
+  /** PR #50: past the deadline, a new link was mailed already closed. */
+  it("sends no invitation nor reminder once the deadline has passed", async () => {
+    const deadline = Date.now() + HOUR_MS;
+    const sessionId = await t.run(async (ctx) => {
+      await ctx.db.patch("projects", f.projectId, { expiresAt: deadline });
+      return ctx.db.insert("sessions", sessionFields(f));
+    });
+    const invite = () =>
+      asOwner(t).mutation(api.sessions.invite, {
+        projectId: f.projectId,
+        candidates: [{ name: "Alex Martin", email: "alex@example.test" }],
+      });
+    // Inside the grace window: the session is still open, the role is not.
+    vi.setSystemTime(deadline + HOUR_MS);
+    await expect(invite()).rejects.toThrow(/project_expired/);
+    await expect(
+      asOwner(t).mutation(api.sessions.resendInvitation, { sessionId }),
+    ).rejects.toThrow(/project_expired/);
+
+    await t.run(async (ctx) =>
+      ctx.db.patch("projects", f.projectId, { expiresAt: undefined }),
+    );
+    await expect(invite()).resolves.toMatchObject({ created: 1 });
+  });
 });
 
 /* ── Pipe F9 / h07 ───────────────────────────────────────────────────────── */

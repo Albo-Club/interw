@@ -110,6 +110,7 @@
     "no_candidates": "Ajoutez au moins un candidat.",
     "too_many_candidates": "Invitez au maximum 100 personnes à la fois.",
     "project_not_active": "Publiez le poste avant d'inviter des candidats.",
+    "project_expired": "La date limite de ce poste est passée. Repoussez-la avant d'inviter ou de relancer des candidats.",
     "session_closed": "Cet entretien est déjà terminé, annulé ou expiré.",
     "address_undeliverable": "Cette adresse a rejeté l'e-mail ou l'a signalé comme spam. Invitez de nouveau le candidat avec une adresse corrigée.",
     "site_url_not_configured": "L'adresse du site n'est pas configurée : les liens d'invitation ne peuvent pas être construits.",

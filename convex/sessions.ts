@@ -27,7 +27,7 @@ import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
 import { candidateInvitationEmail } from './emailTemplates'
-import type { GenericMutationCtx } from 'convex/server'
+import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 const NAME_MAX = 120
@@ -53,7 +53,10 @@ const INVITED_RETENTION_MS = 183 * 24 * 60 * 60 * 1000
  * What a recruiter list shows. `accessToken` is absent by construction: the
  * link is built server-side, on request, for one session at a time.
  */
-function toRecruiterRow(session: Doc<'sessions'>) {
+function toRecruiterRow(
+  session: Doc<'sessions'>,
+  deliveryIssue: DeliveryIssue | null,
+) {
   return {
     _id: session._id,
     projectId: session.projectId,
@@ -71,7 +74,34 @@ function toRecruiterRow(session: Doc<'sessions'>) {
     recommendation: session.recommendation ?? null,
     recruiterDecision: session.recruiterDecision ?? null,
     lastQuestionIndex: session.lastQuestionIndex,
+    deliveryIssue,
   }
+}
+
+type DeliveryIssue = 'bounced' | 'complained' | 'failed'
+
+/**
+ * Whether the latest invitation sent to this candidate failed to reach them.
+ *
+ * Read per row, off the session's own `emailLog` rows — a handful each — and
+ * not off the organisation's last 200 emails: one bulk campaign used to push
+ * an older bounce out of that window, and the recruiter never saw it. Newest
+ * first, so a re-send that got through clears an earlier failure.
+ */
+async function inviteDeliveryIssue(
+  ctx: GenericQueryCtx<DataModel>,
+  sessionId: Id<'sessions'>,
+): Promise<DeliveryIssue | null> {
+  const sends = await ctx.db
+    .query('emailLog')
+    .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
+    .order('desc')
+    .collect()
+  const latest = sends.find((entry) => entry.template === 'candidate-invitation')
+  if (!latest || latest.status === 'sent' || latest.status === 'delivered') {
+    return null
+  }
+  return latest.status
 }
 
 export const listByProject = query({
@@ -86,9 +116,28 @@ export const listByProject = query({
       .withIndex('by_project', (q) => q.eq('projectId', projectId))
       .order('desc')
       .paginate(paginationOpts)
-    return { ...page, page: page.page.map(toRecruiterRow) }
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (session) =>
+          toRecruiterRow(session, await inviteDeliveryIssue(ctx, session._id)),
+        ),
+      ),
+    }
   },
 })
+
+/**
+ * A role past its deadline takes no new invitation and no reminder: the
+ * candidate would open a link that already reads "This interview has closed".
+ * The 24 h grace in `expireOverdueSessions` is for interviews already under
+ * way, not for sending new ones.
+ */
+function assertBeforeDeadline(project: Doc<'projects'>) {
+  if (project.expiresAt !== undefined && Date.now() > project.expiresAt) {
+    throw new ConvexError('project_expired')
+  }
+}
 
 function normalizeCandidate(input: { name: string; email: string }) {
   const name = input.name.trim()
@@ -120,6 +169,7 @@ export const invite = mutation({
   handler: async (ctx, { projectId, candidates }) => {
     const { project, user } = await requireProjectAccess(ctx, projectId)
     if (project.status !== 'active') throw new ConvexError('project_not_active')
+    assertBeforeDeadline(project)
     if (candidates.length === 0) throw new ConvexError('no_candidates')
     if (candidates.length > MAX_BULK_INVITES) {
       throw new ConvexError('too_many_candidates')
@@ -257,6 +307,7 @@ export const resendInvitation = mutation({
     if (session.status !== 'pending' && session.status !== 'in_progress') {
       throw new ConvexError('session_closed')
     }
+    assertBeforeDeadline(project)
     // Pipe F9: an address that hard-bounced (or reported us as spam) does not
     // get the same mail again. Every retry costs the sending domain
     // reputation, and the fix is a corrected address — a new invitation.

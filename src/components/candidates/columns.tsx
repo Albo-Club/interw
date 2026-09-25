@@ -8,11 +8,10 @@ import {
   SessionStatusBadge,
 } from './StatusBadge'
 import { SORT_SPECS } from './candidate-rows'
-import type { CandidateRow, DeliveryIssue } from './candidate-rows'
+import type { CandidateRow } from './candidate-rows'
 import type { ColumnDef } from '@tanstack/react-table'
 import type { TFunction } from 'i18next'
 
-import type { Id } from '../../../convex/_generated/dataModel'
 import { Button } from '~/components/ui/button'
 import {
   DropdownMenu,
@@ -26,7 +25,7 @@ export function buildCandidateColumns({
   orgSlug,
   locale,
   canManage,
-  deliveryIssues,
+  canInvite,
   onCopyLink,
   onResend,
   onCancel,
@@ -36,7 +35,8 @@ export function buildCandidateColumns({
   locale: string
   /** Owner, admin or the role's creator: what `invitationLink` requires. */
   canManage: boolean
-  deliveryIssues: Map<Id<'sessions'>, DeliveryIssue>
+  /** Active and before its deadline: what `resendInvitation` requires. */
+  canInvite: boolean
   onCopyLink: (row: CandidateRow) => void
   onResend: (row: CandidateRow) => void
   onCancel: (row: CandidateRow) => void
@@ -53,7 +53,7 @@ export function buildCandidateColumns({
         />
       ),
       cell: ({ row }) => {
-        const issue = deliveryIssues.get(row.original._id)
+        const issue = row.original.deliveryIssue
         return (
           <div className="min-w-0">
             <Link
@@ -182,7 +182,7 @@ export function buildCandidateColumns({
                     {t('candidates:actions.open')}
                   </Link>
                 </DropdownMenuItem>
-                {open && (
+                {open && canInvite && (
                   <DropdownMenuItem onSelect={() => onResend(row.original)}>
                     {t('candidates:actions.resend')}
                   </DropdownMenuItem>

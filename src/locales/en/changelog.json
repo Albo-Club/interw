@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "share-highlights-and-deadlines": {
+      "title": "Highlights on shared reports, no dead invitations",
+      "body": "A shared report now lists the moments worth watching, as the report in the app does. A bounced invitation is flagged on its candidate however much mail the organisation sent since. A role past its deadline no longer sends invitations or reminders that would open on a closed interview, and when a role's creator leaves with nobody else on its team, its admins are told when a report is ready."
+    },
     "calmer-interface": {
       "title": "A calmer, more consistent interface",
       "body": "Interw now uses its own typeface everywhere, respects your system's reduce-motion setting, and shows the shape of the page while it loads instead of a line of text. Candidate search (⌘K) opens as a list you can move through with the arrow keys, and is reachable from a phone. Dates follow the language of the app, the roles list marks the ones whose team you are on, and importing a job ad adds all of it or none of it."

@@ -27,7 +27,7 @@ import { v } from 'convex/values'
 import { internalAction, internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { deleteObjects } from './lib/objectStore'
-import { introSlotKeys, questionSlotKeys } from './media'
+import { introMediaKeys, questionMediaKeys } from './media'
 import { release } from './lib/storage'
 import { eraseSession } from './purge'
 import type { ActionCtx } from './_generated/server'
@@ -205,19 +205,9 @@ export const projectBatch = internalQuery({
           .query('questions')
           .withIndex('by_project', (q) => q.eq('projectId', project._id))
           .collect()
-        // Rows name what was attached; the slot keys cover what was
-        // uploaded and never attached (T17-5).
         const keys = [
-          ...new Set(
-            [
-              project.introMediaKey,
-              ...introSlotKeys(project),
-              ...questions.flatMap((question) => [
-                question.mediaKey,
-                ...questionSlotKeys(question),
-              ]),
-            ].filter((key): key is string => key !== undefined),
-          ),
+          ...introMediaKeys(project),
+          ...questions.flatMap(questionMediaKeys),
         ]
         return { projectId: project._id, keys }
       }),

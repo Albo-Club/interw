@@ -45,7 +45,7 @@ export const CHANGELOG_ENTRIES = [
 export const LATEST_CHANGELOG_ID = CHANGELOG_ENTRIES[0].id
 
 type EntryCopy = { title: string; body: string }
-export const ENTRY_COPY: Record<'en' | 'fr', Record<string, EntryCopy>> = {
+const ENTRY_COPY: Record<'en' | 'fr', Record<string, EntryCopy>> = {
   en,
   fr,
 }

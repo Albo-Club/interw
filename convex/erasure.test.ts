@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, components, internal } from './_generated/api'
 import { candidateDocumentKeys } from './lib/objectStore'
-import { introSlotKeys, questionSlotKeys } from './media'
+import { introMediaKeys, questionMediaKeys } from './media'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -492,13 +492,25 @@ describe('deleting a role', () => {
         return Promise.resolve()
       })
 
-    const { project, question } = await t.run(async (ctx) => ({
-      project: (await ctx.db.get('projects', s.projectId))!,
-      question: (await ctx.db
-        .query('questions')
-        .withIndex('by_project', (q) => q.eq('projectId', s.projectId))
-        .first())!,
-    }))
+    // A second question whose recording was uploaded and never attached:
+    // no row names it, only its slot does.
+    const { project, questions } = await t.run(async (ctx) => {
+      const row = (await ctx.db.get('projects', s.projectId))!
+      await ctx.db.insert('questions', {
+        orgId: row.orgId,
+        projectId: row._id,
+        orderIndex: 1,
+        content: 'Question 1',
+        maxResponseSeconds: 120,
+      })
+      return {
+        project: row,
+        questions: await ctx.db
+          .query('questions')
+          .withIndex('by_project', (q) => q.eq('projectId', s.projectId))
+          .collect(),
+      }
+    })
     await t
       .withIdentity({ subject: 'ba_recruiter' })
       .mutation(api.projects.remove, { projectId: s.projectId })
@@ -507,12 +519,11 @@ describe('deleting a role', () => {
     // What the rows name, and every key their upload slots could have issued.
     expect(deleted.flat().sort()).toEqual(
       [
-        'orgs/o/projects/p/intro.webm',
-        'orgs/o/projects/p/q0.webm',
-        ...introSlotKeys(project),
-        ...questionSlotKeys(question),
+        ...introMediaKeys(project),
+        ...questions.flatMap(questionMediaKeys),
       ].sort(),
     )
+    expect(deleted.flat()).toContain('orgs/o/projects/p/q0.webm')
     spy.mockRestore()
   })
 
@@ -545,8 +556,7 @@ describe('deleting a role', () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     spy.mockRestore()
 
-    expect(deleted.sort()).toEqual(
-      ['orgs/o/projects/p/q0.webm', ...questionSlotKeys(question)].sort(),
-    )
+    expect(deleted.sort()).toEqual(questionMediaKeys(question).sort())
+    expect(deleted).toContain('orgs/o/projects/p/q0.webm')
   })
 })

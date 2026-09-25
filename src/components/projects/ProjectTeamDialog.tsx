@@ -87,7 +87,7 @@ export function ProjectTeamDialog({
 
         <TeamPicker
           orgId={orgId}
-          creatorId={team?.createdBy}
+          creatorId={team?.creatorSeated ? team.createdBy : undefined}
           selected={selected}
           onChange={setSelected}
         />

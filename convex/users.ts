@@ -12,6 +12,7 @@ import { authComponent, createAuth } from './auth'
 import { countOwners } from './organizations'
 import {
   USER_NAME_MAX,
+  cleanUserName,
   provisionAppUser,
   requireAppUser,
   safeAppUser,
@@ -162,8 +163,7 @@ export const syncBetterAuthUser = internalMutation({
     const patch: { email?: string; name?: string } = {}
     if (email && email !== appUser.email) patch.email = email
     // Better Auth takes any name `updateUser` is handed; ours is a single line.
-    const cleanName =
-      name === undefined ? undefined : singleLine(name).slice(0, USER_NAME_MAX)
+    const cleanName = name === undefined ? undefined : cleanUserName(name)
     if (cleanName !== undefined && cleanName !== appUser.name) {
       patch.name = cleanName
     }

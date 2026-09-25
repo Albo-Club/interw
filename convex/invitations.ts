@@ -3,7 +3,12 @@ import { mutation, query } from './_generated/server'
 import { components } from './_generated/api'
 import { invitationRoleValidator } from './schema'
 import { authComponent } from './auth'
-import { provisionAppUser, requireAppUser, requireOrgRole } from './lib/auth'
+import {
+  hasRole,
+  provisionAppUser,
+  requireAppUser,
+  requireOrgRole,
+} from './lib/auth'
 import { emailsMatch, normalizeEmail } from './lib/invitations'
 import { memberName } from './lib/memberName'
 import { setLastOrgSlug } from './lib/userPrefs'
@@ -289,7 +294,7 @@ async function issuerStillAdmin(
       q.eq('orgId', inv.orgId).eq('userId', inv.invitedBy),
     )
     .unique()
-  return issuer?.role === 'admin' || issuer?.role === 'owner'
+  return issuer !== null && hasRole(issuer.role, 'admin')
 }
 
 /**

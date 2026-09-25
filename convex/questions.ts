@@ -2,7 +2,7 @@ import { ConvexError, v } from 'convex/values'
 
 import { mutation } from './_generated/server'
 import { internal } from './_generated/api'
-import { questionSlotKeys } from './media'
+import { questionMediaKeys } from './media'
 import { requireProjectEditable } from './lib/projectAccess'
 import type { GenericMutationCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -170,15 +170,9 @@ export const remove = mutation({
     await requireNoSessions(ctx, question.projectId)
     await ctx.db.delete('questions', questionId)
     // Its recording went with the row only in name: the object stayed in the
-    // bucket with nothing left to find it by. The row is gone, so every key
-    // its slot could have issued is deleted now.
+    // bucket with nothing left to find it by.
     await ctx.scheduler.runAfter(0, internal.media.deleteKeys, {
-      keys: [
-        ...new Set([
-          ...questionSlotKeys(question),
-          ...(question.mediaKey ? [question.mediaKey] : []),
-        ]),
-      ],
+      keys: questionMediaKeys(question),
     })
 
     // Close the gap so indexes stay 0..n-1: the candidate engine walks them by

@@ -9,6 +9,11 @@ import type { DataModel, Doc, Id } from '../_generated/dataModel'
 /** Same cap as the profile form; enforced on every way a name comes in. */
 export const USER_NAME_MAX = 80
 
+/** A user name as Better Auth hands it over: one line, capped. */
+export function cleanUserName(name: string): string {
+  return singleLine(name).slice(0, USER_NAME_MAX)
+}
+
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 type MutCtx = GenericMutationCtx<DataModel>
 
@@ -18,6 +23,11 @@ const roleRank: Record<AppRole, number> = {
   owner: 2,
   admin: 1,
   member: 0,
+}
+
+/** Whether `role` is at least `minRole` (owner > admin > member). */
+export function hasRole(role: AppRole, minRole: AppRole): boolean {
+  return roleRank[role] >= roleRank[minRole]
 }
 
 export async function safeAppUser(ctx: Ctx): Promise<Doc<'users'> | null> {
@@ -73,7 +83,7 @@ export async function provisionAppUser(ctx: MutCtx): Promise<Doc<'users'>> {
   const userId = await ctx.db.insert('users', {
     betterAuthId: baUser._id,
     email: baUser.email,
-    name: singleLine(baUser.name).slice(0, USER_NAME_MAX),
+    name: cleanUserName(baUser.name),
     avatarUrl: baUser.image ?? undefined,
     superAdmin: isFirst,
     createdAt: Date.now(),
@@ -144,7 +154,7 @@ export async function requireOrgRole(
   org: Doc<'organizations'>
 }> {
   const { user, member, org } = await requireOrgMember(ctx, orgId)
-  if (roleRank[member.role] < roleRank[minRole]) {
+  if (!hasRole(member.role, minRole)) {
     throw new ConvexError('insufficient_role')
   }
   return { user, member, org }

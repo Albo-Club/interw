@@ -627,7 +627,7 @@ verification is in `TESTING.md`.
   the database. Where a slot is signed before any row can name its key
   (candidate documents, recruiter recordings), erasure derives every key the
   slot could have issued from the row's ids instead (`candidateDocumentKeys`,
-  `introSlotKeys`, `questionSlotKeys`).
+  `introMediaKeys`, `questionMediaKeys`).
 - Candidate self-erasure and recruiter deletion run the same code path, so
   they cannot drift into deleting different things.
 - Organization deletion runs the same session core (`purge.ts`), never a

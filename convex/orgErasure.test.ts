@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, components, internal } from './_generated/api'
 import { candidateDocumentKeys } from './lib/objectStore'
-import { introSlotKeys, questionSlotKeys } from './media'
+import { introMediaKeys, questionMediaKeys } from './media'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -343,12 +343,10 @@ async function namedKeys(t: T): Promise<Set<string>> {
       keys.push(...candidateDocumentKeys(s.orgId, s._id))
     }
     for (const p of await ctx.db.query('projects').collect()) {
-      if (p.introMediaKey) keys.push(p.introMediaKey)
-      keys.push(...introSlotKeys(p))
+      keys.push(...introMediaKeys(p))
     }
     for (const q of await ctx.db.query('questions').collect()) {
-      if (q.mediaKey) keys.push(q.mediaKey)
-      keys.push(...questionSlotKeys(q))
+      keys.push(...questionMediaKeys(q))
     }
     return keys
   })

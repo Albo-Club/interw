@@ -44,36 +44,60 @@ const INTRO_RECORDING_TYPES = ['video/webm', 'video/mp4']
 /** ~2 minutes of 720p WebM leaves plenty of headroom. */
 const MAX_PROJECT_MEDIA_BYTES = 100 * 1024 * 1024
 
-/**
- * Every key an intro slot of this role can be issued under. Like candidate
- * documents, a slot is signed before any row names its key, so erasure
- * deletes all of them rather than only the one the row names (T17-5).
- */
-export function introSlotKeys(
+/** The key a role's intro slot is issued under, for one content type. */
+function introSlotKey(
   project: Pick<Doc<'projects'>, '_id' | 'orgId'>,
-): Array<string> {
-  return INTRO_RECORDING_TYPES.map((type) =>
-    projectMediaKey(
-      project.orgId,
-      project._id,
-      'intro',
-      extensionForMimeType(type),
-    ),
+  contentType: string,
+): string {
+  return projectMediaKey(
+    project.orgId,
+    project._id,
+    'intro',
+    extensionForMimeType(contentType),
   )
 }
 
 /** Same, for a question's recording. */
-export function questionSlotKeys(
+function questionSlotKey(
   question: Pick<Doc<'questions'>, '_id' | 'orgId' | 'projectId'>,
-): Array<string> {
-  return ALLOWED_RECORDING_TYPES.map((type) =>
-    projectMediaKey(
-      question.orgId,
-      question.projectId,
-      `q-${question._id}`,
-      extensionForMimeType(type),
-    ),
+  contentType: string,
+): string {
+  return projectMediaKey(
+    question.orgId,
+    question.projectId,
+    `q-${question._id}`,
+    extensionForMimeType(contentType),
   )
+}
+
+/**
+ * Every key a role's intro can be stored under, for erasure: the one its row
+ * names, and every key its slot could have issued. Like candidate documents,
+ * a slot is signed before any row names its key, so an upload never attached
+ * is named by nothing else (T17-5). The row's own key is kept for rows written
+ * before keys were checked against the slot.
+ */
+export function introMediaKeys(
+  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'introMediaKey'>,
+): Array<string> {
+  return withRowKey(
+    INTRO_RECORDING_TYPES.map((type) => introSlotKey(project, type)),
+    project.introMediaKey,
+  )
+}
+
+/** Same, for a question's recording. */
+export function questionMediaKeys(
+  question: Pick<Doc<'questions'>, '_id' | 'orgId' | 'projectId' | 'mediaKey'>,
+): Array<string> {
+  return withRowKey(
+    ALLOWED_RECORDING_TYPES.map((type) => questionSlotKey(question, type)),
+    question.mediaKey,
+  )
+}
+
+function withRowKey(slotKeys: Array<string>, rowKey?: string): Array<string> {
+  return rowKey && !slotKeys.includes(rowKey) ? [...slotKeys, rowKey] : slotKeys
 }
 
 function normalizeMimeType(
@@ -110,15 +134,7 @@ export const resolveIntroUpload = internalQuery({
     const { project } = await requireProjectEditable(ctx, projectId)
     const contentType = normalizeMimeType(mimeType, INTRO_RECORDING_TYPES)
     validateSize(contentLength)
-    return {
-      key: projectMediaKey(
-        project.orgId,
-        project._id,
-        'intro',
-        extensionForMimeType(contentType),
-      ),
-      contentType,
-    }
+    return { key: introSlotKey(project, contentType), contentType }
   },
 })
 
@@ -134,15 +150,7 @@ export const resolveQuestionUpload = internalQuery({
     await requireProjectEditable(ctx, question.projectId)
     const contentType = normalizeMimeType(mimeType)
     validateSize(contentLength)
-    return {
-      key: projectMediaKey(
-        question.orgId,
-        question.projectId,
-        `q-${question._id}`,
-        extensionForMimeType(contentType),
-      ),
-      contentType,
-    }
+    return { key: questionSlotKey(question, contentType), contentType }
   },
 })
 
@@ -216,20 +224,17 @@ export const requestQuestionUpload = action({
  */
 function issuedType(
   key: string,
-  slotKey: (extension: string) => string,
+  slotKey: (contentType: string) => string,
   types: ReadonlyArray<string>,
 ): string | null {
-  return (
-    types.find((type) => slotKey(extensionForMimeType(type)) === key) ?? null
-  )
+  return types.find((type) => slotKey(type) === key) ?? null
 }
 
 export const swapIntroKey = internalMutation({
   args: { projectId: v.id('projects'), key: v.string() },
   handler: async (ctx, { projectId, key }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    const slotKey = (extension: string) =>
-      projectMediaKey(project.orgId, projectId, 'intro', extension)
+    const slotKey = (type: string) => introSlotKey(project, type)
     if (!issuedType(key, slotKey, INTRO_RECORDING_TYPES)) {
       throw new ConvexError('key_mismatch')
     }
@@ -245,13 +250,8 @@ export const swapQuestionKey = internalMutation({
     const question = await ctx.db.get('questions', questionId)
     if (!question) throw new ConvexError('not_found')
     await requireProjectEditable(ctx, question.projectId)
-    const slotKey = (extension: string) =>
-      projectMediaKey(
-        question.orgId,
-        question.projectId,
-        `q-${questionId}`,
-        extension,
-      )
+    const slotKey = (contentType: string) =>
+      questionSlotKey(question, contentType)
     const type = issuedType(key, slotKey, ALLOWED_RECORDING_TYPES)
     if (!type) throw new ConvexError('key_mismatch')
     // Read off the key, like the key itself: it decides whether the prompt is

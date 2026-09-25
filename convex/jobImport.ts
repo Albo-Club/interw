@@ -10,13 +10,15 @@
 import { ConvexError, v } from 'convex/values'
 import { z } from 'zod'
 
-import { action, internalQuery } from './_generated/server'
+import { action, internalQuery, mutation } from './_generated/server'
 import { internal } from './_generated/api'
 import { complete } from './lib/ai'
 import { htmlToText, jobPostingText } from './lib/htmlText'
 import { jobImportPrompt } from './lib/prompts'
 import { requireProjectEditable } from './lib/projectAccess'
 import { consumeLimit } from './rateLimiters'
+import { appendQuestions } from './questions'
+import { appendCriteria } from './criteria'
 
 const DEFAULT_QUESTION_COUNT = 6
 const DEFAULT_CRITERIA_COUNT = 4
@@ -136,5 +138,32 @@ export const importFromUrl = action({
       temperature: 0.4,
     })
     return value
+  },
+})
+
+/**
+ * Write the draft the recruiter accepted, in one transaction. The dialog used
+ * to create each question and criterion in its own call, so a failure on the
+ * fifth left a role half-imported with nothing saying what had been written
+ * (audit 2026-09-15, recruiter F9). Every row passes the same rules as one
+ * added by hand, and either all of them land or none does.
+ */
+export const applyDraft = mutation({
+  args: {
+    projectId: v.id('projects'),
+    questions: v.array(v.object({ title: v.string(), content: v.string() })),
+    criteria: v.array(
+      v.object({
+        label: v.string(),
+        description: v.string(),
+        weight: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, { projectId, questions, criteria }) => {
+    const { project } = await requireProjectEditable(ctx, projectId)
+    await appendQuestions(ctx, project, questions)
+    await appendCriteria(ctx, project, criteria)
+    return null
   },
 })

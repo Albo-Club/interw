@@ -14,6 +14,7 @@ import {
   filterVisibleProjects,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
+  sharedProjectIds,
 } from './lib/projectAccess'
 import { publishBlockers } from './lib/publishReadiness'
 import { uniqueSlug } from './lib/slug'
@@ -102,7 +103,13 @@ export const list = query({
           .order('desc')
           .take(LIST_CAP)
     const visible = await filterVisibleProjects(ctx, rows, user._id, member.role)
-    return visible.map(toSummary)
+    // Owners and admins see every role but are emailed only about the ones
+    // whose team they are on; the list says which (audit recruiter F6).
+    const shared = await sharedProjectIds(ctx, user._id)
+    return visible.map((project) => ({
+      ...toSummary(project),
+      onTeam: project.createdBy === user._id || shared.has(project._id),
+    }))
   },
 })
 

@@ -5,6 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table'
 import type { TFunction } from 'i18next'
 
 import type { Id } from '../../../convex/_generated/dataModel'
+import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import {
   DropdownMenu,
@@ -26,6 +27,10 @@ export type ProjectRow = {
   expiresAt: number | null
   sessionCount: number
   completedSessionCount: number
+  /** Badge the row: the caller is on the role's team, so is emailed about
+   *  its reports. Only owners and admins see roles they are not on, so the
+   *  page sets it for them alone — for a member it would mark every row. */
+  onTeam: boolean
   /** Team, archive, restore: org owners and admins, and the role's creator. */
   canManage: boolean
 }
@@ -64,13 +69,20 @@ export function buildProjectColumns({
       ),
       cell: ({ row }) => (
         <div className="min-w-0">
-          <Link
-            to="/app/$orgSlug/projects/$projectSlug"
-            params={{ orgSlug, projectSlug: row.original.slug }}
-            className="hover:text-primary block truncate font-medium underline-offset-4 hover:underline"
-          >
-            {row.original.title}
-          </Link>
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              to="/app/$orgSlug/projects/$projectSlug"
+              params={{ orgSlug, projectSlug: row.original.slug }}
+              className="hover:text-primary truncate font-medium underline-offset-4 hover:underline"
+            >
+              {row.original.title}
+            </Link>
+            {row.original.onTeam && (
+              <Badge variant="secondary" className="shrink-0">
+                {t('projects:list.onTeam')}
+              </Badge>
+            )}
+          </div>
           {row.original.jobTitle && (
             <p className="text-muted-foreground truncate text-xs">
               {row.original.jobTitle}

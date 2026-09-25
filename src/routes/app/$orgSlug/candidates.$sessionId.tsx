@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import type { SeekCue } from '~/components/report/AnswerPlayer'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
@@ -55,6 +56,12 @@ import { cn } from '~/lib/utils'
 import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/candidates/$sessionId')({
+  // The one place the URL segment becomes a session id. A malformed value is
+  // refused by the functions' `v.id` validators and lands on `errorComponent`.
+  params: {
+    parse: (raw) => ({ sessionId: raw.sessionId as Id<'sessions'> }),
+    stringify: (parsed) => ({ sessionId: parsed.sessionId }),
+  },
   component: CandidateReportPage,
   errorComponent: AppRouteError,
   notFoundComponent: AppNotFound,
@@ -73,7 +80,7 @@ function CandidateReportPage() {
   const locale = getLocale()
 
   const data = useConvexQuery(api.reports.forSession, {
-    sessionId: sessionId as never,
+    sessionId,
   })
   const mediaUrls = useConvexAction(api.reports.sessionMediaUrls)
   const setDecision = useConvexMutation(api.reports.setDecision)
@@ -88,7 +95,7 @@ function CandidateReportPage() {
     retry: retryMedia,
     onPlaybackError,
   } = useSessionMedia(data ? sessionMediaKey(data) : null, () =>
-    mediaUrls({ sessionId: sessionId as never, language: locale }),
+    mediaUrls({ sessionId, language: locale }),
   )
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)
@@ -144,7 +151,7 @@ function CandidateReportPage() {
 
   const saveNote = async () => {
     try {
-      await setNote({ sessionId: sessionId as never, note })
+      await setNote({ sessionId, note })
       toast.success(t('report:note.saved'))
     } catch (error) {
       const { key, fallbackKey } = errorMessageKey(error, 'report')
@@ -155,7 +162,7 @@ function CandidateReportPage() {
   const relaunchAnalysis = async () => {
     setRelaunching(true)
     try {
-      await relaunch({ sessionId: sessionId as never })
+      await relaunch({ sessionId })
       toast.success(t('report:pending.relaunched'))
     } catch (error) {
       const { key, fallbackKey } = errorMessageKey(error, 'report')
@@ -581,7 +588,7 @@ function CandidateReportPage() {
                     }
                     onClick={() =>
                       void setDecision({
-                        sessionId: sessionId as never,
+                        sessionId,
                         decision:
                           session.recruiterDecision === decision
                             ? null
@@ -711,7 +718,7 @@ function CandidateReportPage() {
       </div>
 
       <ShareReportDialog
-        sessionId={sessionId as never}
+        sessionId={sessionId}
         open={sharing}
         onOpenChange={setSharing}
       />
@@ -732,7 +739,7 @@ function CandidateReportPage() {
             <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                void deleteCandidate({ sessionId: sessionId as never })
+                void deleteCandidate({ sessionId })
                   .then(() =>
                     navigate({
                       to: '/app/$orgSlug/projects/$projectSlug',

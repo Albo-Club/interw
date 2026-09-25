@@ -4,6 +4,7 @@
     "title": "Postes",
     "subtitle": "Les postes pour lesquels vous recrutez, et où en est chacun.",
     "new": "Nouveau poste",
+    "onTeam": "Dans l'équipe",
     "search": "Rechercher un poste",
     "empty": {
       "title": "Aucun poste pour l'instant",

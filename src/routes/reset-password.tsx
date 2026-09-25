@@ -203,7 +203,7 @@ function ResetPasswordPage() {
                         />
                         <div aria-live="polite">
                           {match && (
-                            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                            <p className="flex items-center gap-1.5 text-xs font-medium text-success-strong">
                               <Check className="size-3.5" aria-hidden="true" />
                               {t('auth:reset.match')}
                             </p>

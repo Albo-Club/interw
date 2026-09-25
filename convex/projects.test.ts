@@ -233,3 +233,117 @@ describe('projects.remove', () => {
     expect(await exists()).toBe(true)
   })
 })
+
+/**
+ * Audit 2026-09-15, recruiter F6. The list carried a `restricted` flag it
+ * never drew; under the role team (decision of 24/09) what an owner or admin
+ * needs to spot is which roles they are on — the ones that email them.
+ */
+describe('projects.list', () => {
+  let t: TestConvex
+  let s: Awaited<ReturnType<typeof seed>>
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seed(t)
+  })
+
+  it.each([
+    ['creator', true],
+    ['teammate', true],
+    ['admin', false],
+  ] as const)('tells the %s whether they are on the team', async (who, onTeam) => {
+    const rows = await as(t, who).query(api.projects.list, { orgId: s.orgId })
+    expect(rows.map((row) => row.onTeam)).toEqual([onTeam])
+  })
+})
+
+/**
+ * Audit 2026-09-15, recruiter F9. Accepting an imported draft ran one
+ * mutation per question and per criterion: a failure on the fifth left the
+ * role half-imported, with nothing saying what had been written.
+ */
+describe('jobImport.applyDraft', () => {
+  let t: TestConvex
+  let s: Awaited<ReturnType<typeof seed>>
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seed(t)
+  })
+
+  const draft = {
+    questions: [
+      { title: 'Scale', content: 'How did you scale the last service you owned?' },
+      { title: 'Ownership', content: 'Tell us about a decision you reversed.' },
+    ],
+    criteria: [
+      { label: 'Systems thinking', description: 'Trade-offs', weight: 30 },
+      { label: 'Ownership', description: '', weight: 20 },
+    ],
+  }
+
+  const counts = () =>
+    t.run(async (ctx) => ({
+      questions: (await ctx.db.query('questions').collect()).length,
+      criteria: (await ctx.db.query('criteria').collect()).length,
+    }))
+
+  it('appends the whole draft after what the role already has', async () => {
+    await as(t, 'creator').mutation(api.jobImport.applyDraft, {
+      projectId: s.projectId,
+      ...draft,
+    })
+    const rows = await t.run(async (ctx) =>
+      (await ctx.db.query('questions').collect()).map((q) => q.orderIndex),
+    )
+    expect(rows.sort()).toEqual([0, 1, 2])
+    expect(await counts()).toEqual({ questions: 3, criteria: 3 })
+  })
+
+  it('writes nothing when one row fails validation', async () => {
+    await expect(
+      as(t, 'creator').mutation(api.jobImport.applyDraft, {
+        projectId: s.projectId,
+        questions: draft.questions,
+        criteria: [...draft.criteria, { label: ' ', description: '', weight: 10 }],
+      }),
+    ).rejects.toThrow('invalid_label')
+    expect(await counts()).toEqual({ questions: 1, criteria: 1 })
+  })
+
+  it('refuses a draft that would overflow the question cap', async () => {
+    await expect(
+      as(t, 'creator').mutation(api.jobImport.applyDraft, {
+        projectId: s.projectId,
+        questions: Array.from({ length: 25 }, () => draft.questions[0]),
+        criteria: [],
+      }),
+    ).rejects.toThrow('too_many_questions')
+    expect(await counts()).toEqual({ questions: 1, criteria: 1 })
+  })
+
+  it('refuses someone off the role team', async () => {
+    await t.run(async (ctx) => {
+      const other = await ctx.db.insert('users', {
+        betterAuthId: 'ba_outsider',
+        email: 'outsider@acme.test',
+        superAdmin: false,
+        createdAt: 0,
+      })
+      await ctx.db.insert('organizationMembers', {
+        orgId: s.orgId,
+        userId: other,
+        role: 'member',
+        joinedAt: 0,
+      })
+    })
+    await expect(
+      t.withIdentity({ subject: 'ba_outsider' }).mutation(api.jobImport.applyDraft, {
+        projectId: s.projectId,
+        ...draft,
+      }),
+    ).rejects.toThrow()
+    expect(await counts()).toEqual({ questions: 1, criteria: 1 })
+  })
+})

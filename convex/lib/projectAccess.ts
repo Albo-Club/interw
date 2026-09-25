@@ -118,12 +118,21 @@ export async function filterVisibleProjects(
   role: AppRole,
 ): Promise<Array<Doc<'projects'>>> {
   if (seesEverything(role)) return projects
+  const shared = await sharedProjectIds(ctx, userId)
+  return projects.filter((p) => p.createdBy === userId || shared.has(p._id))
+}
+
+/** Roles this person was added to the team of. Their own roles, whose team
+ *  they are on as creator, are not in it: compare `createdBy` for those. */
+export async function sharedProjectIds(
+  ctx: Ctx,
+  userId: Id<'users'>,
+): Promise<Set<Id<'projects'>>> {
   const shares = await ctx.db
     .query('projectShares')
     .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect()
-  const shared = new Set(shares.map((s) => s.projectId))
-  return projects.filter((p) => p.createdBy === userId || shared.has(p._id))
+  return new Set(shares.map((s) => s.projectId))
 }
 
 /**

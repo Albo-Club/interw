@@ -201,7 +201,7 @@ function SlugAvailability({ slug }: { slug: string }) {
   if (result.available) {
     return (
       <p
-        className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400"
+        className="flex items-center gap-1.5 text-xs font-medium text-success-strong"
         aria-live="polite"
       >
         <Check className="size-3.5" aria-hidden="true" />

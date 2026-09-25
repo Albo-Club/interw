@@ -57,7 +57,6 @@ import {
   ToolInput,
   ToolOutput,
 } from '~/components/ai-elements/tool'
-import { getToolRenderer } from '~/components/ai/toolRenderers'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
@@ -131,90 +130,72 @@ function MessageParts({
           const approvalId = toolPart.approval?.id
           const responding =
             approvalId !== undefined && approvalId === respondingApprovalId
-          // Tool name: `tool-listItems` → `listItems`; `dynamic-tool` →
-          // `toolName`. A rich renderer (toolRenderers.tsx) shows below the
-          // collapsible block once the tool completed with an output;
-          // otherwise the JSON in the collapsible stands alone.
-          const toolName =
-            toolPart.type === 'dynamic-tool'
-              ? toolPart.toolName
-              : toolPart.type.slice('tool-'.length)
-          const Renderer = getToolRenderer(toolName)
-          // The renderer is defensive itself (null on unexpected shape); the
-          // `output-available` state guarantees `output` is present.
-          const rich =
-            Renderer && toolPart.state === 'output-available' ? (
-              <Renderer output={toolPart.output} />
-            ) : null
           return (
-            <div key={i} className="space-y-2">
-              <Tool className="mb-0">
-                {toolPart.type === 'dynamic-tool' ? (
-                  <ToolHeader
-                    type={toolPart.type}
-                    toolName={toolPart.toolName}
-                    state={toolPart.state}
-                    statusLabel={stateLabel(toolPart.state)}
-                    className="p-2"
-                  />
-                ) : (
-                  <ToolHeader
-                    type={toolPart.type}
-                    state={toolPart.state}
-                    statusLabel={stateLabel(toolPart.state)}
-                    className="p-2"
+            <Tool key={i} className="mb-0">
+              {toolPart.type === 'dynamic-tool' ? (
+                <ToolHeader
+                  type={toolPart.type}
+                  toolName={toolPart.toolName}
+                  state={toolPart.state}
+                  statusLabel={stateLabel(toolPart.state)}
+                  className="p-2"
+                />
+              ) : (
+                <ToolHeader
+                  type={toolPart.type}
+                  state={toolPart.state}
+                  statusLabel={stateLabel(toolPart.state)}
+                  className="p-2"
+                />
+              )}
+              <ToolContent className="space-y-3 p-3">
+                {toolPart.input !== undefined && (
+                  <ToolInput
+                    input={toolPart.input}
+                    label={t('chat:tool.parameters')}
                   />
                 )}
-                <ToolContent className="space-y-3 p-3">
-                  {toolPart.input !== undefined && (
-                    <ToolInput
-                      input={toolPart.input}
-                      label={t('chat:tool.parameters')}
-                    />
-                  )}
-                  <Confirmation
-                    approval={toolPart.approval}
-                    state={toolPart.state}
-                  >
-                    <ConfirmationRequest className="text-muted-foreground">
-                      {t('chat:approval.pending')}
-                    </ConfirmationRequest>
-                    <ConfirmationActions>
-                      <ConfirmationAction
-                        disabled={responding}
-                        onClick={() =>
-                          approvalId && onRespondApproval(approvalId, true)
-                        }
-                      >
-                        {t('chat:approval.approve')}
-                      </ConfirmationAction>
-                      <ConfirmationAction
-                        variant="outline"
-                        disabled={responding}
-                        onClick={() =>
-                          approvalId && onRespondApproval(approvalId, false)
-                        }
-                      >
-                        {t('chat:approval.deny')}
-                      </ConfirmationAction>
-                    </ConfirmationActions>
-                    <ConfirmationAccepted className="text-muted-foreground">
-                      {t('chat:approval.accepted')}
-                    </ConfirmationAccepted>
-                    <ConfirmationRejected className="text-muted-foreground">
-                      {t('chat:approval.denied')}
-                    </ConfirmationRejected>
-                  </Confirmation>
-                  <ToolOutput
-                    output={toolPart.output}
-                    errorText={toolPart.errorText}
-                    label={t('chat:tool.result')}
-                    errorLabel={t('chat:tool.error')}
-                  />
-                </ToolContent>
-              </Tool>
-              {rich}
-            </div>
+                <Confirmation
+                  approval={toolPart.approval}
+                  state={toolPart.state}
+                >
+                  <ConfirmationRequest className="text-muted-foreground">
+                    {t('chat:approval.pending')}
+                  </ConfirmationRequest>
+                  <ConfirmationActions>
+                    <ConfirmationAction
+                      disabled={responding}
+                      onClick={() =>
+                        approvalId && onRespondApproval(approvalId, true)
+                      }
+                    >
+                      {t('chat:approval.approve')}
+                    </ConfirmationAction>
+                    <ConfirmationAction
+                      variant="outline"
+                      disabled={responding}
+                      onClick={() =>
+                        approvalId && onRespondApproval(approvalId, false)
+                      }
+                    >
+                      {t('chat:approval.deny')}
+                    </ConfirmationAction>
+                  </ConfirmationActions>
+                  <ConfirmationAccepted className="text-muted-foreground">
+                    {t('chat:approval.accepted')}
+                  </ConfirmationAccepted>
+                  <ConfirmationRejected className="text-muted-foreground">
+                    {t('chat:approval.denied')}
+                  </ConfirmationRejected>
+                </Confirmation>
+                <ToolOutput
+                  output={toolPart.output}
+                  errorText={toolPart.errorText}
+                  label={t('chat:tool.result')}
+                  errorLabel={t('chat:tool.error')}
+                />
+              </ToolContent>
+            </Tool>
           )
         }
         return null
@@ -589,7 +570,10 @@ export function AiPanel({
                   {m.role === 'assistant' &&
                     m.status !== 'streaming' &&
                     m.text && (
-                      <MessageActions className="opacity-0 transition-opacity group-hover:opacity-100">
+                      // Hidden until the message is hovered, but revealed as
+                      // soon as keyboard focus lands on it, and always shown
+                      // on touch screens, which have no hover.
+                      <MessageActions className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
                         <MessageAction
                           label={t('chat:copy')}
                           tooltip={t('chat:copy')}

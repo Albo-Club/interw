@@ -20,7 +20,7 @@ export function StepReview({
   questions: Array<WizardQuestion>
   criteria: Array<WizardCriterion>
 }) {
-  const { t } = useTranslation(['projects', 'common'])
+  const { t, i18n } = useTranslation(['projects', 'common'])
 
   const missing = publishBlockers(questions, criteria).map((blocker) =>
     t(`projects:review.missing.${blocker.code}`, {
@@ -81,7 +81,7 @@ export function StepReview({
           label={t('projects:detail.stats.expiry')}
           value={
             project.expiresAt
-              ? new Date(project.expiresAt).toLocaleDateString()
+              ? new Date(project.expiresAt).toLocaleDateString(i18n.language)
               : t('projects:detail.stats.noExpiry')
           }
         />

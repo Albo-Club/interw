@@ -31,7 +31,7 @@ type BaSession = {
  * action. Marks the session backing the current browser tab as "Current".
  */
 export function ActiveSessions() {
-  const { t } = useTranslation(['account', 'common', 'errors'])
+  const { t, i18n } = useTranslation(['account', 'common', 'errors'])
   const te = (k: string) => t(`errors:${k}`)
   const { data: current } = authClient.useSession()
   const currentSessionId = current?.session.id
@@ -122,7 +122,7 @@ export function ActiveSessions() {
         {sorted.map((s) => {
         const isCurrent = s.id === currentSessionId
         const { label, Icon } = describeUserAgent(s.userAgent, t)
-        const when = formatRelative(new Date(s.createdAt), t)
+        const when = formatRelative(new Date(s.createdAt), t, i18n.language)
         return (
           <li
             key={s.id}
@@ -133,7 +133,7 @@ export function ActiveSessions() {
               <div className="flex items-center gap-2">
                 <p className="truncate text-sm font-medium">{label}</p>
                 {isCurrent && (
-                  <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-full px-2 py-0.5 text-xs font-medium">
+                  <span className="bg-success-subtle text-success-strong rounded-full px-2 py-0.5 text-xs font-medium">
                     {t('account:sessions.current')}
                   </span>
                 )}
@@ -226,6 +226,7 @@ function describeUserAgent(
 function formatRelative(
   date: Date,
   t: TFunction<['account', 'common', 'errors']>,
+  locale: string,
 ): string {
   const diff = Date.now() - date.getTime()
   const seconds = Math.floor(diff / 1000)
@@ -236,5 +237,5 @@ function formatRelative(
   if (hours < 24) return t('account:time.hourAgo', { count: hours })
   const days = Math.floor(hours / 24)
   if (days < 30) return t('account:time.dayAgo', { count: days })
-  return date.toLocaleDateString()
+  return date.toLocaleDateString(locale)
 }

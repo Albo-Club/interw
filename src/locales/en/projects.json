@@ -4,6 +4,7 @@
     "title": "Roles",
     "subtitle": "Every role you are interviewing for, and how far each one has got.",
     "new": "New role",
+    "onTeam": "On the team",
     "search": "Search roles",
     "empty": {
       "title": "No role yet",

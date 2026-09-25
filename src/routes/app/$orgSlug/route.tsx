@@ -7,6 +7,7 @@ import { api } from '../../../../convex/_generated/api'
 import { SidebarInset, SidebarProvider } from '~/components/ui/sidebar'
 import { AppSidebar } from '~/components/app-shell/AppSidebar'
 import { AppHeader } from '~/components/app-shell/AppHeader'
+import { AppShellSkeleton } from '~/components/app-shell/AppShellSkeleton'
 import { AiPanelHost, useAiPanelOpen } from '~/components/ai/AiPanelHost'
 import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
@@ -47,11 +48,7 @@ function OrgLayout() {
   }, [me, orgSlug, navigate, setLastOrg])
 
   if (!me || me.kind !== 'ready') {
-    return (
-      <main className="flex min-h-svh items-center justify-center">
-        <p className="text-muted-foreground text-sm">{t('loading')}</p>
-      </main>
-    )
+    return <AppShellSkeleton />
   }
   const member = me.orgs.find((o) => o.slug === orgSlug)
   if (!member) {

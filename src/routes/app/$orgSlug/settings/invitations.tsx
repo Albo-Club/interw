@@ -49,7 +49,7 @@ export const Route = createFileRoute('/app/$orgSlug/settings/invitations')({
 })
 
 function InvitationsSettings() {
-  const { t } = useTranslation(['settings', 'validation', 'common'])
+  const { t, i18n } = useTranslation(['settings', 'validation', 'common'])
   const inviteSchema = useMemo(
     () =>
       z.object({
@@ -220,7 +220,7 @@ function InvitationsSettings() {
                     <p className="text-muted-foreground text-xs">
                       {t('settings:invitations.expiresOn', {
                         role: t(`common:roles.${inv.role}`),
-                        date: new Date(inv.expiresAt).toLocaleDateString(),
+                        date: new Date(inv.expiresAt).toLocaleDateString(i18n.language),
                       })}
                     </p>
                   </div>

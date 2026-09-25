@@ -44,8 +44,6 @@ undone later.
 | B3 | Build         | `pnpm build`             | Bundle written to `.output/`. No type check here — B2 runs `tsc`, once |
 | B4 | Smoke E2E     | `pnpm test:smoke`        | All scenarios pass. Covers the headers the product depends on (`camera=(self)`, `microphone=(self)`, a `media-src` carrying `blob:`, an `img-src` with no bare `https:` that names the Convex storage origin) and the two token surfaces: `/s/<invalid>` and `/r/<invalid>` answer identically for an unknown and a malformed token, and both carry `noindex, nofollow` |
 | B5 | Prod cookies  | `pnpm test:cookies`      | `interw.session_token` has Secure+HttpOnly+SameSite=Lax+Max-Age≈604800 |
-| B6 | Skills intact | `pnpm sync:skills:verify` | `Vendored skills match skills-lock.json.` (exit 0) — offline, covers the `SKILL.md` files **and** their `references`, plus `.claude/skills/` symlinks with no lock entry (`~ <name>: .claude/skills link with no lock entry`, exit 2 — repair with `pnpm sync:skills`) |
-| B6b | Skills up-to-date | `pnpm sync:skills:check` | `Skills up to date with upstream.` (exit 0) — network. Two distinct failures, both exit 2: `~ N skills drifted` (upstream changed) and `✗ … N skills could not be checked` (404 or network — the skill is tracked by nothing) |
 | B7 | Unit + integration tests | `pnpm test` | All suites pass. Covers SigV4 against AWS's own vectors, weight normalisation, the session gate, the candidate projections, evidence anchoring, the report builder (every criterion and every answer covered), that transcripts and imported pages reach the model inside a per-call data fence, that a report carries no para-verbal figures, locale parity, cross-organisation isolation under `convex-test`, and that the chat agent still resolves to the pipeline's provider and model |
 | B8 | Convex codegen committed | `pnpm codegen:api:check` | `convex/_generated/api.d.ts is up to date.` Fails when a Convex module was added without committing its codegen — CI has no deployment, so `npx convex dev` cannot do it there |
 | B9 | Access audit | `pnpm audit:access:check` | Exit 0. Fails on any **public** Convex function with no access check. Run `pnpm audit:access` to print the full matrix; deliberate exceptions are declared with a `// access: <reason>` comment above the export and are listed in the output |
@@ -54,8 +52,8 @@ undone later.
 | B13 | Coverage report | `pnpm test:coverage` | Summary printed, HTML in `coverage/`. Informational — no threshold |
 | B10 | Candidate interview, real browsers | `DEPLOY_CONVEX=true pnpm build && pnpm test:e2e` | Chromium and WebKit, fake camera and microphone: consent, device check, two answers recorded, the bucket cut during the second upload and the failure shown, "Try again" saves it, a reload lands back on the saved review, finish; then `completed` with two `uploaded` segments read back from the database, and the test candidate erased. Needs `CONVEX_DEPLOY_KEY`, `VITE_CONVEX_SITE_URL` and `MEDIA_ORIGIN` for a deployment whose bucket CORS allows `http://localhost:3000`, and `E2E_FIXTURES=enabled` in that deployment's Convex env (the seed in `convex/e2e.ts` refuses without it — never set it on production) — the build deploys this branch's functions to it. The HTML report (`playwright-report/`) carries captures of the recording screen |
 
-B2–B3, B6, B6b, B7, B8, B9, B11 and B12 also run in CI on every PR (`.github/workflows/ci.yml`,
-B6 via the `skills-verify` job, B6b via `skills-drift`). B10 runs in the `e2e`
+B2–B3, B7, B8, B9, B11 and B12 also run in CI on every PR (`.github/workflows/ci.yml`), and so
+does the `skills-drift` job (upstream skills moved — see `CLAUDE.md` § Skills). B10 runs in the `e2e`
 job, on repository secrets — after each merge to `main` and on demand, not on
 PRs (why: comment above the job). CI covers B0
 implicitly: `pnpm/action-setup` is given no `version:`, so it installs the

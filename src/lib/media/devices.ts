@@ -13,6 +13,9 @@ export type BrowserSupport = {
   audioContext: boolean
   /** Instagram, LinkedIn, Facebook and friends: recording fails silently. */
   inAppBrowser: boolean
+  /** Plain HTTP (a bare IP, a proxy): the browser hides the camera API, and
+   *  switching browsers would not help. */
+  insecureContext: boolean
   /** The candidate can proceed. */
   usable: boolean
 }
@@ -53,6 +56,7 @@ export function detectBrowserSupport(
     MediaRecorder?: unknown
     AudioContext?: unknown
     webkitAudioContext?: unknown
+    isSecureContext?: boolean
   } = globalThis,
 ): BrowserSupport {
   const nav = globalScope.navigator
@@ -71,6 +75,7 @@ export function detectBrowserSupport(
     mediaRecorder,
     audioContext,
     inAppBrowser,
+    insecureContext: globalScope.isSecureContext === false,
     usable: getUserMedia && mediaRecorder,
   }
 }

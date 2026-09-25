@@ -1,12 +1,14 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { fireAndForget } from '~/lib/fire-and-forget'
 import { cn } from '~/lib/utils'
 
 export type PlayableSegment = {
   segmentId: string
   url: string
-  kind: string
+  /** Decides the element: an audio-only answer in a `<video>` is a black box. */
+  kind: 'audio' | 'video'
 }
 
 /**
@@ -29,15 +31,23 @@ export function AnswerPlayer({
   activeSegmentId,
   onSelect,
   questionLabels,
+  onError,
 }: {
   segments: Array<PlayableSegment>
   cue: SeekCue
   activeSegmentId: string | null
   onSelect: (segmentId: string) => void
   questionLabels: Record<string, string>
+  /** The source failed to load — typically an expired signed URL. */
+  onError: () => void
 }) {
   const { t } = useTranslation('report')
-  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const mediaRef = useRef<HTMLMediaElement | null>(null)
+  // One ref for either element; a callback because a `RefObject` is typed to
+  // one of them.
+  const attachMedia = (element: HTMLMediaElement | null) => {
+    mediaRef.current = element
+  }
   // `segments[0]` is only defined when the list is non-empty, and tsconfig has
   // no noUncheckedIndexedAccess — so say so explicitly rather than let the
   // optional chains below read as dead code.
@@ -45,10 +55,32 @@ export function AnswerPlayer({
     segments.find((segment) => segment.segmentId === activeSegmentId) ??
     (segments.length > 0 ? segments[0] : undefined)
 
+  // `src` is set here rather than as a prop so a re-signed URL for the same
+  // answer can pick up where the recruiter was: swapping the attribute resets
+  // the element to 0:00, paused. A different answer mounts a fresh element
+  // (`key` below), which has no position to keep.
   useEffect(() => {
-    if (!cue || !videoRef.current) return
+    const video = mediaRef.current
+    const url = current?.url
+    if (!video || !url || video.getAttribute('src') === url) return
+    const resumeAt = video.currentTime
+    const wasPlaying = !video.paused
+    video.src = url
+    if (resumeAt === 0) return
+    video.addEventListener(
+      'loadedmetadata',
+      () => {
+        video.currentTime = resumeAt
+        if (wasPlaying) fireAndForget(video.play(), 'resume playback')
+      },
+      { once: true },
+    )
+  }, [current?.url])
+
+  useEffect(() => {
+    if (!cue || !mediaRef.current) return
     if (cue.segmentId !== current?.segmentId) return
-    const video = videoRef.current
+    const video = mediaRef.current
     const seek = () => {
       video.currentTime = cue.seconds
       void video.play().catch(() => undefined)
@@ -63,14 +95,24 @@ export function AnswerPlayer({
 
   return (
     <div className="space-y-3">
-      <video
-        ref={videoRef}
-        key={current?.segmentId}
-        src={current?.url}
-        controls
-        playsInline
-        className="bg-muted aspect-video w-full rounded-lg"
-      />
+      {current?.kind === 'audio' ? (
+        <audio
+          ref={attachMedia}
+          key={current.segmentId}
+          onError={onError}
+          controls
+          className="w-full"
+        />
+      ) : (
+        <video
+          ref={attachMedia}
+          key={current?.segmentId}
+          onError={onError}
+          controls
+          playsInline
+          className="bg-muted aspect-video w-full rounded-lg"
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         {segments.map((segment, index) => (
           <button

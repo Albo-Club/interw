@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { landing } from './candidate'
+import { landing, privacySummary } from './candidate'
 import { questions } from './interview'
 import { view } from './shares'
 
@@ -14,7 +14,7 @@ import { view } from './shares'
  *
  * A `returns` validator makes Convex check the value on the way out, so the
  * leak fails at deploy time for whoever introduced it. Every other test in
- * this repo that calls one of these three functions now runs through that
+ * this repo that calls one of these functions now runs through that
  * check; this one holds the check itself in place, because deleting it would
  * otherwise make nothing fail.
  */
@@ -28,6 +28,7 @@ describe('the token-facing surfaces declare a return contract', () => {
 
   it.each([
     ['candidate.landing', landing],
+    ['candidate.privacySummary', privacySummary],
     ['interview.questions', questions],
     ['shares.view', view],
   ] as Array<[string, unknown]>)('%s', (_name, fn) => {

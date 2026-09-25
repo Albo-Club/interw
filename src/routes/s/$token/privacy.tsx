@@ -26,15 +26,16 @@ import {
   candidateTouchTargets,
 } from '~/components/candidate/CandidateShell'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/privacy')({
   component: CandidatePrivacy,
+  head: () => candidateHead('privacy'),
 })
 
 function CandidatePrivacy() {
   const { t } = useTranslation(['interview', 'common'])
   const { token } = Route.useParams()
-  const [now] = useState(() => Date.now())
   const [erasure, setErasure] = useState<'idle' | 'deleting' | 'deleted'>(
     'idle',
   )
@@ -44,7 +45,7 @@ function CandidatePrivacy() {
   // instead of the confirmation of their erasure.
   const summary = useConvexQuery(
     api.candidate.privacySummary,
-    erasure === 'idle' ? { token, now } : 'skip',
+    erasure === 'idle' ? { token } : 'skip',
   )
   const deleteMyData = useConvexAction(api.candidate.deleteMyData)
   const languageReady = useCandidateLanguage(summary?.language)

@@ -2,7 +2,7 @@ import { ConvexError, v } from 'convex/values'
 
 import { mutation } from './_generated/server'
 import { requireProjectEditable } from './lib/projectAccess'
-import type { DataModel, Id } from './_generated/dataModel'
+import type { DataModel, Doc, Id } from './_generated/dataModel'
 import type { GenericMutationCtx } from 'convex/server'
 
 const LABEL_MAX = 80
@@ -27,6 +27,52 @@ function validateWeight(weight: number): number {
   return weight
 }
 
+export type CriterionInput = {
+  label: string
+  description?: string
+  weight?: number
+}
+
+/**
+ * Validate every criterion, then append them after the role's existing ones.
+ * Shared by `create` and the job-ad import (see `appendQuestions`).
+ */
+export async function appendCriteria(
+  ctx: GenericMutationCtx<DataModel>,
+  project: Doc<'projects'>,
+  inputs: Array<CriterionInput>,
+): Promise<Array<Id<'criteria'>>> {
+  const existing = await ctx.db
+    .query('criteria')
+    .withIndex('by_project', (q) => q.eq('projectId', project._id))
+    .collect()
+  if (existing.length + inputs.length > MAX_CRITERIA) {
+    throw new ConvexError('too_many_criteria')
+  }
+
+  const ids: Array<Id<'criteria'>> = []
+  for (const input of inputs) {
+    const label = input.label.trim()
+    if (!label || label.length > LABEL_MAX) throw new ConvexError('invalid_label')
+    const description = input.description?.trim()
+    if (description && description.length > DESCRIPTION_MAX) {
+      throw new ConvexError('description_too_long')
+    }
+
+    ids.push(
+      await ctx.db.insert('criteria', {
+        orgId: project.orgId,
+        projectId: project._id,
+        label,
+        description: description || undefined,
+        weight: validateWeight(input.weight ?? DEFAULT_WEIGHT),
+        orderIndex: existing.length + ids.length,
+      }),
+    )
+  }
+  return ids
+}
+
 export const create = mutation({
   args: {
     projectId: v.id('projects'),
@@ -34,30 +80,10 @@ export const create = mutation({
     description: v.optional(v.string()),
     weight: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const { project } = await requireProjectEditable(ctx, args.projectId)
-
-    const existing = await ctx.db
-      .query('criteria')
-      .withIndex('by_project', (q) => q.eq('projectId', args.projectId))
-      .collect()
-    if (existing.length >= MAX_CRITERIA) throw new ConvexError('too_many_criteria')
-
-    const label = args.label.trim()
-    if (!label || label.length > LABEL_MAX) throw new ConvexError('invalid_label')
-    const description = args.description?.trim()
-    if (description && description.length > DESCRIPTION_MAX) {
-      throw new ConvexError('description_too_long')
-    }
-
-    return await ctx.db.insert('criteria', {
-      orgId: project.orgId,
-      projectId: args.projectId,
-      label,
-      description: description || undefined,
-      weight: validateWeight(args.weight ?? DEFAULT_WEIGHT),
-      orderIndex: existing.length,
-    })
+  handler: async (ctx, { projectId, ...input }) => {
+    const { project } = await requireProjectEditable(ctx, projectId)
+    const [id] = await appendCriteria(ctx, project, [input])
+    return id
   },
 })
 
@@ -96,22 +122,6 @@ export const remove = mutation({
   handler: async (ctx, { criterionId }) => {
     const criterion = await loadCriterionForEdit(ctx, criterionId)
     await ctx.db.delete('criteria', criterionId)
-
-    // Drop the criterion from any per-question weighting that referenced it,
-    // otherwise the report generator resolves a dangling id.
-    const questions = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', criterion.projectId))
-      .collect()
-    for (const question of questions) {
-      if (!question.criteriaWeights) continue
-      if (!(criterionId in question.criteriaWeights)) continue
-      const next = { ...question.criteriaWeights }
-      delete next[criterionId]
-      await ctx.db.patch('questions', question._id, {
-        criteriaWeights: Object.keys(next).length > 0 ? next : undefined,
-      })
-    }
 
     const rest = await ctx.db
       .query('criteria')

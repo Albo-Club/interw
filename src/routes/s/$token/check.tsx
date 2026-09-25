@@ -35,9 +35,11 @@ import { PracticeTake } from '~/components/candidate/PracticeTake'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 export const Route = createFileRoute('/s/$token/check')({
   component: DeviceCheck,
+  head: () => candidateHead('check'),
 })
 
 type Phase = 'starting' | 'live' | 'failed' | 'unsupported'
@@ -186,7 +188,11 @@ function DeviceCheck() {
 
         {phase === 'unsupported' || !recorderSupport.usable ? (
           <Alert variant="destructive">
-            <AlertTitle>{t('interview:device.unsupported')}</AlertTitle>
+            <AlertTitle>
+              {support.insecureContext
+                ? t('interview:device.insecureContext')
+                : t('interview:device.unsupported')}
+            </AlertTitle>
           </Alert>
         ) : (
           <>

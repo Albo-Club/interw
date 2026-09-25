@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from '@tanstack/react-router'
 import { useUIMessages } from '@convex-dev/agent/react'
 import { usePaginatedQuery } from 'convex/react'
 import { useConvexMutation } from '@convex-dev/react-query'
-import { ConvexError } from 'convex/values'
 import {
   Check,
   ChevronDown,
@@ -18,6 +17,7 @@ import {
 import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
+import { PROMPT_MAX } from '../../../convex/lib/chatLimits'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { UIMessage } from '@convex-dev/agent/react'
 import type { PromptInputMessage } from '~/components/ai-elements/prompt-input'
@@ -57,7 +57,6 @@ import {
   ToolInput,
   ToolOutput,
 } from '~/components/ai-elements/tool'
-import { getToolRenderer } from '~/components/ai/toolRenderers'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
@@ -74,15 +73,15 @@ import {
 } from '~/components/ui/dropdown-menu'
 import { Input } from '~/components/ui/input'
 import { Spinner } from '~/components/ui/spinner'
+import { convexErrorCode } from '~/lib/convex-errors'
 import { cn } from '~/lib/utils'
 
-function errorCode(err: unknown): string {
-  const data = err instanceof ConvexError ? err.data : null
-  if (typeof data === 'string') return data
-  if (data && typeof data === 'object' && 'code' in data) {
-    return (data as { code: string }).code
-  }
-  return ''
+/** The panel's own copy for the codes a send can fail with. */
+function sendErrorKey(err: unknown): string {
+  const code = convexErrorCode(err)
+  return code === 'rate_limited' || code === 'prompt_too_long'
+    ? `chat:errors.${code}`
+    : 'chat:errors.default'
 }
 
 /** Parts of an assistant message: text (markdown) + tool calls. */
@@ -131,90 +130,72 @@ function MessageParts({
           const approvalId = toolPart.approval?.id
           const responding =
             approvalId !== undefined && approvalId === respondingApprovalId
-          // Tool name: `tool-listItems` → `listItems`; `dynamic-tool` →
-          // `toolName`. A rich renderer (toolRenderers.tsx) shows below the
-          // collapsible block once the tool completed with an output;
-          // otherwise the JSON in the collapsible stands alone.
-          const toolName =
-            toolPart.type === 'dynamic-tool'
-              ? toolPart.toolName
-              : toolPart.type.slice('tool-'.length)
-          const Renderer = getToolRenderer(toolName)
-          // The renderer is defensive itself (null on unexpected shape); the
-          // `output-available` state guarantees `output` is present.
-          const rich =
-            Renderer && toolPart.state === 'output-available' ? (
-              <Renderer output={toolPart.output} />
-            ) : null
           return (
-            <div key={i} className="space-y-2">
-              <Tool className="mb-0">
-                {toolPart.type === 'dynamic-tool' ? (
-                  <ToolHeader
-                    type={toolPart.type}
-                    toolName={toolPart.toolName}
-                    state={toolPart.state}
-                    statusLabel={stateLabel(toolPart.state)}
-                    className="p-2"
-                  />
-                ) : (
-                  <ToolHeader
-                    type={toolPart.type}
-                    state={toolPart.state}
-                    statusLabel={stateLabel(toolPart.state)}
-                    className="p-2"
+            <Tool key={i} className="mb-0">
+              {toolPart.type === 'dynamic-tool' ? (
+                <ToolHeader
+                  type={toolPart.type}
+                  toolName={toolPart.toolName}
+                  state={toolPart.state}
+                  statusLabel={stateLabel(toolPart.state)}
+                  className="p-2"
+                />
+              ) : (
+                <ToolHeader
+                  type={toolPart.type}
+                  state={toolPart.state}
+                  statusLabel={stateLabel(toolPart.state)}
+                  className="p-2"
+                />
+              )}
+              <ToolContent className="space-y-3 p-3">
+                {toolPart.input !== undefined && (
+                  <ToolInput
+                    input={toolPart.input}
+                    label={t('chat:tool.parameters')}
                   />
                 )}
-                <ToolContent className="space-y-3 p-3">
-                  {toolPart.input !== undefined && (
-                    <ToolInput
-                      input={toolPart.input}
-                      label={t('chat:tool.parameters')}
-                    />
-                  )}
-                  <Confirmation
-                    approval={toolPart.approval}
-                    state={toolPart.state}
-                  >
-                    <ConfirmationRequest className="text-muted-foreground">
-                      {t('chat:approval.pending')}
-                    </ConfirmationRequest>
-                    <ConfirmationActions>
-                      <ConfirmationAction
-                        disabled={responding}
-                        onClick={() =>
-                          approvalId && onRespondApproval(approvalId, true)
-                        }
-                      >
-                        {t('chat:approval.approve')}
-                      </ConfirmationAction>
-                      <ConfirmationAction
-                        variant="outline"
-                        disabled={responding}
-                        onClick={() =>
-                          approvalId && onRespondApproval(approvalId, false)
-                        }
-                      >
-                        {t('chat:approval.deny')}
-                      </ConfirmationAction>
-                    </ConfirmationActions>
-                    <ConfirmationAccepted className="text-muted-foreground">
-                      {t('chat:approval.accepted')}
-                    </ConfirmationAccepted>
-                    <ConfirmationRejected className="text-muted-foreground">
-                      {t('chat:approval.denied')}
-                    </ConfirmationRejected>
-                  </Confirmation>
-                  <ToolOutput
-                    output={toolPart.output}
-                    errorText={toolPart.errorText}
-                    label={t('chat:tool.result')}
-                    errorLabel={t('chat:tool.error')}
-                  />
-                </ToolContent>
-              </Tool>
-              {rich}
-            </div>
+                <Confirmation
+                  approval={toolPart.approval}
+                  state={toolPart.state}
+                >
+                  <ConfirmationRequest className="text-muted-foreground">
+                    {t('chat:approval.pending')}
+                  </ConfirmationRequest>
+                  <ConfirmationActions>
+                    <ConfirmationAction
+                      disabled={responding}
+                      onClick={() =>
+                        approvalId && onRespondApproval(approvalId, true)
+                      }
+                    >
+                      {t('chat:approval.approve')}
+                    </ConfirmationAction>
+                    <ConfirmationAction
+                      variant="outline"
+                      disabled={responding}
+                      onClick={() =>
+                        approvalId && onRespondApproval(approvalId, false)
+                      }
+                    >
+                      {t('chat:approval.deny')}
+                    </ConfirmationAction>
+                  </ConfirmationActions>
+                  <ConfirmationAccepted className="text-muted-foreground">
+                    {t('chat:approval.accepted')}
+                  </ConfirmationAccepted>
+                  <ConfirmationRejected className="text-muted-foreground">
+                    {t('chat:approval.denied')}
+                  </ConfirmationRejected>
+                </Confirmation>
+                <ToolOutput
+                  output={toolPart.output}
+                  errorText={toolPart.errorText}
+                  label={t('chat:tool.result')}
+                  errorLabel={t('chat:tool.error')}
+                />
+              </ToolContent>
+            </Tool>
           )
         }
         return null
@@ -233,13 +214,13 @@ function suggestionKeys(_pathname: string): Array<string> {
 
 export function AiPanel({
   orgId,
-  open = true,
+  autoFocus,
   onClose,
 }: {
   orgId: Id<'organizations'>
-  /** Panel visibility (hidden via CSS by the layout): focus on open. */
-  open?: boolean
-  /** Closes the panel (desktop collapse / mobile overlay). */
+  /** Focus the composer on mount: the recruiter just opened the panel. */
+  autoFocus: boolean
+  /** Closes the panel (desktop column / mobile sheet). */
   onClose: () => void
 }) {
   const { t, i18n } = useTranslation(['chat', 'common'])
@@ -263,7 +244,7 @@ export function AiPanel({
     string | null
   >(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const prevOpenRef = useRef(open)
+  const counterId = useId()
 
   const createThread = useConvexMutation(api.chat.createNewThread)
   const sendMessage = useConvexMutation(api.chat.sendMessage)
@@ -301,12 +282,9 @@ export function AiPanel({
     { initialNumItems: 50, stream: true },
   )
 
-  // Focus the composer when the panel opens (not on initial mount: the
-  // panel is open by default, don't steal the page's focus).
   useEffect(() => {
-    if (open && !prevOpenRef.current) textareaRef.current?.focus()
-    prevOpenRef.current = open
-  }, [open])
+    if (autoFocus) textareaRef.current?.focus()
+  }, [autoFocus])
 
   // The "thinking" indicator drops as soon as the response starts
   // streaming (or when switching conversations).
@@ -326,8 +304,13 @@ export function AiPanel({
   const isEmpty =
     (!threadId || messages.results.length === 0) && !sending && !awaitingStream
 
+  const length = input.trim().length
+  const tooLong = length > PROMPT_MAX
+  const formatCount = (n: number) => n.toLocaleString(i18n.language)
+  const max = formatCount(PROMPT_MAX)
+
   async function submitPrompt(prompt: string) {
-    if (!prompt || sending || streaming) return
+    if (!prompt || prompt.length > PROMPT_MAX || sending || streaming) return
     setSending(true)
     setInput('')
     try {
@@ -345,11 +328,7 @@ export function AiPanel({
       })
       setAwaitingStream(true)
     } catch (err) {
-      toast.error(
-        errorCode(err) === 'rate_limited'
-          ? t('chat:errors.rate_limited')
-          : t('chat:errors.default'),
-      )
+      toast.error(t(sendErrorKey(err), { max }))
       setInput(prompt)
     } finally {
       setSending(false)
@@ -375,11 +354,7 @@ export function AiPanel({
       // revive the "thinking" indicator until the first token.
       setAwaitingStream(true)
     } catch (err) {
-      toast.error(
-        errorCode(err) === 'rate_limited'
-          ? t('chat:errors.rate_limited')
-          : t('chat:errors.default'),
-      )
+      toast.error(t(sendErrorKey(err), { max }))
     } finally {
       setRespondingApprovalId(null)
     }
@@ -595,7 +570,10 @@ export function AiPanel({
                   {m.role === 'assistant' &&
                     m.status !== 'streaming' &&
                     m.text && (
-                      <MessageActions className="opacity-0 transition-opacity group-hover:opacity-100">
+                      // Hidden until the message is hovered, but revealed as
+                      // soon as keyboard focus lands on it, and always shown
+                      // on touch screens, which have no hover.
+                      <MessageActions className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
                         <MessageAction
                           label={t('chat:copy')}
                           tooltip={t('chat:copy')}
@@ -637,9 +615,33 @@ export function AiPanel({
               onChange={(e) => setInput(e.currentTarget.value)}
               placeholder={t('chat:inputPlaceholder')}
               className="min-h-12"
+              aria-invalid={tooLong || undefined}
+              aria-describedby={counterId}
             />
           </PromptInputBody>
           <PromptInputFooter className="justify-end">
+            {/* The limit is shown before it bites, not after a refused send. */}
+            <p
+              id={counterId}
+              className={cn(
+                'text-muted-foreground mr-auto px-2 text-xs tabular-nums',
+                !input && 'sr-only',
+                tooLong && 'text-destructive font-medium',
+              )}
+            >
+              {tooLong && (
+                <span role="status">{t('chat:counter.overLimit')} </span>
+              )}
+              <span aria-hidden="true">
+                {formatCount(length)} / {max}
+              </span>
+              <span className="sr-only">
+                {t('chat:counter.limit', {
+                  length: formatCount(length),
+                  max,
+                })}
+              </span>
+            </p>
             <PromptInputSubmit
               status={
                 streaming
@@ -650,7 +652,9 @@ export function AiPanel({
               }
               onStop={() => void handleStop()}
               disabled={
-                streaming ? false : sending || awaitingStream || !input.trim()
+                streaming
+                  ? false
+                  : sending || awaitingStream || !length || tooLong
               }
               aria-label={streaming ? t('chat:stop') : t('chat:send')}
               title={streaming ? t('chat:stop') : t('chat:send')}

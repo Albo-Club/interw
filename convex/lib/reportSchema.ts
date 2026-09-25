@@ -24,7 +24,9 @@ export const reportOutputSchema = z.object({
   executiveSummary: z.string().min(40).max(2_000),
   overallScore: z.number().int().min(0).max(100),
   recommendation: z.enum(['strong_no', 'no', 'maybe', 'yes', 'strong_yes']),
-  strengths: z.array(z.string().min(3).max(240)).min(1).max(5),
+  // No minimum: an inaudible or off-topic interview has none, and the prompt
+  // asks the model to say so rather than invent one.
+  strengths: z.array(z.string().min(3).max(240)).max(5),
   concerns: z.array(z.string().min(3).max(240)).max(5),
   /** One entry per criterion, every criterion, in index order. */
   criteria: z

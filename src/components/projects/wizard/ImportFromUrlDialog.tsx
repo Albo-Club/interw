@@ -45,8 +45,7 @@ export function ImportFromUrlDialog({
 }) {
   const { t } = useTranslation(['projects', 'common'])
   const importFromUrl = useConvexAction(api.jobImport.importFromUrl)
-  const createQuestion = useConvexMutation(api.questions.create)
-  const createCriterion = useConvexMutation(api.criteria.create)
+  const applyDraft = useConvexMutation(api.jobImport.applyDraft)
 
   const [url, setUrl] = useState('')
   const [working, setWorking] = useState(false)
@@ -72,21 +71,11 @@ export function ImportFromUrlDialog({
     if (!draft) return
     setWorking(true)
     try {
-      for (const question of draft.questions) {
-        await createQuestion({
-          projectId,
-          title: question.title,
-          content: question.content,
-        })
-      }
-      for (const criterion of draft.criteria) {
-        await createCriterion({
-          projectId,
-          label: criterion.label,
-          description: criterion.description,
-          weight: criterion.weight,
-        })
-      }
+      await applyDraft({
+        projectId,
+        questions: draft.questions,
+        criteria: draft.criteria,
+      })
       setDraft(null)
       setUrl('')
       onOpenChange(false)

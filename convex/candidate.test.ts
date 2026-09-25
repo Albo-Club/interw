@@ -202,6 +202,26 @@ describe('candidate.landing', () => {
     expect(view.gate.canRecord).toBe(false)
   })
 
+  /**
+   * h01/h02. `now` is the caller's clock. Passed to the gate raw, `now: 0`
+   * showed `ready` on a role that had expired, while every write re-gated on
+   * the server's clock — the page and the writes disagreed.
+   */
+  it('stays expired however far into the past the caller claims to be', async () => {
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.acmeSessionId))!
+      // Expired against the real server clock, not against the fixture's.
+      await ctx.db.patch('projects', session.projectId, { expiresAt: 1_000 })
+    })
+    for (const now of [0, -1, Number.MIN_SAFE_INTEGER]) {
+      const view = await t.query(api.candidate.landing, {
+        token: s.acmeToken,
+        now,
+      })
+      expect(view.gate.state).toBe('expired')
+    }
+  })
+
   it('closes the link once the role is archived', async () => {
     await t.run(async (ctx) => {
       const session = (await ctx.db.get('sessions', s.acmeSessionId))!

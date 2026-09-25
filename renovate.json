@@ -17,17 +17,19 @@
       "prBodyNotes": ["Run `npx convex ai-files update` and commit `convex/_generated/ai/` in this PR: nothing else refreshes the Convex guidelines."]
     },
     {
-      "description": "Auto-merge dev dependencies on green CI.",
+      "description": "Auto-merge dev dependencies on green CI, once a release has been public for three days: a compromised or broken publish is usually yanked within that window, and nobody reads an automerged PR.",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"],
-      "automerge": true
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Pinned overrides — bump deliberately, not automatically.",
+      "description": "The pinned TanStack router family — the three overrides, plus react-router-with-query, which binds to them — bump deliberately and together, not automatically.",
       "matchPackageNames": [
         "@tanstack/react-router",
         "@tanstack/react-start",
-        "@tanstack/router-core"
+        "@tanstack/router-core",
+        "@tanstack/react-router-with-query"
       ],
       "enabled": false
     },
@@ -47,6 +49,21 @@
       "matchPackageNames": ["pnpm"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      "description": "nitro is a dated 3.0 beta pinned exactly. It produces the Vercel build output (KNOWN_ISSUES.md § Nitro picks its preset from the build host), and a newer beta can change it: bump by hand, with a preview deploy.",
+      "matchPackageNames": ["nitro"],
+      "enabled": false
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "The Convex MCP server in .mcp.json is pinned to the same convex version as package.json, so it moves with it.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.mcp\\.json$/"],
+      "matchStrings": ["\"convex@(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "convex",
+      "datasourceTemplate": "npm"
     }
   ]
 }

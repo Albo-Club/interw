@@ -2,6 +2,7 @@ import { ConvexError } from 'convex/values'
 import { describe, expect, it } from 'vitest'
 
 import { buildReport } from './reportBuilder'
+import { reportOutputSchema } from './reportSchema'
 import type { AnswerInput, CriterionInput } from './reportBuilder'
 import type { ReportOutput } from './reportSchema'
 import type { DataModel, Id } from '../_generated/dataModel'
@@ -193,6 +194,14 @@ describe('buildReport', () => {
     ).toThrow(ConvexError)
   })
 
+  // The prompt asks for one entry per answer, even an empty one. An answer
+  // left out would vanish from the report with nothing saying so.
+  it('refuses a report that skipped an answer', () => {
+    expect(() =>
+      build(output({ answers: [output().answers[0]] })),
+    ).toThrow(/report_missing_answers/)
+  })
+
   it('refuses a criterion scored twice', () => {
     const twice = output()
     expect(() =>
@@ -253,5 +262,15 @@ describe('buildReport', () => {
     expect(report.recommendation).toBe('yes')
     expect(report.strengths).toEqual(['Led a real migration end to end'])
     expect(report.concerns).toEqual(['Little evidence of managing others'])
+  })
+})
+
+describe('reportOutputSchema', () => {
+  // An inaudible or off-topic interview has no strength to report. Requiring
+  // one forced the model to invent it or fail validation on every retry.
+  it('accepts a report with no strengths', () => {
+    expect(reportOutputSchema.safeParse(output({ strengths: [] })).success).toBe(
+      true,
+    )
   })
 })

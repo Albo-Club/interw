@@ -5,7 +5,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "convex@latest",
+        "convex@1.46.0",
         "mcp",
         "start",
         "--project-dir",

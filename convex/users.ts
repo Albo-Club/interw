@@ -45,7 +45,8 @@ export const me = query({
       await Promise.all(
         memberships.map(async (m) => {
           const org = await ctx.db.get("organizations", m.orgId)
-          if (!org) return null
+          // Frozen for deletion: gone from every member's app at once.
+          if (!org || org.deletingAt !== undefined) return null
           return {
             _id: org._id,
             slug: org.slug,
@@ -179,7 +180,10 @@ async function soleOwnedOrgs(
   for (const m of memberships) {
     if (m.role !== 'owner' || (await countOwners(ctx, m.orgId)) > 1) continue
     const org = await ctx.db.get('organizations', m.orgId)
-    if (org) orgs.push({ _id: org._id, name: org.name, slug: org.slug })
+    // One being deleted needs no owner: it will not outlive its erasure.
+    if (org && org.deletingAt === undefined) {
+      orgs.push({ _id: org._id, name: org.name, slug: org.slug })
+    }
   }
   return orgs
 }

@@ -527,6 +527,17 @@ function ProfilePage() {
                       >
                         {org.name}
                       </Link>
+                      {' · '}
+                      <Link
+                        to="/app/$orgSlug/settings/general"
+                        params={{ orgSlug: org.slug }}
+                        aria-label={t('account:danger.deleteOrgLabel', {
+                          name: org.name,
+                        })}
+                        className="text-destructive underline underline-offset-4"
+                      >
+                        {t('account:danger.deleteOrg')}
+                      </Link>
                     </li>
                   ))}
                 </ul>

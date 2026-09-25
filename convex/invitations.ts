@@ -105,7 +105,9 @@ export const preview = query({
     if (inv.expiresAt < Date.now()) return { kind: 'expired' as const }
 
     const org = await ctx.db.get("organizations", inv.orgId)
-    if (!org) return { kind: 'not_found' as const }
+    if (!org || org.deletingAt !== undefined) {
+      return { kind: 'not_found' as const }
+    }
 
     const adapter = (
       components as unknown as {
@@ -146,7 +148,9 @@ export const accept = mutation({
     if (!inv) throw new ConvexError('not_found')
 
     const org = await ctx.db.get("organizations", inv.orgId)
-    if (!org) throw new ConvexError('not_found')
+    if (!org || org.deletingAt !== undefined) {
+      throw new ConvexError('not_found')
+    }
 
     const alreadyMember = await ctx.db
       .query('organizationMembers')

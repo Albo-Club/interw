@@ -281,6 +281,10 @@ export default defineSchema({
     logoStorageId: v.optional(v.id('_storage')),
     createdBy: v.id('users'),
     createdAt: v.number(),
+    /** Set when an owner asks for the organisation to be deleted. From then
+     *  on it is frozen — no member, candidate or share link gets in — while
+     *  convex/orgErasure.ts erases it and finally deletes this row. */
+    deletingAt: v.optional(v.number()),
   })
     .index('by_slug', ['slug'])
     .index('by_logoStorageId', ['logoStorageId']),
@@ -615,6 +619,7 @@ export default defineSchema({
       v.literal('retention'),
       v.literal('candidate_request'),
       v.literal('recruiter_delete'),
+      v.literal('org_delete'),
     ),
     objectsDeleted: v.number(),
     purgedAt: v.number(),

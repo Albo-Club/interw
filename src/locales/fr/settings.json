@@ -25,6 +25,25 @@
       "insufficient_role": "Réservé aux admins ou propriétaires",
       "invalid_name": "Nom invalide",
       "default": "Échec de l'enregistrement"
+    },
+    "danger": {
+      "title": "Supprimer l'organisation",
+      "description": "Supprimez définitivement {{name}} et tout ce qu'elle contient. Cette action est irréversible.",
+      "roles_one": "{{count}} poste, avec ses questions et ses enregistrements",
+      "roles_other": "{{count}} postes, avec leurs questions et leurs enregistrements",
+      "candidates_one": "{{count}} candidat : ses enregistrements d'entretien, son CV, ses transcriptions et son rapport",
+      "candidates_other": "{{count}} candidats : leurs enregistrements d'entretien, CV, transcriptions et rapports",
+      "assistant": "Toutes les conversations avec l'assistant tenues dans cette organisation",
+      "invitations_one": "{{count}} invitation en attente",
+      "invitations_other": "{{count}} invitations en attente",
+      "members_one": "L'accès de {{count}} membre, qui sera prévenu par e-mail",
+      "members_other": "L'accès de {{count}} membres, qui seront prévenus par e-mail",
+      "action": "Supprimer l'organisation…",
+      "dialogTitle": "Supprimer {{name}} ?",
+      "dialogDescription": "Tout le monde perd l'accès immédiatement, et les données sont effacées définitivement dans l'heure. Les liens candidats et les rapports partagés cessent de fonctionner. Aucun retour en arrière n'est possible.",
+      "confirmLabel": "Saisissez <strong>{{name}}</strong> pour confirmer",
+      "confirm": "Supprimer définitivement",
+      "deleted": "{{name}} est en cours de suppression. Ses membres ont été prévenus."
     }
   },
   "members": {
@@ -74,5 +93,10 @@
       "rate_limited": "Trop d'invitations — ralentissez et réessayez plus tard",
       "default": "Échec de l'envoi de l'invitation"
     }
+  },
+  "errors": {
+    "confirm_mismatch": "Le nom saisi ne correspond pas à celui de l'organisation.",
+    "org_deleting": "Cette organisation est déjà en cours de suppression.",
+    "insufficient_role": "Seul un propriétaire peut supprimer l'organisation."
   }
 }

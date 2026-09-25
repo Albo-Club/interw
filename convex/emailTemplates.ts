@@ -851,3 +851,60 @@ export function reportReadyEmail({
 
   return { subject: c.subject, html, text: plainText(c.text) }
 }
+
+/**
+ * Sent to every member when an owner deletes the organisation. It exists so
+ * that nobody loses their workspace without being told who removed it, and
+ * so it says what happens to the data — not where to go, since there is no
+ * longer anywhere to go.
+ */
+export function organizationDeletedEmail({
+  locale,
+  orgName,
+  deletedBy,
+}: {
+  locale: EmailLocale
+  orgName: string
+  deletedBy: string
+}) {
+  const safeOrg = esc(orgName)
+  const safeActor = esc(deletedBy)
+  const c = pick(locale, {
+    en: {
+      subject: `${orgName} was deleted on ${APP_NAME}`,
+      heading: `${safeOrg} was deleted`,
+      intro: `<strong>${safeActor}</strong> deleted the organization <strong>${safeOrg}</strong>.`,
+      followup: `Its roles, candidates, interview recordings and reports are being permanently erased, and nobody can access it any more. This cannot be undone.`,
+      footer: `You are receiving this because you were a member of ${safeOrg}. Your ${APP_NAME} account itself is unchanged.`,
+      preheader: `${safeActor} deleted ${safeOrg}.`,
+      text: [
+        `${deletedBy} deleted the organization ${orgName} on ${APP_NAME}.`,
+        `Its roles, candidates, interview recordings and reports are being permanently erased, and nobody can access it any more. This cannot be undone.`,
+        `You are receiving this because you were a member of ${orgName}. Your ${APP_NAME} account itself is unchanged.`,
+      ],
+    },
+    fr: {
+      subject: `${orgName} a été supprimée sur ${APP_NAME}`,
+      heading: `${safeOrg} a été supprimée`,
+      intro: `<strong>${safeActor}</strong> a supprimé l'organisation <strong>${safeOrg}</strong>.`,
+      followup: `Ses postes, candidats, enregistrements d'entretien et rapports sont en cours d'effacement définitif, et plus personne n'y a accès. Cette action est irréversible.`,
+      footer: `Vous recevez cet e-mail parce que vous étiez membre de ${safeOrg}. Votre compte ${APP_NAME} lui-même n'est pas modifié.`,
+      preheader: `${safeActor} a supprimé ${safeOrg}.`,
+      text: [
+        `${deletedBy} a supprimé l'organisation ${orgName} sur ${APP_NAME}.`,
+        `Ses postes, candidats, enregistrements d'entretien et rapports sont en cours d'effacement définitif, et plus personne n'y a accès. Cette action est irréversible.`,
+        `Vous recevez cet e-mail parce que vous étiez membre de ${orgName}. Votre compte ${APP_NAME} lui-même n'est pas modifié.`,
+      ],
+    },
+  })
+
+  const html = layout({
+    locale,
+    preheader: c.preheader,
+    heading: c.heading,
+    paragraphs: [c.intro, c.followup],
+    footer: c.footer,
+  })
+
+  return { subject: c.subject, html, text: plainText(c.text) }
+}

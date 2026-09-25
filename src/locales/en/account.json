@@ -125,9 +125,11 @@
     "dialogDescription": "We'll send a confirmation link to <strong>{{email}}</strong>. Click it to permanently delete your account. If you change your mind, ignore the email and nothing happens.",
     "confirm": "Send confirmation",
     "confirmationSent": "Confirmation sent to {{email}}. Click the link within 1 hour to permanently delete.",
-    "blockedTitle": "Make someone else an owner first",
-    "blocked": "You're the only owner of the organizations below. An organization can't be left without an owner: make another member an owner of each one, then come back.",
-    "manageMembers": "Manage members of {{name}}"
+    "blockedTitle": "Make someone else an owner, or delete the organization",
+    "blocked": "You're the only owner of the organizations below. An organization can't be left without an owner: make another member an owner of each one, or delete the organization, then come back.",
+    "manageMembers": "Manage members of {{name}}",
+    "deleteOrg": "Delete",
+    "deleteOrgLabel": "Delete {{name}}"
   },
   "deletion": {
     "metaTitle": "Account deletion — interw",

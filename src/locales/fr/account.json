@@ -125,9 +125,11 @@
     "dialogDescription": "Nous enverrons un lien de confirmation à <strong>{{email}}</strong>. Cliquez dessus pour supprimer définitivement votre compte. Si vous changez d'avis, ignorez l'e-mail et rien ne se passera.",
     "confirm": "Envoyer la confirmation",
     "confirmationSent": "Confirmation envoyée à {{email}}. Cliquez sur le lien dans l'heure pour supprimer définitivement.",
-    "blockedTitle": "Nommez d'abord un autre propriétaire",
-    "blocked": "Vous êtes le seul propriétaire des organisations ci-dessous. Une organisation ne peut pas rester sans propriétaire : nommez un autre membre propriétaire de chacune, puis revenez.",
-    "manageMembers": "Gérer les membres de {{name}}"
+    "blockedTitle": "Nommez un autre propriétaire, ou supprimez l'organisation",
+    "blocked": "Vous êtes le seul propriétaire des organisations ci-dessous. Une organisation ne peut pas rester sans propriétaire : nommez un autre membre propriétaire de chacune, ou supprimez l'organisation, puis revenez.",
+    "manageMembers": "Gérer les membres de {{name}}",
+    "deleteOrg": "Supprimer",
+    "deleteOrgLabel": "Supprimer {{name}}"
   },
   "deletion": {
     "metaTitle": "Suppression du compte — interw",

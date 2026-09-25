@@ -1,5 +1,8 @@
 import { ConvexError, v } from 'convex/values'
 import { mutation, query } from './_generated/server'
+import { internal } from './_generated/api'
+import { RESEND_FROM, resend } from './email'
+import { organizationDeletedEmail } from './emailTemplates'
 import { roleValidator } from './schema'
 import {
   requireAppUser,
@@ -9,6 +12,7 @@ import {
 } from './lib/auth'
 import { setLastOrgSlug } from './lib/userPrefs'
 import { resolveAvatarUrl, resolveLogoUrl } from './lib/storage'
+import { WRITE_URL_TTL_SECONDS } from './lib/objectStore'
 import type { DataModel, Id } from './_generated/dataModel'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 
@@ -114,7 +118,7 @@ export const bySlug = query({
       .query('organizations')
       .withIndex('by_slug', (q) => q.eq('slug', slug))
       .unique()
-    if (!org) return null
+    if (!org || org.deletingAt !== undefined) return null
     const member = await ctx.db
       .query('organizationMembers')
       .withIndex('by_org_and_user', (q) =>
@@ -229,6 +233,90 @@ export const removeMember = mutation({
     }
 
     await ctx.db.delete("organizationMembers", memberId)
+    return null
+  },
+})
+
+/** What deleting the organisation takes with it, for the owner's confirmation. */
+export const deletionSummary = query({
+  args: { orgId: v.id('organizations') },
+  handler: async (ctx, { orgId }) => {
+    await requireOrgRole(ctx, orgId, 'owner')
+    const projects = await ctx.db
+      .query('projects')
+      .withIndex('by_org', (q) => q.eq('orgId', orgId))
+      .collect()
+    const members = await ctx.db
+      .query('organizationMembers')
+      .withIndex('by_org', (q) => q.eq('orgId', orgId))
+      .collect()
+    const invitations = await ctx.db
+      .query('invitations')
+      .withIndex('by_org', (q) => q.eq('orgId', orgId))
+      .collect()
+    return {
+      roles: projects.length,
+      // The projects' own counters: reading every session to count them would
+      // make this card re-run on every candidate's upload.
+      candidates: projects.reduce((sum, p) => sum + p.sessionCount, 0),
+      members: members.length,
+      pendingInvitations: invitations.filter((i) => !i.acceptedAt).length,
+    }
+  },
+})
+
+/**
+ * Delete the organisation and everything in it. Owner-only, confirmed by
+ * typing its name.
+ *
+ * This only freezes it: from the moment `deletingAt` is set, every member,
+ * candidate link and share link is refused (see `requireOrgMember`,
+ * `evaluateSessionGate`, `resolveShare`), and a second request fails on that
+ * same guard rather than mailing everyone twice. The erasure itself
+ * (convex/orgErasure.ts) starts once every upload URL signed before the
+ * freeze has expired, so no object can land in the bucket after the keys
+ * that name it have been collected.
+ */
+export const requestDeletion = mutation({
+  args: { orgId: v.id('organizations'), confirmName: v.string() },
+  handler: async (ctx, { orgId, confirmName }) => {
+    const { user, org } = await requireOrgRole(ctx, orgId, 'owner')
+    if (confirmName.trim() !== org.name) {
+      throw new ConvexError('confirm_mismatch')
+    }
+    await ctx.db.patch('organizations', orgId, { deletingAt: Date.now() })
+
+    // Told now, while the memberships still say who to tell.
+    const members = await ctx.db
+      .query('organizationMembers')
+      .withIndex('by_org', (q) => q.eq('orgId', orgId))
+      .collect()
+    for (const m of members) {
+      const recipient = await ctx.db.get('users', m.userId)
+      if (!recipient) continue
+      const { subject, html, text } = organizationDeletedEmail({
+        locale: recipient.preferredLanguage ?? 'en',
+        orgName: org.name,
+        deletedBy: user.name ?? user.email,
+      })
+      await resend.sendEmail(ctx, {
+        from: RESEND_FROM,
+        to: recipient.email,
+        subject,
+        html,
+        text,
+      })
+    }
+
+    await ctx.scheduler.runAfter(
+      WRITE_URL_TTL_SECONDS * 1000,
+      internal.orgErasure.step,
+      { orgId },
+    )
+    console.log('[org-erasure] requested', {
+      orgId,
+      members: members.length,
+    })
     return null
   },
 })

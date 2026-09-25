@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "delete-organization": {
+      "title": "Delete an organization",
+      "body": "An organization's owner can now delete it from its settings, after typing its name to confirm. Every role, candidate recording, CV, transcript, report and assistant conversation in it is erased for good, and its members are told by email. Being the only owner of an organization no longer stands between you and deleting your account: delete the organization first, and your account is free to go."
+    },
     "clearer-account-settings": {
       "title": "Clearer account settings",
       "body": "Your profile now follows an email change step by step, shows the ways you can really sign in, and lets you set a password if your account has none. An account-deletion link opened on another device now leads to a clear page, and an account can no longer leave an organization without an owner. We also hardened our security notices: you now get an email after a password reset too."

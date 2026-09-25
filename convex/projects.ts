@@ -14,11 +14,14 @@ import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
   leaveTeam,
+  requireProjectAccess,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
   sharedProjectIds,
 } from './lib/projectAccess'
 import { publishBlockers } from './lib/publishReadiness'
+import { siteUrl } from './lib/siteUrl'
+import { generateToken } from './lib/tokens'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
 import type { MutationCtx } from './_generated/server'
@@ -27,8 +30,6 @@ import type { Doc, Id } from './_generated/dataModel'
 const TITLE_MAX = 120
 const JOB_TITLE_MAX = 120
 const PERSONA_NAME_MAX = 60
-const MIN_DURATION_MINUTES = 5
-const MAX_DURATION_MINUTES = 120
 
 /**
  * Listing cap. A single organisation realistically runs tens of open roles;
@@ -156,7 +157,10 @@ export const getBySlug = query({
         personaName: project.personaName ?? null,
         introMode: effectiveIntroMode(project),
         hasIntroMedia: project.introMediaKey !== undefined,
-        maxDurationMinutes: project.maxDurationMinutes,
+        applyUrl:
+          project.applyToken === undefined
+            ? null
+            : siteUrl(`/apply/${project.applyToken}`),
         candidateFields: project.candidateFields,
       },
       questions: questions.map((q) => ({
@@ -185,15 +189,23 @@ export const getBySlug = query({
 export const create = mutation({
   args: {
     orgId: v.id('organizations'),
-    title: v.string(),
-    jobTitle: v.optional(v.string()),
+    /** What the candidate sees, and what the role is called unless… */
+    jobTitle: v.string(),
+    /** …the team gives it a label of its own, which only it ever sees. */
+    internalTitle: v.optional(v.string()),
     language: languageValidator,
     /** Colleagues who follow the role, on top of the creator. */
     team: v.optional(v.array(v.id('users'))),
   },
-  handler: async (ctx, { orgId, title, jobTitle, language, team }) => {
+  handler: async (
+    ctx,
+    { orgId, jobTitle, internalTitle, language, team },
+  ) => {
     const { user } = await requireOrgMember(ctx, orgId)
-    const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
+    const cleanJobTitle = requireText(jobTitle, JOB_TITLE_MAX, 'invalid_title')
+    const cleanTitle = internalTitle?.trim()
+      ? requireText(internalTitle, TITLE_MAX, 'invalid_title')
+      : cleanJobTitle
 
     const slug = await uniqueSlug(
       cleanTitle,
@@ -211,11 +223,10 @@ export const create = mutation({
       orgId,
       slug,
       title: cleanTitle,
-      jobTitle: optionalText(jobTitle, JOB_TITLE_MAX, 'invalid_job_title'),
+      jobTitle: cleanJobTitle,
       status: 'draft',
       language,
       introMode: 'none',
-      maxDurationMinutes: 20,
       candidateFields: DEFAULT_CANDIDATE_FIELDS,
       createdBy: user._id,
       createdAt: now,
@@ -250,10 +261,8 @@ export const update = mutation({
     projectId: v.id('projects'),
     title: v.optional(v.string()),
     jobTitle: v.optional(v.string()),
-    language: v.optional(languageValidator),
     personaName: v.optional(v.string()),
     introMode: v.optional(introModeValidator),
-    maxDurationMinutes: v.optional(v.number()),
     candidateFields: v.optional(candidateFieldsValidator),
     /** Epoch ms, or null to clear. */
     expiresAt: v.optional(v.union(v.number(), v.null())),
@@ -271,8 +280,12 @@ export const update = mutation({
         JOB_TITLE_MAX,
         'invalid_job_title',
       )
+      // A role with no internal name of its own is named by its job title,
+      // and keeps being so as the job title changes.
+      if (args.title === undefined && project.title === project.jobTitle) {
+        patch.title = requireText(args.jobTitle, TITLE_MAX, 'invalid_title')
+      }
     }
-    if (args.language !== undefined) patch.language = args.language
     if (args.personaName !== undefined) {
       patch.personaName = optionalText(
         args.personaName,
@@ -281,16 +294,6 @@ export const update = mutation({
       )
     }
     if (args.introMode !== undefined) patch.introMode = args.introMode
-    if (args.maxDurationMinutes !== undefined) {
-      if (
-        !Number.isInteger(args.maxDurationMinutes) ||
-        args.maxDurationMinutes < MIN_DURATION_MINUTES ||
-        args.maxDurationMinutes > MAX_DURATION_MINUTES
-      ) {
-        throw new ConvexError('invalid_duration')
-      }
-      patch.maxDurationMinutes = args.maxDurationMinutes
-    }
     if (args.candidateFields !== undefined) {
       patch.candidateFields = args.candidateFields
     }
@@ -329,6 +332,22 @@ export const publish = mutation({
     if (project.status !== 'active') {
       await ctx.db.patch('projects', projectId, { status: 'active' })
     }
+    return null
+  },
+})
+
+/**
+ * Give the role its public candidate link. Idempotent: the link, once made,
+ * stays the same, so it can live in an ATS template or on a job board. Any
+ * member who can invite to the role can open it to the public — it is the
+ * same power, without typing the names.
+ */
+export const enableApplyLink = mutation({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    const { project } = await requireProjectAccess(ctx, projectId)
+    if (project.applyToken !== undefined) return null
+    await ctx.db.patch('projects', projectId, { applyToken: generateToken() })
     return null
   },
 })

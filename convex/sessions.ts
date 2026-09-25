@@ -1,10 +1,9 @@
 /**
  * Candidate sessions, recruiter side.
  *
- * A session only ever exists because a recruiter created it. With no public
- * role page in scope, no anonymous caller writes to this table without a
- * pre-existing token — which removes an entire class of abuse before it can
- * be written.
+ * A session exists because a recruiter invited the candidate, or because the
+ * candidate opened the role's public link (convex/apply.ts). Both go through
+ * `insertSession`, so the two kinds of session are the same row.
  */
 
 import { ConvexError, v } from 'convex/values'
@@ -23,6 +22,8 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { isPastDeadline } from './lib/sessionState'
+import { maxInterviewMinutes } from './lib/interviewDuration'
+import { siteUrl } from './lib/siteUrl'
 import { generateToken } from './lib/tokens'
 import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
@@ -76,6 +77,9 @@ function toRecruiterRow(
     recommendation: session.recommendation ?? null,
     recruiterDecision: session.recruiterDecision ?? null,
     lastQuestionIndex: session.lastQuestionIndex,
+    // False for a candidate who came through the role's public link: their
+    // link is not ours to mail (see `resendInvitation`).
+    invited: session.invitedBy !== undefined,
     deliveryIssue,
   }
 }
@@ -145,7 +149,7 @@ function assertAcceptsCandidates(project: Doc<'projects'>) {
   }
 }
 
-function normalizeCandidate(input: { name: string; email: string }) {
+export function normalizeCandidate(input: { name: string; email: string }) {
   const name = input.name.trim()
   const email = normalizeEmail(input.email)
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
@@ -154,9 +158,34 @@ function normalizeCandidate(input: { name: string; email: string }) {
 }
 
 function invitationUrl(token: string): string {
-  const siteUrl = process.env.SITE_URL
-  if (!siteUrl) throw new ConvexError('site_url_not_configured')
-  return `${siteUrl.replace(/\/+$/, '')}/s/${token}`
+  return siteUrl(`/s/${token}`)
+}
+
+/**
+ * A fresh `pending` session. The caller bumps `projects.sessionCount`: a bulk
+ * invitation does it once for the whole batch.
+ */
+export async function insertSession(
+  ctx: GenericMutationCtx<DataModel>,
+  project: Doc<'projects'>,
+  candidate: { name: string; email: string },
+  invitedBy?: Id<'users'>,
+) {
+  const accessToken = generateToken()
+  const now = Date.now()
+  const sessionId = await ctx.db.insert('sessions', {
+    orgId: project.orgId,
+    projectId: project._id,
+    accessToken,
+    candidateName: candidate.name,
+    candidateEmail: candidate.email,
+    status: 'pending',
+    lastQuestionIndex: 0,
+    invitedBy,
+    invitedAt: now,
+    purgeAfter: now + INVITED_RETENTION_MS,
+  })
+  return { sessionId, accessToken }
 }
 
 /**
@@ -184,7 +213,6 @@ export const invite = mutation({
     const org = await ctx.db.get('organizations', project.orgId)
     if (!org) throw new ConvexError('not_found')
 
-    const now = Date.now()
     const results: Array<{ sessionId: Id<'sessions'>; created: boolean }> = []
     const toNotify: Array<Id<'sessions'>> = []
     let created = 0
@@ -204,26 +232,27 @@ export const invite = mutation({
             q.eq('projectId', projectId).eq('candidateEmail', candidate.email),
           )
           .collect()
-      ).find((s) => s.status === 'pending' || s.status === 'in_progress')
+      ).find(
+        (s) =>
+          (s.status === 'pending' || s.status === 'in_progress') &&
+          // Only a session we invited is reused. One opened through the
+          // public link was typed in by whoever held that link, and so is
+          // its address: mailing its token to the real owner of the address
+          // would hand them a session somebody else already holds.
+          s.invitedBy !== undefined,
+      )
       if (already) {
         results.push({ sessionId: already._id, created: false })
         toNotify.push(already._id)
         continue
       }
 
-      const token = generateToken()
-      const sessionId = await ctx.db.insert('sessions', {
-        orgId: project.orgId,
-        projectId,
-        accessToken: token,
-        candidateName: candidate.name,
-        candidateEmail: candidate.email,
-        status: 'pending',
-        lastQuestionIndex: 0,
-        invitedBy: user._id,
-        invitedAt: now,
-        purgeAfter: now + INVITED_RETENTION_MS,
-      })
+      const { sessionId } = await insertSession(
+        ctx,
+        project,
+        candidate,
+        user._id,
+      )
       created += 1
       results.push({ sessionId, created: true })
       toNotify.push(sessionId)
@@ -249,13 +278,30 @@ export const invite = mutation({
   },
 })
 
+async function interviewMinutes(
+  ctx: GenericMutationCtx<DataModel>,
+  projectId: Id<'projects'>,
+): Promise<number> {
+  const questions = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', projectId))
+    .collect()
+  return maxInterviewMinutes(questions)
+}
+
 async function sendInvitation(
   ctx: GenericMutationCtx<DataModel>,
   {
     session,
     project,
     orgName,
-  }: { session: Doc<'sessions'>; project: Doc<'projects'>; orgName: string },
+    durationMinutes,
+  }: {
+    session: Doc<'sessions'>
+    project: Doc<'projects'>
+    orgName: string
+    durationMinutes: number
+  },
 ): Promise<void> {
   const { subject, html, text } = candidateInvitationEmail({
     locale: project.language,
@@ -263,7 +309,7 @@ async function sendInvitation(
     jobTitle: project.jobTitle ?? null,
     orgName,
     startUrl: invitationUrl(session.accessToken),
-    durationMinutes: project.maxDurationMinutes,
+    durationMinutes,
   })
   const providerId = await resend.sendEmail(ctx, {
     from: RESEND_FROM,
@@ -312,6 +358,9 @@ export const resendInvitation = mutation({
     if (session.status !== 'pending' && session.status !== 'in_progress') {
       throw new ConvexError('session_closed')
     }
+    // Same reason as the reuse rule in `invite`: a self-applied session's
+    // token is held by whoever typed the address. Invite the address instead.
+    if (session.invitedBy === undefined) throw new ConvexError('not_invited')
     assertAcceptsCandidates(project)
     // Pipe F9: an address that hard-bounced (or reported us as spam) does not
     // get the same mail again. Every retry costs the sending domain
@@ -329,7 +378,12 @@ export const resendInvitation = mutation({
     await consumeLimit(ctx, 'candidateInvite', user._id)
     const org = await ctx.db.get('organizations', session.orgId)
     if (!org) throw new ConvexError('not_found')
-    await sendInvitation(ctx, { session, project, orgName: org.name })
+    await sendInvitation(ctx, {
+      session,
+      project,
+      orgName: org.name,
+      durationMinutes: await interviewMinutes(ctx, project._id),
+    })
     return null
   },
 })
@@ -360,13 +414,26 @@ export const cancel = mutation({
 export const sendInvitationBatch = internalMutation({
   args: { sessionIds: v.array(v.id('sessions')) },
   handler: async (ctx, { sessionIds }) => {
+    // A batch comes from one `invite` call, so from one role: read its
+    // questions once, not once per candidate.
+    const minutesByProject = new Map<Id<'projects'>, number>()
     for (const sessionId of sessionIds) {
       const session = await ctx.db.get('sessions', sessionId)
       if (!session) continue
       const project = await ctx.db.get('projects', session.projectId)
       const org = await ctx.db.get('organizations', session.orgId)
       if (!project || !org) continue
-      await sendInvitation(ctx, { session, project, orgName: org.name })
+      let durationMinutes = minutesByProject.get(project._id)
+      if (durationMinutes === undefined) {
+        durationMinutes = await interviewMinutes(ctx, project._id)
+        minutesByProject.set(project._id, durationMinutes)
+      }
+      await sendInvitation(ctx, {
+        session,
+        project,
+        orgName: org.name,
+        durationMinutes,
+      })
     }
     return null
   },

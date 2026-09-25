@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useConvexMutation } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, ArrowUp, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Clock, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import { maxInterviewMinutes } from '../../../../convex/lib/interviewDuration'
 import { ImportFromUrlDialog } from './ImportFromUrlDialog'
+import type { TFunction } from 'i18next'
 import type { WizardProject, WizardQuestion } from './types'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { Button } from '~/components/ui/button'
@@ -19,6 +21,13 @@ import {
   FieldLabel,
 } from '~/components/ui/field'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -31,6 +40,10 @@ import {
 import { EmptyState } from '~/components/projects/EmptyState'
 import { MediaRecorderField } from '~/components/projects/MediaRecorderField'
 import { useProjectPlayback } from '~/components/projects/useProjectPlayback'
+
+/** The answer times a recruiter picks from, inside the server's 15–600 s. A
+ *  list rather than a free number: nobody thinks of an answer in seconds. */
+const RESPONSE_PRESETS = [30, 60, 90, 120, 180, 300, 600]
 
 export function StepQuestions({
   project,
@@ -97,6 +110,30 @@ export function StepQuestions({
           {t('projects:questions.import')}
         </Button>
       </div>
+
+      {/* The one figure the candidate is told, computed live from the answer
+          times below — so it can never disagree with them. */}
+      {questions.length > 0 && (
+        <div className="bg-muted/50 flex items-start gap-3 rounded-lg border p-4">
+          <Clock
+            aria-hidden
+            className="text-muted-foreground mt-0.5 size-5 shrink-0"
+          />
+          <div className="space-y-0.5" aria-live="polite">
+            <p className="text-sm">
+              {t('projects:questions.duration.label')}{' '}
+              <strong className="text-base font-semibold tabular-nums">
+                {t('projects:questions.duration.value', {
+                  count: maxInterviewMinutes(questions),
+                })}
+              </strong>
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {t('projects:questions.duration.hint')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {questions.length === 0 ? (
         <EmptyState
@@ -202,7 +239,11 @@ function QuestionCard({
   const [title, setTitle] = useState(question.title ?? '')
   const [content, setContent] = useState(question.content)
   const [hint, setHint] = useState(question.hintText ?? '')
-  const [seconds, setSeconds] = useState(String(question.maxResponseSeconds))
+  // A legacy value outside the presets stays selectable rather than being
+  // silently rounded on the next save.
+  const responseOptions = RESPONSE_PRESETS.includes(question.maxResponseSeconds)
+    ? RESPONSE_PRESETS
+    : [...RESPONSE_PRESETS, question.maxResponseSeconds].sort((a, b) => a - b)
 
   const save = async (patch: Parameters<typeof update>[0]) => {
     try {
@@ -307,28 +348,29 @@ function QuestionCard({
               <FieldLabel htmlFor={`q-seconds-${question._id}`}>
                 {t('projects:questions.fields.maxResponse')}
               </FieldLabel>
-              <Input
-                id={`q-seconds-${question._id}`}
-                type="number"
-                min={15}
-                max={600}
-                step={15}
-                inputMode="numeric"
-                className="max-w-32 tabular-nums"
-                value={seconds}
-                onChange={(event) => setSeconds(event.target.value)}
-                onBlur={() => {
-                  const parsed = Number.parseInt(seconds, 10)
-                  if (Number.isNaN(parsed)) {
-                    setSeconds(String(question.maxResponseSeconds))
-                    return
-                  }
+              <Select
+                value={String(question.maxResponseSeconds)}
+                onValueChange={(value) =>
                   void save({
                     questionId: question._id,
-                    maxResponseSeconds: parsed,
+                    maxResponseSeconds: Number(value),
                   })
-                }}
-              />
+                }
+              >
+                <SelectTrigger
+                  id={`q-seconds-${question._id}`}
+                  className="max-w-40 tabular-nums"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {responseOptions.map((option) => (
+                    <SelectItem key={option} value={String(option)}>
+                      {formatAnswerTime(t, option)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FieldDescription>
                 {t('projects:questions.fields.maxResponseHint')}
               </FieldDescription>
@@ -345,4 +387,13 @@ function QuestionCard({
       </CardContent>
     </Card>
   )
+}
+
+/** 90 → "1 min 30 s", 120 → "2 min", 30 → "30 s". */
+function formatAnswerTime(t: TFunction, seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  if (minutes === 0) return t('projects:questions.time.seconds', { count: rest })
+  if (rest === 0) return t('projects:questions.time.minutes', { count: minutes })
+  return t('projects:questions.time.minutesSeconds', { minutes, seconds: rest })
 }

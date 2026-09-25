@@ -59,6 +59,10 @@ const project: Doc<'projects'> = {
   completedSessionCount: 5,
 }
 
+const fourQuestions = [120, 120, 120, 120].map((maxResponseSeconds) => ({
+  maxResponseSeconds,
+}))
+
 const question: Doc<'questions'> = {
   _id: id('questions'),
   _creationTime: 0,
@@ -107,13 +111,22 @@ describe('candidate projections', () => {
   })
 
   it('shows the public job title, not the internal one', () => {
-    const view = toCandidateProjectView(project, 4)
+    const view = toCandidateProjectView(project, fourQuestions)
     expect(view.jobTitle).toBe('Senior Backend Engineer')
     expect(JSON.stringify(view)).not.toContain('Internal title')
   })
 
+  // The legacy role-level duration (25 here) once told a candidate less time
+  // than the questions took. What they are told now comes from the questions.
+  it('announces the time the questions take, not the legacy field', () => {
+    const view = toCandidateProjectView(project, fourQuestions)
+    expect(view.maxInterviewMinutes).toBe(10)
+    expect(view.questionCount).toBe(4)
+    expect(Object.keys(view)).not.toContain('maxDurationMinutes')
+  })
+
   it('never leaks pipeline counters or visibility settings to a candidate', () => {
-    const keys = Object.keys(toCandidateProjectView(project, 4))
+    const keys = Object.keys(toCandidateProjectView(project, fourQuestions))
     for (const field of [
       'sessionCount',
       'completedSessionCount',
@@ -132,12 +145,12 @@ describe('candidate projections', () => {
   // screen with nothing on it, nor hand them the retired text.
   it('reads a retired text or audio intro as no intro', () => {
     for (const introMode of ['text', 'audio'] as const) {
-      const view = toCandidateProjectView({ ...project, introMode }, 4)
+      const view = toCandidateProjectView({ ...project, introMode }, fourQuestions)
       expect(view.introMode).toBe('none')
       expect(JSON.stringify(view)).not.toContain('Bienvenue')
     }
     expect(
-      toCandidateProjectView({ ...project, introMode: 'video' }, 4).introMode,
+      toCandidateProjectView({ ...project, introMode: 'video' }, fourQuestions).introMode,
     ).toBe('video')
   })
 

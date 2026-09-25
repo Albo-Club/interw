@@ -436,7 +436,6 @@ describe('transcribe', () => {
 
   const run = () =>
     transcribe(new Blob(['audio']).stream(), {
-      language: 'fr',
       fileName: 'answer.m4a',
       contentType: 'audio/mp4',
     })
@@ -474,6 +473,16 @@ describe('transcribe', () => {
     expect(calls[0].url).toBe('https://api.mistral.ai/v1/audio/transcriptions')
     expect(calls[0].form.get('model')).toBe('voxtral-mini-latest')
     expect(calls[0].form.get('timestamp_granularities')).toBe('segment')
+  })
+
+  // A role may ask one question in French and the next in English: the
+  // provider detects the language per answer rather than being told one.
+  it('lets the provider detect the language', async () => {
+    const calls = stubTranscription(mistralResponse())
+
+    await run()
+
+    expect(calls[0].form.has('language')).toBe(false)
   })
 
   it('drops a segment with no time instead of failing the answer', async () => {

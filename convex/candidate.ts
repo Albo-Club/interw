@@ -123,7 +123,7 @@ export const landing = query({
       organisationName: org.name,
       organisationLogoUrl: await resolveLogoUrl(ctx, org),
       session: toCandidateSessionView(session),
-      project: toCandidateProjectView(project, progress.questions.length),
+      project: toCandidateProjectView(project, progress.questions),
       gate: {
         ...evaluateSessionGate({
           session,

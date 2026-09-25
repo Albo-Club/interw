@@ -1,6 +1,10 @@
 {
   "metaTitle": "Your interview",
   "screens": {
+    "apply": {
+      "title": "Apply — your interview",
+      "description": "Tell us who you are, then record a short video interview from your browser."
+    },
     "welcome": {
       "title": "Welcome — your interview",
       "description": "Read how your video interview works, then agree to be recorded before you start."
@@ -23,7 +27,8 @@
     }
   },
   "shell": {
-    "privacy": "Your data"
+    "privacy": "Your data",
+    "language": "Change language"
   },
   "state": {
     "notFound": {
@@ -47,6 +52,18 @@
       "body": "Thank you — there is nothing more to do. Your answers have been sent, and the team will contact you directly."
     }
   },
+  "apply": {
+    "title": "Interview for {{jobTitle}}",
+    "titleNoRole": "Interview with {{org}}",
+    "intro": "{{org}} would like to hear from you. It is a short video interview, up to {{count}} minutes, that you record on your own from this browser.",
+    "name": "Full name",
+    "email": "Email address",
+    "emailHint": "{{org}} will use it to get back to you about this role.",
+    "submit": "Start",
+    "submitting": "Starting…",
+    "closed": "This role is not accepting interviews at the moment.",
+    "expired": "The deadline for this role has passed."
+  },
   "welcome": {
     "greeting": "Hello {{name}}",
     "invitedBy": "{{org}} has invited you to record a short interview for the {{jobTitle}} role.",
@@ -56,7 +73,7 @@
       "questions": "{{count}} question, asked on camera by the team",
       "questions_other": "{{count}} questions, asked on camera by the team",
       "record": "You record your answer to each one, in your own time",
-      "duration": "About {{count}} minutes in total",
+      "duration": "Up to {{count}} minutes",
       "alone": "No one is waiting — you choose when to start"
     },
     "whatYouNeed": "What you'll need",

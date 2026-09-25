@@ -48,7 +48,7 @@ export const candidateProjectReturns = v.object({
   personaName: v.union(v.string(), v.null()),
   introMode: introModeValidator,
   hasIntroMedia: v.boolean(),
-  maxDurationMinutes: v.number(),
+  maxInterviewMinutes: v.number(),
   candidateFields: candidateFieldsValidator,
   questionCount: v.number(),
 })

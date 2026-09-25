@@ -1,7 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { chooseCandidateLanguage } from './useCandidateLanguage'
 import type { ReactNode } from 'react'
 
+import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
 /**
@@ -38,7 +40,8 @@ export function CandidateShell({
    *  the video and the one button that ends an answer are always in view. */
   width?: 'narrow' | 'stage'
 }) {
-  const { t } = useTranslation('interview')
+  const { t, i18n } = useTranslation(['interview', 'common'])
+  const other = i18n.language === 'fr' ? 'en' : 'fr'
   const column = width === 'narrow' ? 'max-w-2xl' : 'max-w-5xl'
   return (
     <div
@@ -50,20 +53,36 @@ export function CandidateShell({
     >
       <header className="border-b">
         <div
-          className={cn('mx-auto flex h-14 items-center gap-3 px-4', column)}
-        >
-          {logoUrl && (
-            <img
-              src={logoUrl}
-              alt=""
-              width={24}
-              height={24}
-              className="size-6 rounded-sm object-contain"
-            />
+          className={cn(
+            'mx-auto flex h-14 items-center justify-between gap-4 px-4',
+            column,
           )}
-          <span className="text-sm font-semibold tracking-tight">
-            {organisationName ?? 'interw'}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 shrink-0 rounded-sm object-contain"
+              />
+            )}
+            <span className="truncate text-sm font-semibold tracking-tight">
+              {organisationName ?? 'interw'}
+            </span>
           </span>
+          {/* Named in its own language, so it reads to the person who needs
+              it rather than to the one already served. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            lang={other}
+            title={t('interview:shell.language')}
+            onClick={() => chooseCandidateLanguage(i18n, other)}
+          >
+            {t(`common:language.${other}`)}
+          </Button>
         </div>
       </header>
 
@@ -90,7 +109,7 @@ export function CandidateShell({
               params={{ token: privacyToken }}
               className="underline underline-offset-4"
             >
-              {t('shell.privacy')}
+              {t('interview:shell.privacy')}
             </Link>
           </div>
         </footer>

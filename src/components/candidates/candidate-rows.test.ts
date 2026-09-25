@@ -28,6 +28,7 @@ function row(n: number, patch: Partial<CandidateRow> = {}): CandidateRow {
     recommendation: null,
     recruiterDecision: null,
     lastQuestionIndex: 0,
+    invited: true,
     deliveryIssue: null,
     ...patch,
   }

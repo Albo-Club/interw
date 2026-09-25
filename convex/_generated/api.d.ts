@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as agent from "../agent.js";
+import type * as apply from "../apply.js";
 import type * as auth from "../auth.js";
 import type * as candidate from "../candidate.js";
 import type * as chat from "../chat.js";
@@ -38,6 +39,7 @@ import type * as lib_clock from "../lib/clock.js";
 import type * as lib_evidence from "../lib/evidence.js";
 import type * as lib_htmlText from "../lib/htmlText.js";
 import type * as lib_instructions from "../lib/instructions.js";
+import type * as lib_interviewDuration from "../lib/interviewDuration.js";
 import type * as lib_invitations from "../lib/invitations.js";
 import type * as lib_locale from "../lib/locale.js";
 import type * as lib_memberName from "../lib/memberName.js";
@@ -51,6 +53,7 @@ import type * as lib_reportSchema from "../lib/reportSchema.js";
 import type * as lib_safeUrl from "../lib/safeUrl.js";
 import type * as lib_sessionState from "../lib/sessionState.js";
 import type * as lib_sigv4 from "../lib/sigv4.js";
+import type * as lib_siteUrl from "../lib/siteUrl.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_storage from "../lib/storage.js";
 import type * as lib_tokens from "../lib/tokens.js";
@@ -84,6 +87,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   agent: typeof agent;
+  apply: typeof apply;
   auth: typeof auth;
   candidate: typeof candidate;
   chat: typeof chat;
@@ -112,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   "lib/evidence": typeof lib_evidence;
   "lib/htmlText": typeof lib_htmlText;
   "lib/instructions": typeof lib_instructions;
+  "lib/interviewDuration": typeof lib_interviewDuration;
   "lib/invitations": typeof lib_invitations;
   "lib/locale": typeof lib_locale;
   "lib/memberName": typeof lib_memberName;
@@ -125,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   "lib/safeUrl": typeof lib_safeUrl;
   "lib/sessionState": typeof lib_sessionState;
   "lib/sigv4": typeof lib_sigv4;
+  "lib/siteUrl": typeof lib_siteUrl;
   "lib/slug": typeof lib_slug;
   "lib/storage": typeof lib_storage;
   "lib/tokens": typeof lib_tokens;

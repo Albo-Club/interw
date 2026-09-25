@@ -78,7 +78,6 @@ export const seedE2eSession = internalMutation({
         status: 'active',
         language: 'en',
         introMode: 'none',
-        maxDurationMinutes: 5,
         candidateFields: {
           phone: { enabled: false, required: false },
           linkedin: { enabled: false, required: false },

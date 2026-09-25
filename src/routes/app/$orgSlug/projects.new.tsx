@@ -7,29 +7,18 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
-import type { Id } from '../../../../convex/_generated/dataModel'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
-import { TeamPicker } from '~/components/projects/TeamPicker'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-  FieldLegend,
-  FieldSet,
 } from '~/components/ui/field'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select'
 import {
   Card,
   CardContent,
@@ -54,27 +43,28 @@ function NewProjectPage() {
   const { orgSlug } = Route.useParams()
   const navigate = useNavigate()
   const org = useConvexQuery(api.organizations.bySlug, { slug: orgSlug })
-  const me = useConvexQuery(api.users.me)
   const create = useConvexMutation(api.projects.create)
   const [submitting, setSubmitting] = useState(false)
-  const [team, setTeam] = useState<Array<Id<'users'>>>([])
+  const [showInternal, setShowInternal] = useState(false)
 
   const schema = useMemo(
     () =>
       z.object({
-        title: z
+        jobTitle: z
           .string()
           .trim()
           .min(1, t('projects:errors.invalid_title'))
           .max(120, t('projects:errors.invalid_title')),
-        jobTitle: z.string().trim().max(120, t('projects:errors.invalid_job_title')),
-        language: z.enum(['fr', 'en']),
+        internalTitle: z
+          .string()
+          .trim()
+          .max(120, t('projects:errors.invalid_title')),
       }),
     [t],
   )
 
   const form = useForm({
-    defaultValues: { title: '', jobTitle: '', language: 'fr' as 'fr' | 'en' },
+    defaultValues: { jobTitle: '', internalTitle: '' },
     validators: { onSubmit: schema },
     onSubmit: async ({ value }) => {
       if (!org) return
@@ -82,16 +72,19 @@ function NewProjectPage() {
       try {
         const { slug } = await create({
           orgId: org._id,
-          title: value.title,
-          jobTitle: value.jobTitle || undefined,
-          language: value.language,
-          team,
+          jobTitle: value.jobTitle,
+          internalTitle: value.internalTitle || undefined,
+          // The team's language: it writes the reports and the emails. The
+          // candidate can switch their own screens, and transcription detects
+          // the language of each answer.
+          language: getLocale(),
         })
-        // Straight into the wizard: a project with no questions is not yet
+        // Straight into the wizard: a role with no questions is not yet
         // useful, and sending the recruiter back to a list would hide that.
         await navigate({
           to: '/app/$orgSlug/projects/$projectSlug/edit',
           params: { orgSlug, projectSlug: slug },
+          search: {},
         })
       } catch (error) {
         const { key, fallbackKey } = errorMessageKey(error, 'projects')
@@ -117,32 +110,6 @@ function NewProjectPage() {
             }}
           >
             <FieldGroup>
-              <form.Field name="title">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>
-                      {t('projects:new.fields.title')}
-                    </FieldLabel>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(event) => field.handleChange(event.target.value)}
-                      autoFocus
-                    />
-                    <FieldDescription>
-                      {t('projects:new.fields.titleHint')}
-                    </FieldDescription>
-                    {field.state.meta.errors.length > 0 && (
-                      <FieldError>
-                        {String(field.state.meta.errors[0]?.message ?? '')}
-                      </FieldError>
-                    )}
-                  </Field>
-                )}
-              </form.Field>
-
               <form.Field name="jobTitle">
                 {(field) => (
                   <Field>
@@ -153,60 +120,63 @@ function NewProjectPage() {
                       id={field.name}
                       name={field.name}
                       value={field.state.value}
+                      placeholder={t('projects:new.fields.jobTitlePlaceholder')}
                       onBlur={field.handleBlur}
                       onChange={(event) => field.handleChange(event.target.value)}
+                      autoComplete="off"
+                      autoFocus
                     />
                     <FieldDescription>
                       {t('projects:new.fields.jobTitleHint')}
                     </FieldDescription>
+                    {field.state.meta.errors.length > 0 && (
+                      <FieldError>
+                        {String(field.state.meta.errors[0]?.message ?? '')}
+                      </FieldError>
+                    )}
+                    {!showInternal && (
+                      <Button
+                        type="button"
+                        variant="link"
+                        className="h-auto self-start p-0"
+                        onClick={() => setShowInternal(true)}
+                      >
+                        {t('projects:new.addInternalName')}
+                      </Button>
+                    )}
                   </Field>
                 )}
               </form.Field>
 
-              <form.Field name="language">
-                {(field) => (
-                  <Field>
-                    <FieldLabel htmlFor={field.name}>
-                      {t('projects:new.fields.language')}
-                    </FieldLabel>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(value) =>
-                        field.handleChange(value as 'fr' | 'en')
-                      }
-                    >
-                      <SelectTrigger id={field.name}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fr">
-                          {t('common:language.fr')}
-                        </SelectItem>
-                        <SelectItem value="en">
-                          {t('common:language.en')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>
-                      {t('projects:new.fields.languageHint')}
-                    </FieldDescription>
-                  </Field>
-                )}
-              </form.Field>
-
-              {org && (
-                <FieldSet className="gap-3">
-                  <FieldLegend variant="label" className="mb-0">
-                    {t('projects:team.label')}
-                  </FieldLegend>
-                  <FieldDescription>{t('projects:team.hint')}</FieldDescription>
-                  <TeamPicker
-                    orgId={org._id}
-                    creatorId={me?.kind === 'ready' ? me.user._id : undefined}
-                    selected={team}
-                    onChange={setTeam}
-                  />
-                </FieldSet>
+              {showInternal && (
+                <form.Field name="internalTitle">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={field.name}>
+                        {t('projects:new.fields.title')}
+                      </FieldLabel>
+                      <Input
+                        id={field.name}
+                        name={field.name}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(event) =>
+                          field.handleChange(event.target.value)
+                        }
+                        autoComplete="off"
+                        autoFocus
+                      />
+                      <FieldDescription>
+                        {t('projects:new.fields.titleHint')}
+                      </FieldDescription>
+                      {field.state.meta.errors.length > 0 && (
+                        <FieldError>
+                          {String(field.state.meta.errors[0]?.message ?? '')}
+                        </FieldError>
+                      )}
+                    </Field>
+                  )}
+                </form.Field>
               )}
 
               <div className="flex justify-end gap-2">

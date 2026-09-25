@@ -39,9 +39,9 @@ export function StepCandidateForm({ project }: { project: WizardProject }) {
   return (
     <div className="space-y-8">
       <section className="space-y-1">
-        <h2 className="text-lg font-semibold">
+        <h3 className="font-semibold">
           {t('projects:candidateForm.title')}
-        </h2>
+        </h3>
         <p className="text-muted-foreground text-sm">
           {t('projects:candidateForm.subtitle')}
         </p>

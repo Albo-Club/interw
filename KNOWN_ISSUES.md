@@ -2627,6 +2627,14 @@ The general shape: a flag that names a target is a *request*, and an ambient
 credential that names a different target wins. Whenever both exist, trust what
 the tool says it did, never what you asked for.
 
+The same key turns **`npx convex dev` into a deploy**. In the Claude Code cloud
+sandbox it points at **staging**, not at a throwaway dev deployment, and
+`convex dev --once` (even with `CONVEX_AGENT_MODE=anonymous`, even after asking
+for a local deployment) pushed a branch's unmerged functions there and wrote a
+`.env.local` naming it. To look at a change in the app from the sandbox, start
+from `env -u CONVEX_DEPLOY_KEY`; if something did land, redeploy `main` from a
+worktree of `origin/main` the same way.
+
 ## A fresh clone has no `origin/HEAD`, and `/security-review` needs it
 
 `git clone` normally writes `refs/remotes/origin/HEAD`, but the checkout a
@@ -2837,6 +2845,42 @@ The pass is bounded (25 roles, 200 session writes) and reschedules itself
 with the same cursor until the range is drained. It rescans every
 past-deadline role each hour: two indexed reads per role, empty once drained.
 
+## The public apply link: an open door, bounded
+
+A role can carry a public link, `/apply/<projects.applyToken>`, meant to be
+pasted into an ATS email template or a job ad. Whoever opens it types a name
+and an address, and `apply.start` inserts the same `pending` session an
+invitation would (`insertSession` in `convex/sessions.ts`, `invitedBy`
+absent). From there the candidate is on `/s/<token>`: nothing downstream knows
+or cares how the session was made. What an anonymous door costs, and the
+choices that keep it cheap:
+
+- **The address is declared, not proven.** The candidate starts at once — no
+  round-trip through their inbox. A typo makes them unreachable; anyone can
+  type someone else's address. The recording shows who actually sat it.
+- **Every submission is a new session, even for a known address.** Handing
+  back the open session for an address would hand anyone who knows that
+  address its owner's interview, name, CV and `deleteMyData`. Duplicates in
+  the table are the price; never "fix" them by reusing a session here.
+- **And never the other way round.** `invite` reuses an open session for an
+  address only if it has `invitedBy`, and `resendInvitation` refuses one that
+  does not (`not_invited`). Otherwise anyone could plant an address through
+  the link, keep the token, and have the recruiter's invitation mail that very
+  token to its real owner — whose interview, CV and erasure they then hold.
+- **No email on submission.** Sending the invitation to the typed address
+  would make the form a relay for mail to arbitrary people from our domain.
+  The completion email still goes out — only after a whole interview.
+- **Bounded per role, not per caller.** `candidateApply` (300/h, burst 100)
+  caps a flood on one role; there is no IP to key on (see "Brute force: the
+  IP is a claim"). It is sized so an ATS mailing a shortlist never hits it.
+- **Minted on request, never by default.** `projects.enableApplyLink` sets the
+  token the first time a recruiter asks, so no role is reachable from outside
+  until someone chose that. The role's own state closes the link: draft,
+  archived, past its deadline, or an organisation being deleted read as a
+  notice, and `start` refuses with the candidate page's own `closed` /
+  `expired` codes. There is no rotate yet — a leaked link is closed by
+  archiving the role.
+
 ## A dashboard figure is a bounded scan, and says when it saturated
 
 There is no count operator. `dashboard.overview` reads, per figure, the index
@@ -2952,6 +2996,41 @@ Lazy `import()` chunks are not counted.
   then fails loudly ("no start manifest", "route … is missing") rather than
   measuring nothing — read the new manifest, don't delete the step.
 
+## A role's interview length is computed, never typed
+
+A role used to carry `maxDurationMinutes` (default 20, 5–120), which the
+candidate was told — in the invitation and on the welcome screen — and which
+nothing enforced. The per-question answer time (`maxResponseSeconds`) is the
+only limit the recorder applies. In production a role set to 30 minutes had
+questions that took longer, and a candidate planned their time on the wrong
+figure.
+
+The figure is now `maxInterviewMinutes()` (`convex/lib/interviewDuration.ts`):
+the answer times plus 30 s to read each question, rounded up. The candidate is
+told "up to" that, never "about". The column stays in the schema as optional
+legacy until rows stop carrying it; nothing reads it.
+
+The general rule: a number shown to one person that is derived from settings
+made elsewhere is computed from them, not entered alongside them — two inputs
+for one fact will eventually disagree.
+
+## Transcription detects the language of each answer
+
+`transcribe()` sends no `language`. A role may ask one question in French and
+the next in English, and the provider detects the language per answer; a
+role-level hint would transcribe every answer in the other language as if it
+were in the role's. The cost is some accuracy on very short answers, which the
+hint used to buy — accepted, because a mixed-language role was a product
+decision and a mis-heard language is worse than a mis-heard word. If short
+answers come back garbled, the fix is a language per question, not the role
+hint back.
+
+`projects.language` still exists, but it is the recruiting team's language (set
+from the app's language at creation, not chosen): it writes the report, the job
+ad import and the emails, and is the candidate's default screen language. The
+candidate can switch their own screens from the header for the rest of the tab
+(`useCandidateLanguage`), which leaves the `lang` cookie alone.
+
 ## Mistral's transcription response is not OpenAI's
 
 Every transcription failed validation, and so every report after it found no
@@ -2966,5 +3045,6 @@ and token counts, never `total_seconds`. Nothing caught it because
   Mistral's docs — refresh it from there, not from another provider's.
 - **`language` with `timestamp_granularities`.** One Mistral doc page says the
   two are incompatible; production says otherwise. With both sent, Voxtral
-  answered HTTP 200 on every call in `jobLog` (September 2026).
-  Keep `language`: it helps accuracy on short answers.
+  answered HTTP 200 on every call in `jobLog` (September 2026). `language` is
+  no longer sent anyway — see § "Transcription detects the language of each
+  answer".

@@ -599,15 +599,18 @@ verification is in `TESTING.md`.
 
 ## The candidate surface
 
-- `src/routes/s/**` and `src/components/candidate/**` may import
+- `src/routes/s/**`, `src/routes/apply.*` and `src/components/candidate/**` may import
   `~/components/ui/*` and `~/lib/*`, and nothing else from the recruiter app.
   ESLint enforces it; the previous build shipped 2.96 MB of JS to candidates
   because everything sat in one import graph.
 - Every technical state has a visible rendering: recording, sending, retrying,
   failed. A candidate gets one attempt — a failure they cannot see is an
   interview lost days before anyone finds out.
-- `/s/**` and `/r/**` carry `noindex, nofollow`. These URLs are personal to
-  one person.
+- `/s/**`, `/r/**` and `/apply/**` carry `noindex, nofollow`. The first two
+  are personal to one person; an apply link opens a role to whoever holds it.
+- A session reached through a role's public link is never handed back by
+  address: every submission is a new session. See `KNOWN_ISSUES.md` § "The
+  public apply link".
 
 ## Pipeline
 

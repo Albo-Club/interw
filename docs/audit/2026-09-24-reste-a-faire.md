@@ -35,7 +35,7 @@ précédente, et se merge dans l'ordre (§7).
 | T13 | `claude/audit-T13-candidate-leftovers` | #51 | brouillon (part de T11) |
 | T14 | `claude/audit-T14-dead-code-design` | #52 | brouillon |
 | T15 | `claude/audit-T15-ci-tooling` | #53 | brouillon |
-| T16 | `claude/audit-T16-docs` | PR empilée sur #53 | brouillon |
+| T16 | `claude/audit-T16-docs` | #54 | brouillon |
 | T17 | — | — | à faire |
 
 ## 1. Ce qui est fait

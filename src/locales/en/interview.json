@@ -134,8 +134,8 @@
     "retry": "Check again",
     "continue": "Everything works — start the interview",
     "continueAnyway": "Start anyway",
+    "settings": "Settings",
     "practice": {
-      "title": "Hear yourself before you start",
       "start": "Record a {{seconds}}-second test",
       "stop": "Stop ({{seconds}}s)",
       "again": "Record another test",

@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
 
-import { Check, CircleAlert, Mic, Video } from 'lucide-react'
+import { Check, ChevronDown, CircleAlert, Mic, Settings2, Video } from 'lucide-react'
 
 import { api } from '../../../../convex/_generated/api'
 import type { MicVerdict } from '~/lib/media/devices'
@@ -32,6 +32,7 @@ import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
 import { MicMeter } from '~/components/candidate/MicMeter'
 import { PracticeTake } from '~/components/candidate/PracticeTake'
+import { Stage } from '~/components/candidate/Stage'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
 import { cn } from '~/lib/utils'
@@ -64,6 +65,8 @@ function DeviceCheck() {
   const [audioOnly, setAudioOnly] = useState(false)
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [preview, setPreview] = useState<HTMLVideoElement | null>(null)
+  /** The practice take's blob URL, played on the stage while it exists. */
+  const [take, setTake] = useState<string | null>(null)
 
   const streamRef = useRef<MediaStream | null>(null)
   const [verdict, setVerdict] = useState<MicVerdict>('silent')
@@ -129,11 +132,10 @@ function DeviceCheck() {
 
   if (data === undefined || !languageReady) {
     return (
-      <CandidateShell>
-        <div className="space-y-6">
-          <Skeleton className="h-9 w-72" />
-          <Skeleton className="aspect-[3/4] w-full rounded-lg sm:aspect-video" />
-        </div>
+      <CandidateShell width="stage">
+        <Skeleton className="mb-4 h-12 w-72 max-w-full" />
+        <Skeleton className="min-h-0 flex-1 rounded-xl" />
+        <Skeleton className="mx-auto mt-4 h-11 w-48" />
       </CandidateShell>
     )
   }
@@ -162,22 +164,28 @@ function DeviceCheck() {
     })
   }
 
+  // Nothing to preview: the stage stays dark and says why.
+  const blocked = phase === 'unsupported' || !recorderSupport.usable
+
   return (
     <CandidateShell
+      width="stage"
       organisationName={data.organisationName}
       logoUrl={data.organisationLogoUrl}
       privacyToken={token}
     >
-      <div className="space-y-8">
-        <header className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {t('interview:device.title')}
-          </h1>
-          <p className="text-muted-foreground leading-relaxed">
-            {t('interview:device.subtitle')}
-          </p>
-        </header>
+      <header className="mb-4 space-y-1">
+        <h1 className="text-lg font-semibold tracking-tight">
+          {t('interview:device.title')}
+        </h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {t('interview:device.subtitle')}
+        </p>
+      </header>
 
+      {/* Warnings that leave the camera usable sit above the stage rather
+          than over it: the candidate watches the preview while fixing them. */}
+      <div className="mb-4 space-y-3 empty:hidden">
         {support.inAppBrowser && (
           <Alert>
             <CircleAlert className="size-4" />
@@ -186,110 +194,149 @@ function DeviceCheck() {
             </AlertDescription>
           </Alert>
         )}
-
-        {phase === 'unsupported' || !recorderSupport.usable ? (
-          <Alert variant="destructive">
-            <AlertTitle>
-              {support.insecureContext
-                ? t('interview:device.insecureContext')
-                : t('interview:device.unsupported')}
-            </AlertTitle>
+        {cameraDark && (
+          <Alert>
+            <CircleAlert className="size-4" />
+            <AlertDescription>{t('interview:device.cameraDark')}</AlertDescription>
           </Alert>
-        ) : (
-          <>
-            <CameraPreview ref={setPreview} audioOnly={phase === 'live' && audioOnly}>
+        )}
+      </div>
+
+      <Stage
+        // A practice take has the floor while it exists, as a question does
+        // in the interview: the live camera steps into the corner.
+        prompt={
+          take ? (
+            <video
+              src={take}
+              controls
+              playsInline
+              className="size-full object-contain"
+            />
+          ) : null
+        }
+        self={
+          blocked ? null : (
+            <CameraPreview
+              ref={setPreview}
+              fill
+              audioOnly={phase === 'live' && audioOnly}
+            >
               {phase !== 'live' && (
-                <div className="text-muted-foreground absolute inset-0 flex items-center justify-center text-sm">
+                <div className="text-stage-foreground/80 absolute inset-0 flex items-center justify-center text-sm">
                   {phase === 'starting'
                     ? t('common:loadingEllipsis')
                     : t('interview:device.preview')}
                 </div>
               )}
             </CameraPreview>
+          )
+        }
+        // Left out under a take, whose own controls sit along that edge.
+        caption={
+          phase === 'live' &&
+          !take && (
+            <p className="text-center text-sm text-balance">
+              {t('interview:device.speakPrompt')}
+            </p>
+          )
+        }
+        status={
+          phase === 'live' && (
+            // Clear of the camera thumbnail a take puts in the other corner.
+            <div
+              className={cn(
+                'absolute top-3 left-3',
+                take ? 'right-36 sm:right-56' : 'right-3',
+              )}
+            >
+              <MicCheck stream={stream} onVerdict={setVerdict} />
+            </div>
+          )
+        }
+        // The titles are whole sentences saying what to do: never clamped.
+        overlay={
+          blocked ? (
+            <Alert variant="destructive">
+              <AlertTitle className="line-clamp-none">
+                {support.insecureContext
+                  ? t('interview:device.insecureContext')
+                  : t('interview:device.unsupported')}
+              </AlertTitle>
+            </Alert>
+          ) : phase === 'failed' && failure ? (
+            <Alert variant="destructive">
+              <AlertTitle className="line-clamp-none">
+                {t(failure, { defaultValue: t('interview:errors.unexpected') })}
+              </AlertTitle>
+              {failure === 'interview:device.permissionDenied' && (
+                <AlertDescription>
+                  {t('interview:device.permissionHelp')}
+                </AlertDescription>
+              )}
+            </Alert>
+          ) : null
+        }
+      />
 
-            {phase === 'failed' && failure && (
-              <Alert variant="destructive">
-                <AlertTitle>
-                  {t(failure, { defaultValue: t('interview:errors.unexpected') })}
-                </AlertTitle>
-                {failure === 'interview:device.permissionDenied' && (
-                  <AlertDescription>
-                    {t('interview:device.permissionHelp')}
-                  </AlertDescription>
-                )}
-              </Alert>
-            )}
-
-            {cameraDark && (
-              <Alert>
-                <CircleAlert className="size-4" />
-                <AlertDescription>{t('interview:device.cameraDark')}</AlertDescription>
-              </Alert>
-            )}
-
-            {phase === 'live' && (
-              <>
-                <MicCheck stream={stream} onVerdict={setVerdict} />
-
-                {stream && recorderSupport.audio && (
-                  <PracticeTake
-                    stream={stream}
-                    mimeType={
-                      (!audioOnly && recorderSupport.video) ||
-                      recorderSupport.audio
-                    }
-                  />
-                )}
-
-                <section className="grid gap-4 sm:grid-cols-2">
-                  <DevicePicker
-                    id="camera"
-                    icon={<Video className="size-4" />}
-                    label={t('interview:device.cameraLabel')}
-                    devices={cameras}
-                    value={cameraId}
-                    onChange={setCameraId}
-                  />
-                  <DevicePicker
-                    id="microphone"
-                    icon={<Mic className="size-4" />}
-                    label={t('interview:device.micLabel')}
-                    devices={microphones}
-                    value={micId}
-                    onChange={setMicId}
-                  />
-                </section>
-              </>
-            )}
-          </>
+      <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
+        {phase === 'live' && stream && recorderSupport.audio && (
+          <PracticeTake
+            stream={stream}
+            mimeType={
+              (!audioOnly && recorderSupport.video) || recorderSupport.audio
+            }
+            onTake={setTake}
+          />
         )}
+        <Button variant="ghost" onClick={() => void startPreview()}>
+          {t('interview:device.retry')}
+        </Button>
+        {phase === 'live' && (cameras.length > 1 || microphones.length > 1) && (
+          // Native disclosure: keyboard and screen readers get it for free.
+          // Open, it takes a line of its own and the stage gives up the room.
+          <details className="group open:basis-full">
+            <summary className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm font-medium outline-none focus-visible:ring-[3px] [&::-webkit-details-marker]:hidden">
+              <Settings2 className="size-4" />
+              {t('interview:device.settings')}
+              <ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+            </summary>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 pt-3">
+              <DevicePicker
+                id="camera"
+                icon={<Video className="size-4" />}
+                label={t('interview:device.cameraLabel')}
+                devices={cameras}
+                value={cameraId}
+                onChange={setCameraId}
+              />
+              <DevicePicker
+                id="microphone"
+                icon={<Mic className="size-4" />}
+                label={t('interview:device.micLabel')}
+                devices={microphones}
+                value={micId}
+                onChange={setMicId}
+              />
+            </div>
+          </details>
+        )}
+      </div>
 
-        <div className="flex flex-wrap gap-3 border-t pt-6">
-          {/* The candidate is never trapped by our own check: a mic meter can
-              be wrong, and blocking someone out of their interview over it
-              would be worse than a quiet recording. */}
-          <Button
-            size="lg"
-            onClick={proceed}
-            disabled={!recorderSupport.usable}
-          >
-            {verdict === 'good' ? (
-              <>
-                <Check className="size-4" />
-                {t('interview:device.continue')}
-              </>
-            ) : (
-              t('interview:device.continueAnyway')
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => void startPreview()}
-          >
-            {t('interview:device.retry')}
-          </Button>
-        </div>
+      {/* Where the interview's own button is. The candidate is never trapped
+          by our own check: a mic meter can be wrong, and blocking someone out
+          of their interview over it would be worse than a quiet recording. */}
+      <div className="flex justify-center pt-4">
+        <Button size="lg" onClick={proceed} disabled={!recorderSupport.usable}>
+          {verdict === 'good' ? (
+            <>
+              <Check className="size-4" />
+              {t('interview:device.continue')}
+            </>
+          ) : (
+            t('interview:device.continueAnyway')
+          )}
+        </Button>
       </div>
     </CandidateShell>
   )
@@ -314,30 +361,31 @@ function MicCheck({
   const verdict = assessMicLevels(recent)
   useEffect(() => onVerdict(verdict), [verdict, onVerdict])
   return (
-    <section className="space-y-3">
-      <p className="text-sm font-medium">
-        {t('interview:device.speakPrompt')}
-      </p>
-      <MicMeter level={level} verdict={verdict} />
-      <p
-        role="status"
-        aria-live="polite"
-        className={cn(
-          'text-sm',
-          verdict === 'good'
-            ? 'text-success-strong'
-            : verdict === 'quiet'
-              ? 'text-warning-strong'
-              : 'text-muted-foreground',
-        )}
-      >
+    <div className="bg-stage/80 w-fit max-w-full space-y-2 rounded-lg px-3 py-2 backdrop-blur-sm">
+      <p role="status" aria-live="polite" className="flex gap-2 text-sm">
+        <Mic
+          aria-hidden
+          className={cn(
+            'mt-0.5 size-4 shrink-0',
+            verdict === 'good'
+              ? 'text-success'
+              : verdict === 'quiet'
+                ? 'text-warning'
+                : 'text-stage-foreground/70',
+          )}
+        />
         {verdict === 'good'
           ? t('interview:device.micGood')
           : verdict === 'quiet'
             ? t('interview:device.micQuiet')
             : t('interview:device.micSilent')}
       </p>
-    </section>
+      <MicMeter
+        level={level}
+        verdict={verdict}
+        className="bg-stage-foreground/20 h-1"
+      />
+    </div>
   )
 }
 

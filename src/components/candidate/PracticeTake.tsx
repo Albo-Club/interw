@@ -17,13 +17,19 @@ type Phase = 'idle' | 'recording' | 'failed'
  * the answer will be understood — the echo, the fan, the headset that
  * records from the laptop instead. Nothing leaves the browser: the take is a
  * blob URL, revoked as soon as it is replaced or the screen is left.
+ *
+ * The take is handed up rather than played here: the check screen plays it on
+ * its stage, where there is room for it without scrolling.
  */
 export function PracticeTake({
   stream,
   mimeType,
+  onTake,
 }: {
   stream: MediaStream
   mimeType: string
+  /** The finished take's URL, or null once it is replaced or revoked. */
+  onTake: (url: string | null) => void
 }) {
   const { t } = useTranslation('interview')
   const [phase, setPhase] = useState<Phase>('idle')
@@ -33,9 +39,13 @@ export function PracticeTake({
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    onTake(url)
     if (!url) return
-    return () => URL.revokeObjectURL(url)
-  }, [url])
+    return () => {
+      onTake(null)
+      URL.revokeObjectURL(url)
+    }
+  }, [url, onTake])
 
   useEffect(
     () => () => {
@@ -79,21 +89,7 @@ export function PracticeTake({
   }
 
   return (
-    <section className="space-y-3">
-      <p className="text-sm font-medium">{t('device.practice.title')}</p>
-      {url && (
-        <video
-          src={url}
-          controls
-          playsInline
-          className="bg-muted aspect-video w-full rounded-lg"
-        />
-      )}
-      {phase === 'failed' && (
-        <p role="status" className="text-destructive text-sm">
-          {t('device.practice.failed')}
-        </p>
-      )}
+    <>
       {phase === 'recording' ? (
         <Button variant="outline" onClick={() => void stop()}>
           <Square className="size-4" />
@@ -113,6 +109,11 @@ export function PracticeTake({
             : t('device.practice.start', { seconds: PRACTICE_SECONDS })}
         </Button>
       )}
-    </section>
+      {phase === 'failed' && (
+        <p role="status" className="text-destructive basis-full text-center text-sm">
+          {t('device.practice.failed')}
+        </p>
+      )}
+    </>
   )
 }

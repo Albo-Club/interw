@@ -1,6 +1,9 @@
-// In-app changelog ("What's new") entry metadata, newest first. The
-// user-facing copy lives in the `changelog` i18n namespace, keyed by `id` —
-// add the entry here AND in src/locales/{en,fr}/changelog.json.
+import en from '~/locales/en/changelog-entries.json'
+import fr from '~/locales/fr/changelog-entries.json'
+
+// In-app changelog ("What's new") entry metadata, newest first. The copy of
+// each entry is keyed by `id` in src/locales/{en,fr}/changelog-entries.json —
+// add the entry here AND in both files.
 export const CHANGELOG_ENTRIES = [
   { id: 'simpler-role-creation', date: '2026-09-25' },
   { id: 'transcription-restored', date: '2026-09-25' },
@@ -48,3 +51,19 @@ export const CHANGELOG_ENTRIES = [
 ] as const
 
 export const LATEST_CHANGELOG_ID = CHANGELOG_ENTRIES[0].id
+
+type EntryCopy = { title: string; body: string }
+const ENTRY_COPY: Record<'en' | 'fr', Record<string, EntryCopy>> = {
+  en,
+  fr,
+}
+
+/**
+ * The title and body of one entry. Not in the i18n resources: those are
+ * bundled into every page, the candidate's interview included, and this copy
+ * grows with every release. Importing it here keeps it in the recruiter
+ * chunks that show it. See KNOWN_ISSUES.md § "The candidate bundle budget".
+ */
+export function entryCopy(id: string, language: string): EntryCopy {
+  return ENTRY_COPY[language.startsWith('fr') ? 'fr' : 'en'][id]
+}

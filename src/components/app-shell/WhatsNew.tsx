@@ -14,7 +14,11 @@ import {
   DialogTrigger,
 } from '~/components/ui/dialog'
 import { SidebarMenuButton } from '~/components/ui/sidebar'
-import { CHANGELOG_ENTRIES, LATEST_CHANGELOG_ID } from '~/lib/changelog'
+import {
+  CHANGELOG_ENTRIES,
+  LATEST_CHANGELOG_ID,
+  entryCopy,
+} from '~/lib/changelog'
 
 const STORAGE_KEY = 'changelog-last-seen'
 
@@ -78,10 +82,10 @@ export function WhatsNew({ currentSlug }: { currentSlug: string }) {
                 {formatDate(entry.date)}
               </p>
               <h3 className="text-sm font-medium">
-                {t(`entries.${entry.id}.title`)}
+                {entryCopy(entry.id, i18n.language).title}
               </h3>
               <p className="text-muted-foreground text-sm">
-                {t(`entries.${entry.id}.body`)}
+                {entryCopy(entry.id, i18n.language).body}
               </p>
             </article>
           ))}

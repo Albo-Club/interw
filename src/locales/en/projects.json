@@ -4,6 +4,7 @@
     "title": "Roles",
     "subtitle": "Every role you are interviewing for, and how far each one has got.",
     "new": "New role",
+    "onTeam": "On the team",
     "search": "Search roles",
     "empty": {
       "title": "No role yet",
@@ -56,7 +57,7 @@
     "archive": "Archive",
     "restore": "Restore",
     "delete": "Delete",
-    "share": "Share",
+    "team": "Team",
     "invite": "Invite candidates",
     "overview": "Overview",
     "questions": "Questions",
@@ -106,15 +107,25 @@
     "clearExpiry": "No expiry",
     "intro": {
       "title": "Introduction",
-      "subtitle": "The first thing a candidate sees. A recorded welcome sets a much better tone than a wall of text.",
+      "subtitle": "The first thing a candidate sees: you, on camera, welcoming them. Without one, candidates go straight to the first question.",
       "mode": {
         "none": "No introduction",
-        "text": "Written",
-        "audio": "Recorded audio",
-        "video": "Recorded video"
+        "video": "Video of you"
       },
-      "text": "Introduction text",
-      "textPlaceholder": "Welcome, and thank you for your time…"
+      "media": {
+        "hint": "Until you record it, candidates go straight to the first question.",
+        "record": "Record your intro",
+        "rerecord": "Record again",
+        "remove": "Remove video",
+        "stop": "Stop",
+        "uploading": "Uploading…",
+        "uploadFailed": "Upload failed. Nothing was saved — try again.",
+        "none": "No video recorded yet.",
+        "ready": "Your intro video",
+        "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again.",
+        "noCamera": "No camera found. The intro is a video: connect a camera, then try again.",
+        "unsupported": "This browser can't record video. Use the latest Chrome, Safari, Firefox or Edge."
+      }
     }
   },
   "questions": {
@@ -148,7 +159,9 @@
       "uploadFailed": "Upload failed. Nothing was saved — try again.",
       "none": "No recording. The question will be shown as text.",
       "ready": "Recorded",
-      "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again."
+      "permissionDenied": "Camera or microphone access was refused. Allow it in your browser, then try again.",
+      "noCamera": "No camera or microphone found. Connect one, then try again.",
+      "unsupported": "This browser can't record. Use the latest Chrome, Safari, Firefox or Edge."
     },
     "remove": "Delete question",
     "removeConfirm": {
@@ -201,17 +214,21 @@
     "readyBody": "Publish it, then invite your first candidate.",
     "blocked": "Not ready yet",
     "missing": {
-      "questions": "Add at least one question.",
-      "criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against."
+      "no_questions": "Add at least one question.",
+      "question_not_written": "Question {{position}} still has the example text. Write the question you want to ask.",
+      "no_criteria": "Add at least one evaluation criterion — otherwise there is nothing to score against.",
+      "criterion_not_named": "Criterion {{position}} still has its example name. Name what you want to assess."
     }
   },
-  "share": {
-    "title": "Who can see this role",
-    "subtitle": "By default everyone in your organisation can. Name people to restrict it — admins and you always keep access.",
-    "everyone": "Everyone in the organisation",
-    "restricted": "Only the people I name",
-    "save": "Save access",
-    "saved": "Access updated"
+  "team": {
+    "title": "Role team",
+    "subtitle": "The team sees this role and is emailed when a candidate's report is ready. Admins and owners see every role, but are only emailed about the ones they are on.",
+    "creator": "Creator of the role, always on the team",
+    "createdBy": "Created by <name></name>",
+    "label": "Team",
+    "hint": "Who follows this role with you. You can change it later.",
+    "save": "Save team",
+    "saved": "Team updated"
   },
   "import": {
     "title": "Import from a job ad",
@@ -232,7 +249,8 @@
     "title": "Delete this role?",
     "body": "\"{{title}}\" and its questions and criteria will be permanently deleted. This cannot be undone.",
     "confirm": "Delete role",
-    "hasSessions": "This role has candidates, so it cannot be deleted. Archive it instead — that keeps their interviews and reports."
+    "hasSessions": "This role has candidates, so it cannot be deleted. Archive it instead — that keeps their interviews and reports.",
+    "done": "Role deleted."
   },
   "errors": {
     "invalid_title": "Give the role a title of 120 characters or fewer.",
@@ -254,6 +272,8 @@
     "invalid_url": "That is not a public web address.",
     "unsupported_media_type": "That recording format is not supported.",
     "media_too_large": "That recording is too large. Keep question recordings under 100 MB.",
-    "key_mismatch": "The upload did not match what was expected. Try recording again."
+    "key_mismatch": "The upload did not match what was expected. Try recording again.",
+    "team_too_large": "A team can have at most 100 people.",
+    "not_a_member": "Someone you picked is no longer in the organisation. Reload the page and try again."
   }
 }

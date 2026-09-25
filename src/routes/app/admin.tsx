@@ -7,12 +7,15 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ConvexError } from 'convex/values'
+import { usePaginatedQuery } from 'convex/react'
 import { useConvexMutation, useConvexQuery } from '@convex-dev/react-query'
 
 import { api } from '../../../convex/_generated/api'
+import type { Id } from '../../../convex/_generated/dataModel'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { Button } from '~/components/ui/button'
+import { Skeleton } from '~/components/ui/skeleton'
 import {
   Card,
   CardContent,
@@ -20,6 +23,8 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
+
+const PAGE_SIZE = 25
 
 export const Route = createFileRoute('/app/admin')({
   component: AdminPage,
@@ -34,24 +39,21 @@ export const Route = createFileRoute('/app/admin')({
 
 function AdminPage() {
   const navigate = useNavigate()
-  const { t } = useTranslation('nav')
+  const { t, i18n } = useTranslation('nav')
   const me = useConvexQuery(api.users.me)
-  const overview = useConvexQuery(
-    api.admin.overview,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
-  const orgs = useConvexQuery(
-    api.admin.listOrgs,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
-  const users = useConvexQuery(
-    api.admin.listUsers,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
-  )
+  const allowed = me?.kind === 'ready' && me.user.superAdmin
+  const overview = useConvexQuery(api.admin.overview, allowed ? {} : 'skip')
+  // Paginated (Back F8): both lists used to read their whole table.
+  const orgs = usePaginatedQuery(api.admin.listOrgs, allowed ? {} : 'skip', {
+    initialNumItems: PAGE_SIZE,
+  })
+  const users = usePaginatedQuery(api.admin.listUsers, allowed ? {} : 'skip', {
+    initialNumItems: PAGE_SIZE,
+  })
   const setSuperAdmin = useConvexMutation(api.admin.setSuperAdmin)
   const health = useConvexQuery(
     api.admin.pipelineHealth,
-    me?.kind === 'ready' && me.user.superAdmin ? {} : 'skip',
+    allowed ? {} : 'skip',
   )
   const relaunch = useConvexMutation(api.admin.relaunchSession)
 
@@ -63,8 +65,8 @@ function AdminPage() {
 
   if (!me || me.kind !== 'ready') {
     return (
-      <main className="flex min-h-svh items-center justify-center">
-        <p className="text-muted-foreground text-sm">{t('loading')}</p>
+      <main className="mx-auto max-w-5xl p-6">
+        <ListSkeleton />
       </main>
     )
   }
@@ -77,9 +79,9 @@ function AdminPage() {
     )
   }
 
-  async function handleToggle(userId: string, value: boolean) {
+  async function handleToggle(userId: Id<'users'>, value: boolean) {
     try {
-      await setSuperAdmin({ userId: userId as never, value })
+      await setSuperAdmin({ userId, value })
       toast.success(value ? t('admin.granted') : t('admin.revoked'))
     } catch (err) {
       const code = err instanceof ConvexError ? (err.data as string) : ''
@@ -91,9 +93,9 @@ function AdminPage() {
     }
   }
 
-  async function handleRelaunch(sessionId: string) {
+  async function handleRelaunch(sessionId: Id<'sessions'>) {
     try {
-      await relaunch({ sessionId: sessionId as never })
+      await relaunch({ sessionId })
       toast.success(t('admin.pipeline.stuck.relaunched'))
     } catch {
       toast.error(t('admin.pipeline.stuck.failed'))
@@ -115,14 +117,14 @@ function AdminPage() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Stat label={t('admin.stats.users')} value={overview?.userCount} />
+        <Stat label={t('admin.stats.users')} value={overview?.users} />
         <Stat
           label={t('admin.stats.organizations')}
-          value={overview?.orgCount}
+          value={overview?.orgs}
         />
         <Stat
           label={t('admin.stats.memberships')}
-          value={overview?.memberCount}
+          value={overview?.members}
         />
         <Stat
           label={t('admin.stats.pendingInvites')}
@@ -137,7 +139,7 @@ function AdminPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {!health ? (
-            <p className="text-muted-foreground text-sm">{t('loading')}</p>
+            <ListSkeleton />
           ) : (
             health.windows.map((window) => (
               <section key={window.days} className="space-y-2">
@@ -194,7 +196,7 @@ function AdminPage() {
         </CardHeader>
         <CardContent>
           {!health ? (
-            <p className="text-muted-foreground text-sm">{t('loading')}</p>
+            <ListSkeleton />
           ) : health.stuck.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t('admin.pipeline.stuck.empty')}
@@ -214,7 +216,7 @@ function AdminPage() {
                         expected: row.expected,
                       })}
                       {row.completedAt
-                        ? ` · ${new Date(row.completedAt).toLocaleDateString()}`
+                        ? ` · ${new Date(row.completedAt).toLocaleDateString(i18n.language)}`
                         : ''}
                     </p>
                   </div>
@@ -238,15 +240,15 @@ function AdminPage() {
           <CardDescription>{t('admin.orgs.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {!orgs ? (
-            <p className="text-muted-foreground text-sm">{t('loading')}</p>
-          ) : orgs.length === 0 ? (
+          {orgs.status === 'LoadingFirstPage' ? (
+            <ListSkeleton />
+          ) : orgs.results.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t('admin.orgs.empty')}
             </p>
           ) : (
             <ul className="divide-border divide-y text-sm">
-              {orgs.map((o) => (
+              {orgs.results.map((o) => (
                 <li
                   key={o._id}
                   className="flex items-center justify-between py-3"
@@ -259,12 +261,16 @@ function AdminPage() {
                     </p>
                   </div>
                   <span className="text-muted-foreground text-xs">
-                    {new Date(o.createdAt).toLocaleDateString()}
+                    {new Date(o.createdAt).toLocaleDateString(i18n.language)}
                   </span>
                 </li>
               ))}
             </ul>
           )}
+          <LoadMore
+            status={orgs.status}
+            onLoad={() => orgs.loadMore(PAGE_SIZE)}
+          />
         </CardContent>
       </Card>
 
@@ -274,15 +280,15 @@ function AdminPage() {
           <CardDescription>{t('admin.users.description')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {!users ? (
-            <p className="text-muted-foreground text-sm">{t('loading')}</p>
-          ) : users.length === 0 ? (
+          {users.status === 'LoadingFirstPage' ? (
+            <ListSkeleton />
+          ) : users.results.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t('admin.users.empty')}
             </p>
           ) : (
             <ul className="divide-border divide-y text-sm">
-              {users.map((u) => {
+              {users.results.map((u) => {
                 const isSelf = u._id === me.user._id
                 return (
                   <li
@@ -317,19 +323,58 @@ function AdminPage() {
               })}
             </ul>
           )}
+          <LoadMore
+            status={users.status}
+            onLoad={() => users.loadMore(PAGE_SIZE)}
+          />
         </CardContent>
       </Card>
     </main>
   )
 }
 
-function Stat({ label, value }: { label: string; value: number | undefined }) {
+function Stat({
+  label,
+  value,
+}: {
+  label: string
+  value: { count: number; capped: boolean } | undefined
+}) {
+  const { t } = useTranslation('nav')
   return (
     <Card>
       <CardContent className="py-4">
         <p className="text-muted-foreground text-xs">{label}</p>
-        <p className="text-2xl font-semibold tabular-nums">{value ?? '—'}</p>
+        <p className="text-2xl font-semibold tabular-nums">
+          {!value
+            ? '—'
+            : value.capped
+              ? t('admin.stats.atLeast', { value: value.count })
+              : value.count}
+        </p>
       </CardContent>
     </Card>
+  )
+}
+
+/** Rows in the shape of the lists below, while their first page loads. */
+function ListSkeleton() {
+  const { t } = useTranslation('nav')
+  return (
+    <div role="status" aria-label={t('loading')} className="space-y-2">
+      {Array.from({ length: 3 }, (_, i) => (
+        <Skeleton key={i} className="h-12 w-full" />
+      ))}
+    </div>
+  )
+}
+
+function LoadMore({ status, onLoad }: { status: string; onLoad: () => void }) {
+  const { t } = useTranslation('nav')
+  if (status !== 'CanLoadMore') return null
+  return (
+    <Button variant="outline" size="sm" className="mt-3" onClick={onLoad}>
+      {t('admin.loadMore')}
+    </Button>
   )
 }

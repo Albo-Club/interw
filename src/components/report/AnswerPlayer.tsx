@@ -10,7 +10,8 @@ import { cn } from '~/lib/utils'
 export type PlayableSegment = {
   segmentId: string
   url: string
-  kind: string
+  /** Decides the element: an audio-only answer in a `<video>` is a black box. */
+  kind: 'audio' | 'video'
 }
 
 /**
@@ -41,6 +42,7 @@ export function AnswerPlayer({
   onSelect,
   questionLabels,
   answerLengths,
+  onError,
 }: {
   segments: Array<PlayableSegment>
   cue: SeekCue
@@ -49,12 +51,20 @@ export function AnswerPlayer({
   questionLabels: Record<string, string>
   /** Seconds, from the report: a MediaRecorder file does not know its own. */
   answerLengths: Record<string, number | null>
+  /** The download failed — typically an expired signed URL. */
+  onError: () => void
 }) {
   const { t } = useTranslation('report')
-  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const mediaRef = useRef<HTMLMediaElement | null>(null)
+  // One ref for either element; a callback because a `RefObject` is typed to
+  // one of them.
+  const attachMedia = (element: HTMLMediaElement | null) => {
+    mediaRef.current = element
+  }
   const [download, setDownload] = useState<Download | null>(null)
   /** A seek that landed but whose autoplay the browser refused. */
   const [playAt, setPlayAt] = useState<number | null>(null)
+  const [attempt, setAttempt] = useState(0)
   // `segments[0]` is only defined when the list is non-empty, and tsconfig has
   // no noUncheckedIndexedAccess — so say so explicitly rather than let the
   // optional chains below read as dead code.
@@ -66,15 +76,32 @@ export function AnswerPlayer({
   const status = download?.segmentId === segmentId ? download : null
   const objectUrl = status?.phase === 'done' ? status.objectUrl : undefined
 
+  // The URL is re-signed every 50 minutes (`useSessionMedia`); a local copy
+  // does not expire, so a new URL alone must not download the answer again.
+  // It is read through a ref, and only a failed download waits for a new one.
+  const latest = useRef({ url, onError })
+  const failedUrl = useRef<string | null>(null)
+  useEffect(() => {
+    latest.current = { url, onError }
+  })
+  useEffect(() => {
+    if (failedUrl.current && url && url !== failedUrl.current) {
+      failedUrl.current = null
+      setAttempt((n) => n + 1)
+    }
+  }, [url])
+
   // The whole answer, as soon as it is shown — see `downloadMedia`.
   useEffect(() => {
-    if (!segmentId || !url) return
+    const source = latest.current.url
+    if (!segmentId || !source) return
     const controller = new AbortController()
     let local: string | null = null
+    failedUrl.current = null
     setPlayAt(null)
     setDownload({ segmentId, phase: 'loading', percent: null })
     downloadMedia(
-      url,
+      source,
       (percent) => setDownload({ segmentId, phase: 'loading', percent }),
       controller.signal,
     ).then(
@@ -86,22 +113,25 @@ export function AnswerPlayer({
       (error: unknown) => {
         if (controller.signal.aborted) return
         console.warn('[interw] answer download failed', error)
+        failedUrl.current = source
         setDownload({ segmentId, phase: 'failed' })
+        // Ask for a fresh signature; the effect above retries with it.
+        latest.current.onError()
       },
     )
     return () => {
       controller.abort()
       if (local) URL.revokeObjectURL(local)
     }
-  }, [segmentId, url])
+  }, [segmentId, attempt])
 
   // A cue that arrives mid-download waits here for the local copy.
   useEffect(() => {
-    const video = videoRef.current
-    if (!cue || !video || !objectUrl || cue.segmentId !== segmentId) return
+    const media = mediaRef.current
+    if (!cue || !media || !objectUrl || cue.segmentId !== segmentId) return
     const seek = () => {
-      video.currentTime = cue.seconds
-      video.play().then(
+      media.currentTime = cue.seconds
+      media.play().then(
         () => setPlayAt(null),
         // Autoplay refused (iOS, once the wait outlived the click): offer a
         // play button rather than leave a click that did nothing.
@@ -109,26 +139,43 @@ export function AnswerPlayer({
       )
     }
     // Seeking before metadata is loaded is silently ignored by every browser.
-    if (video.readyState >= 1) {
+    if (media.readyState >= 1) {
       seek()
       return
     }
-    video.addEventListener('loadedmetadata', seek, { once: true })
-    return () => video.removeEventListener('loadedmetadata', seek)
+    media.addEventListener('loadedmetadata', seek, { once: true })
+    return () => media.removeEventListener('loadedmetadata', seek)
   }, [cue, segmentId, objectUrl])
 
   if (segments.length === 0) return null
 
+  // A local copy that will not play is not an expired URL: say so.
+  const onMediaError = () => {
+    if (segmentId) setDownload({ segmentId, phase: 'failed' })
+  }
+
   return (
     <div className="space-y-3">
-      <video
-        ref={videoRef}
-        key={segmentId}
-        src={objectUrl}
-        controls
-        playsInline
-        className="bg-muted aspect-video w-full rounded-lg"
-      />
+      {current?.kind === 'audio' ? (
+        <audio
+          ref={attachMedia}
+          key={current.segmentId}
+          src={objectUrl}
+          onError={onMediaError}
+          controls
+          className="w-full"
+        />
+      ) : (
+        <video
+          ref={attachMedia}
+          key={segmentId}
+          src={objectUrl}
+          onError={onMediaError}
+          controls
+          playsInline
+          className="bg-muted aspect-video w-full rounded-lg"
+        />
+      )}
       <div aria-live="polite" className="text-muted-foreground text-sm">
         {status?.phase === 'loading' && (
           <span className="inline-flex items-center gap-2">
@@ -148,11 +195,11 @@ export function AnswerPlayer({
           <Button
             size="sm"
             onClick={() => {
-              const video = videoRef.current
+              const media = mediaRef.current
               // A refusal leaves this button in place, which is the signal.
-              if (video) {
+              if (media) {
                 fireAndForget(
-                  video.play().then(() => setPlayAt(null)),
+                  media.play().then(() => setPlayAt(null)),
                   'report playback',
                 )
               }

@@ -8,8 +8,9 @@
  *     Silently skipping a criterion would shift the weighted average without
  *     anyone noticing, and a report that is quietly wrong is worse than one
  *     that failed and retried.
- *  2. Every criterion must be scored. Partial coverage means the weighting the
- *     recruiter configured did not happen.
+ *  2. Every criterion must be scored, and every answer assessed. Partial
+ *     coverage means the weighting the recruiter configured did not happen,
+ *     or an answer disappears from the report unannounced.
  *  3. Every quote is re-anchored against the transcript. The model's own
  *     offset is only ever a fallback.
  */
@@ -140,6 +141,11 @@ export function buildReport({
       depth: entry.depth,
       evidence: entry.evidence ? anchor(entry.evidence) : undefined,
     })
+  }
+  // Same rule as the criteria: an answer the model skipped would vanish from
+  // the report with nothing telling the recruiter it was never assessed.
+  if (seenAnswers.size !== answers.length) {
+    throw new ConvexError('report_missing_answers')
   }
 
   // Hybrid score: half the model's holistic read, half the weighting the

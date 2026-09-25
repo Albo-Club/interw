@@ -378,6 +378,45 @@ describe('the fan-in', () => {
   })
 
   /**
+   * Flagged by T01. A relaunch while transcriptions were still running put
+   * every unfinished answer back on the queue — including the ones whose job
+   * was already in the pool — so each of those answers was sent to the
+   * provider, and billed, twice.
+   */
+  it('does not queue an answer again while its transcription is in flight', async () => {
+    await t.mutation(internal.pipeline.onSessionCompleted, {
+      sessionId: s.sessionId,
+    })
+    // A relaunch before any job has run: every answer is in flight.
+    await t.mutation(internal.pipeline.onSessionCompleted, {
+      sessionId: s.sessionId,
+    })
+    await drain(t)
+
+    const { rows, session, reports } = await t.run(async (ctx) => ({
+      rows: await ctx.db
+        .query('jobLog')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+      session: await ctx.db.get('sessions', s.sessionId),
+      reports: await ctx.db
+        .query('reports')
+        .withIndex('by_session', (q) => q.eq('sessionId', s.sessionId))
+        .collect(),
+    }))
+    // Every job that runs writes exactly one of `started` or `skipped`, so
+    // this counts jobs queued, not only jobs that reached the provider.
+    const jobs = rows.filter(
+      (row) =>
+        row.step === 'transcribe' &&
+        (row.outcome === 'started' || row.outcome === 'skipped'),
+    )
+    expect(jobs).toHaveLength(QUESTION_COUNT)
+    expect(session?.segmentsSettled).toBe(QUESTION_COUNT)
+    expect(reports).toHaveLength(1)
+  })
+
+  /**
    * Audit 2026-09-15, Pipe M14. `attempt` was 1 on every row, so a first try
    * and a fourth could not be told apart and no retry rate could be read.
    */

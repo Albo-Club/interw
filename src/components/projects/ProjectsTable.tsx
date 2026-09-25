@@ -30,7 +30,7 @@ export function ProjectsTable({
   locale,
   onArchive,
   onRestore,
-  onShare,
+  onEditTeam,
   emptyState,
 }: {
   projects: Array<ProjectRow>
@@ -38,7 +38,7 @@ export function ProjectsTable({
   locale: string
   onArchive: (project: ProjectRow) => void
   onRestore: (project: ProjectRow) => void
-  onShare: (project: ProjectRow) => void
+  onEditTeam: (project: ProjectRow) => void
   emptyState: React.ReactNode
 }) {
   const { t } = useTranslation(['projects', 'common'])
@@ -49,8 +49,8 @@ export function ProjectsTable({
 
   const columns = useMemo(
     () =>
-      buildProjectColumns({ orgSlug, locale, onArchive, onRestore, onShare, t }),
-    [orgSlug, locale, onArchive, onRestore, onShare, t],
+      buildProjectColumns({ orgSlug, locale, onArchive, onRestore, onEditTeam, t }),
+    [orgSlug, locale, onArchive, onRestore, onEditTeam, t],
   )
 
   const table = useReactTable({

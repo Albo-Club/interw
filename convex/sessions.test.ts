@@ -164,3 +164,120 @@ describe('the retention clock', () => {
 
 /** Six months from the invitation. Mirrors INVITED_RETENTION_MS. */
 const INVITED_RETENTION_MS_EXPECTED = 183 * 24 * 60 * 60 * 1000
+
+/**
+ * Audit E4: the candidate table could not compare anyone, because the list it
+ * reads never carried the score. The headline result is denormalised onto the
+ * session by the queue; the recruiter row has to pass it through.
+ */
+describe('the recruiter list', () => {
+  let t: ReturnType<typeof newTest>
+  let f: Fixture
+
+  beforeEach(async () => {
+    t = newTest()
+    f = await seed(t)
+  })
+
+  it('carries the score and the recommendation, and never the token', async () => {
+    await t.run(async (ctx) => {
+      for (const [name, score] of [
+        ['Scored', 82],
+        ['Waiting', undefined],
+      ] as const) {
+        await ctx.db.insert('sessions', {
+          orgId: f.orgId,
+          projectId: f.projectId,
+          accessToken: name.padEnd(43, 'x'),
+          candidateName: name,
+          candidateEmail: `${name.toLowerCase()}@example.test`,
+          status: score === undefined ? 'pending' : 'completed',
+          lastQuestionIndex: 0,
+          invitedBy: f.recruiter,
+          invitedAt: 0,
+          overallScore: score,
+          recommendation: score === undefined ? undefined : 'strong_yes',
+        })
+      }
+    })
+
+    const { page } = await asRecruiter(t).query(api.sessions.listByProject, {
+      projectId: f.projectId,
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    const byName = Object.fromEntries(page.map((row) => [row.candidateName, row]))
+    expect(byName.Scored).toMatchObject({
+      overallScore: 82,
+      recommendation: 'strong_yes',
+    })
+    expect(byName.Waiting).toMatchObject({
+      overallScore: null,
+      recommendation: null,
+    })
+    expect(JSON.stringify(page)).not.toContain('xxxx')
+  })
+})
+
+/**
+ * "Copy the link" is shown to the people the server lets fetch it: the org's
+ * owners and admins, and the role's creator. A team member who can see the
+ * candidate still cannot mint an interview link for them.
+ */
+describe('the invitation link', () => {
+  let t: ReturnType<typeof newTest>
+  let f: Fixture
+  let sessionId: Id<'sessions'>
+
+  beforeEach(async () => {
+    vi.stubEnv('SITE_URL', 'https://app.example.test/')
+    t = newTest()
+    f = await seed(t)
+    sessionId = await t.run(async (ctx) => {
+      const teammate = await ctx.db.insert('users', {
+        betterAuthId: 'ba_teammate',
+        email: 'mate@acme.test',
+        superAdmin: false,
+        createdAt: 0,
+      })
+      await ctx.db.insert('organizationMembers', {
+        orgId: f.orgId,
+        userId: teammate,
+        role: 'member',
+        joinedAt: 0,
+      })
+      await ctx.db.insert('projectShares', {
+        orgId: f.orgId,
+        projectId: f.projectId,
+        userId: teammate,
+        grantedBy: f.recruiter,
+        grantedAt: 0,
+      })
+      return await ctx.db.insert('sessions', {
+        orgId: f.orgId,
+        projectId: f.projectId,
+        accessToken: 't'.repeat(43),
+        candidateName: 'Alex',
+        candidateEmail: 'alex@example.test',
+        status: 'pending',
+        lastQuestionIndex: 0,
+        invitedBy: f.recruiter,
+        invitedAt: 0,
+      })
+    })
+  })
+
+  it('is handed to an owner', async () => {
+    const { url } = await asRecruiter(t).query(api.sessions.invitationLink, {
+      sessionId,
+    })
+    expect(url).toBe(`https://app.example.test/s/${'t'.repeat(43)}`)
+  })
+
+  it('is refused to a team member who is not the creator', async () => {
+    await expect(
+      t
+        .withIdentity({ subject: 'ba_teammate' })
+        .query(api.sessions.invitationLink, { sessionId }),
+    ).rejects.toThrow(/insufficient_role/)
+  })
+})

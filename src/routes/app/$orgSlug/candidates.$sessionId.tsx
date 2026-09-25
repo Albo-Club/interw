@@ -6,15 +6,23 @@ import {
   useConvexQuery,
 } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, FileText, Play, Share2, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  FileText,
+  Play,
+  RotateCw,
+  Share2,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import type { SeekCue } from '~/components/report/AnswerPlayer'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { errorMessageKey } from '~/lib/convex-errors'
-import { fireAndForget } from '~/lib/fire-and-forget'
+import { sessionMediaKey, useSessionMedia } from '~/hooks/useSessionMedia'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { Skeleton } from '~/components/ui/skeleton'
@@ -32,7 +40,10 @@ import {
 } from '~/components/ui/alert-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
+import { MemberName } from '~/components/MemberName'
 import { ShareReportDialog } from '~/components/report/ShareReportDialog'
+import { Highlights } from '~/components/report/Highlights'
+import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
 import {
   AnswerPlayer,
   formatTimecode,
@@ -43,9 +54,18 @@ import {
   SessionStatusBadge,
 } from '~/components/candidates/StatusBadge'
 import { cn } from '~/lib/utils'
+import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 export const Route = createFileRoute('/app/$orgSlug/candidates/$sessionId')({
+  // The one place the URL segment becomes a session id. A malformed value is
+  // refused by the functions' `v.id` validators and lands on `errorComponent`.
+  params: {
+    parse: (raw) => ({ sessionId: raw.sessionId as Id<'sessions'> }),
+    stringify: (parsed) => ({ sessionId: parsed.sessionId }),
+  },
   component: CandidateReportPage,
+  errorComponent: AppRouteError,
+  notFoundComponent: AppNotFound,
   head: () => ({
     meta: [
       { title: getI18n(getLocale()).getFixedT(null, 'report')('metaTitle') },
@@ -61,42 +81,30 @@ function CandidateReportPage() {
   const locale = getLocale()
 
   const data = useConvexQuery(api.reports.forSession, {
-    sessionId: sessionId as never,
+    sessionId,
   })
   const mediaUrls = useConvexAction(api.reports.sessionMediaUrls)
   const setDecision = useConvexMutation(api.reports.setDecision)
   const setNote = useConvexMutation(api.reports.setNote)
+  const relaunch = useConvexMutation(api.reports.relaunch)
   const deleteCandidate = useConvexAction(api.sessions.deleteCandidateData)
   const navigate = useNavigate()
 
-  const [media, setMedia] = useState<{
-    segments: Array<{ segmentId: string; url: string; kind: string }>
-    cv: string | null
-    coverLetter: string | null
-  } | null>(null)
+  const {
+    media,
+    failed: mediaFailed,
+    retry: retryMedia,
+    onPlaybackError,
+  } = useSessionMedia(data ? sessionMediaKey(data) : null, () =>
+    mediaUrls({ sessionId, language: locale }),
+  )
   const [cue, setCue] = useState<SeekCue>(null)
   const [activeSegment, setActiveSegment] = useState<string | null>(null)
   const [note, setNoteValue] = useState('')
   const [noteLoaded, setNoteLoaded] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-
-  // Minted once per session, not on every live update of `data`: each new
-  // signed URL makes the player download the whole answer again.
-  const loaded = data !== undefined
-  useEffect(() => {
-    if (!loaded) return
-    let cancelled = false
-    fireAndForget(
-      mediaUrls({ sessionId: sessionId as never }).then((result) => {
-        if (!cancelled) setMedia(result)
-      }),
-      'playback urls',
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [loaded, mediaUrls, sessionId])
+  const [relaunching, setRelaunching] = useState(false)
 
   useEffect(() => {
     if (data && !noteLoaded) {
@@ -132,7 +140,16 @@ function CandidateReportPage() {
     )
   }
 
-  const { session, project, criteria, answers, report, pipeline } = data
+  const {
+    session,
+    project,
+    criteria,
+    answers,
+    report,
+    pipeline,
+    canManage,
+    decisionHistory,
+  } = data
   const criterionLabel = new Map(criteria.map((c) => [c._id, c]))
 
   const jump = (segmentId: string, seconds: number) => {
@@ -142,11 +159,24 @@ function CandidateReportPage() {
 
   const saveNote = async () => {
     try {
-      await setNote({ sessionId: sessionId as never, note })
+      await setNote({ sessionId, note })
       toast.success(t('report:note.saved'))
     } catch (error) {
       const { key, fallbackKey } = errorMessageKey(error, 'report')
       toast.error(t(key, { defaultValue: t(fallbackKey) }))
+    }
+  }
+
+  const relaunchAnalysis = async () => {
+    setRelaunching(true)
+    try {
+      await relaunch({ sessionId })
+      toast.success(t('report:pending.relaunched'))
+    } catch (error) {
+      const { key, fallbackKey } = errorMessageKey(error, 'report')
+      toast.error(t(key, { defaultValue: t(fallbackKey) }))
+    } finally {
+      setRelaunching(false)
     }
   }
 
@@ -184,14 +214,18 @@ function CandidateReportPage() {
               {t('report:share.title')}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            className="text-destructive"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="size-4" />
-            {t('candidates:actions.delete')}
-          </Button>
+          {/* Only for those the server lets delete (E9): offering a button
+              that always fails is a dead end. */}
+          {canManage && (
+            <Button
+              variant="ghost"
+              className="text-destructive"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="size-4" />
+              {t('candidates:actions.delete')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -247,6 +281,23 @@ function CandidateReportPage() {
                 ))}
               </ul>
             )}
+            {lastFailure && canManage && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={relaunching}
+                onClick={() => void relaunchAnalysis()}
+              >
+                <RotateCw
+                  className={cn(
+                    'size-4',
+                    relaunching && 'motion-safe:animate-spin',
+                  )}
+                  aria-hidden
+                />
+                {t('report:pending.relaunch')}
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
       ) : session.status === 'in_progress' ? (
@@ -258,6 +309,13 @@ function CandidateReportPage() {
               answered: answeredCount,
               total: answers.length,
             })}
+          </AlertDescription>
+        </Alert>
+      ) : session.status === 'expired' ? (
+        <Alert>
+          <AlertTitle>{t('report:expired.title')}</AlertTitle>
+          <AlertDescription>
+            {t('report:expired.body', { name: session.candidateName })}
           </AlertDescription>
         </Alert>
       ) : (
@@ -373,11 +431,15 @@ function CandidateReportPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ul className="list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
-                    {report.strengths.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
+                  {report.strengths.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">—</p>
+                  ) : (
+                    <ul className="list-disc space-y-1.5 pl-4 text-sm leading-relaxed">
+                      {report.strengths.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  )}
                 </CardContent>
               </Card>
               <Card>
@@ -493,8 +555,10 @@ function CandidateReportPage() {
           </section>
         </div>
 
-        {/* ── Sidebar: the video, the delivery figures, the decision. ──── */}
+        {/* ── Sidebar: the video, the decision. ──── */}
         <aside className="space-y-6">
+          {mediaFailed && <MediaFailedAlert onRetry={retryMedia} />}
+
           {media && media.segments.length > 0 && (
             <AnswerPlayer
               segments={media.segments}
@@ -503,6 +567,14 @@ function CandidateReportPage() {
               onSelect={setActiveSegment}
               questionLabels={questionLabels}
               answerLengths={answerLengths}
+              onError={onPlaybackError}
+            />
+          )}
+
+          {report?.highlights && (
+            <Highlights
+              highlights={report.highlights}
+              onJump={media && media.segments.length > 0 ? jump : null}
             />
           )}
 
@@ -525,7 +597,7 @@ function CandidateReportPage() {
                     }
                     onClick={() =>
                       void setDecision({
-                        sessionId: sessionId as never,
+                        sessionId,
                         decision:
                           session.recruiterDecision === decision
                             ? null
@@ -553,40 +625,41 @@ function CandidateReportPage() {
               {session.recruiterDecisionBy && (
                 <p className="text-muted-foreground text-xs">
                   <DecisionBadge decision={session.recruiterDecision} />{' '}
-                  {session.recruiterDecisionBy.name ??
-                    session.recruiterDecisionBy.email}
+                  <MemberName member={session.recruiterDecisionBy} />
                 </p>
+              )}
+              {decisionHistory.length > 0 && (
+                <details className="text-xs">
+                  <summary className="text-muted-foreground cursor-pointer">
+                    {t('candidates:decision.history')}
+                  </summary>
+                  <ol className="mt-2 space-y-1.5">
+                    {decisionHistory.map((event, index) => (
+                      <li
+                        key={index}
+                        className="flex flex-wrap items-baseline gap-x-2"
+                      >
+                        <span className="font-medium">
+                          {event.decision
+                            ? t(`candidates:decision.${event.decision}`)
+                            : t('candidates:decision.cleared')}
+                        </span>
+                        <span className="text-muted-foreground min-w-0 break-words">
+                          <MemberName member={event.by} />
+                        </span>
+                        <time
+                          dateTime={new Date(event.at).toISOString()}
+                          className="text-muted-foreground tabular-nums"
+                        >
+                          {new Date(event.at).toLocaleString(locale)}
+                        </time>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
               )}
             </CardContent>
           </Card>
-
-          {report?.paraverbal && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {t('report:sections.delivery')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-muted-foreground text-xs">
-                  {t('report:delivery.subtitle')}
-                </p>
-                {report.paraverbal.dimensions.map((dimension) => (
-                  <div key={dimension.key} className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span>{t(`report:delivery.${dimension.key}`)}</span>
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {t(`report:delivery.${dimension.key}Unit`, {
-                          value: dimension.measure,
-                        })}
-                      </span>
-                    </div>
-                    <Progress value={dimension.score * 10} />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
 
           {(media?.cv || media?.coverLetter) && (
             <Card>
@@ -598,17 +671,29 @@ function CandidateReportPage() {
               <CardContent className="flex flex-col gap-2">
                 {media.cv && (
                   <Button variant="outline" size="sm" asChild>
-                    <a href={media.cv} rel="noreferrer">
-                      <FileText className="size-4" />
-                      CV
+                    <a href={media.cv} target="_blank" rel="noopener noreferrer">
+                      <FileText className="size-4" aria-hidden />
+                      {t('report:documents.cv')}
+                      <span className="sr-only">
+                        {' '}
+                        {t('report:documents.newTab')}
+                      </span>
                     </a>
                   </Button>
                 )}
                 {media.coverLetter && (
                   <Button variant="outline" size="sm" asChild>
-                    <a href={media.coverLetter} rel="noreferrer">
-                      <FileText className="size-4" />
-                      {t('report:sections.documents')}
+                    <a
+                      href={media.coverLetter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <FileText className="size-4" aria-hidden />
+                      {t('report:documents.coverLetter')}
+                      <span className="sr-only">
+                        {' '}
+                        {t('report:documents.newTab')}
+                      </span>
                     </a>
                   </Button>
                 )}
@@ -639,7 +724,7 @@ function CandidateReportPage() {
       </div>
 
       <ShareReportDialog
-        sessionId={sessionId as never}
+        sessionId={sessionId}
         open={sharing}
         onOpenChange={setSharing}
       />
@@ -660,7 +745,7 @@ function CandidateReportPage() {
             <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                void deleteCandidate({ sessionId: sessionId as never })
+                void deleteCandidate({ sessionId })
                   .then(() =>
                     navigate({
                       to: '/app/$orgSlug/projects/$projectSlug',

@@ -114,6 +114,23 @@ export function nextOpenQuestion(
   return answered.length
 }
 
+/**
+ * Whether the interview opens on the recruiter's intro: a video that can be
+ * played, on a first visit. Anything else — no intro, a mode since retired, a
+ * URL that could not be signed — goes straight to the first question, and the
+ * candidate never sees an intro screen. One with nothing on it is a dead end.
+ */
+export function opensOnIntro(
+  intro: { mode: 'none' | 'video'; url: string | null },
+  answered: ReadonlyArray<boolean>,
+): boolean {
+  return (
+    intro.mode === 'video' &&
+    intro.url !== null &&
+    answered.every((done) => !done)
+  )
+}
+
 function moveTo(state: InterviewState, index: number): InterviewState {
   return {
     ...state,
@@ -258,4 +275,12 @@ export function interviewReducer(
         ? { ...state, phase: 'finishFailed', error: event.error }
         : state
   }
+}
+
+/**
+ * An answer exists on this page and not on the server: leaving now loses it.
+ * `saveFailed` counts — the bytes wait there for "Try again".
+ */
+export function answerAtRisk(phase: Phase): boolean {
+  return phase === 'recording' || phase === 'saving' || phase === 'saveFailed'
 }

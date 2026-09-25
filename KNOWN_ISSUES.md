@@ -174,9 +174,11 @@ object it read before updating it) — that is an accident of 1.6.30.
 
 ### Per-address quotas are charged before Better Auth runs
 
-`perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
-`verificationSend` in a before hook, for every address, and refuses with a
-real 429 (`code: 'RATE_LIMITED'`). It used to happen inside the email senders,
+`perEmailQuota` charges `emailCodeSend`, `passwordResetSend`,
+`verificationSend` or `passwordSignIn` in a before hook, for every address,
+and refuses with a real 429 (`code: 'RATE_LIMITED'`). The bucket key is an
+HMAC of the normalised address under `BETTER_AUTH_SECRET` (`makeSignature`),
+so the rate limiter's table — which nothing erases — never holds addresses. It used to happen inside the email senders,
 which was wrong three ways:
 
 1. A sender only runs for an address that has an account, so the quota
@@ -202,6 +204,80 @@ a Better Auth sender.
   returns a verified email — and (2) `accountLinking.enabled` is unchanged.
   Legacy unverified password accounts still complete their old verification
   link through `verificationRequiresCredential`.
+
+## Brute force: the IP is a claim, the account is not
+
+Better Auth's `rateLimit` is per IP, and it takes the IP from a request
+header (`@better-auth/core/dist/utils/ip.mjs:201-217`). Whoever sets the
+header chooses the bucket. Two ways that went wrong (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 3):
+
+- The Convex adapter's proxy (`@convex-dev/better-auth/dist/react-start/index.js:38`)
+  copies every inbound header, so our `/api/auth/*` forwarded whatever the
+  client and the platform left in `X-Forwarded-For`.
+- `<deployment>.convex.site/api/auth/*` is public. A request sent straight
+  there carries any header its sender likes: a new `X-Forwarded-For` per
+  guess meant a new bucket per guess, and unlimited password guesses.
+
+**The per-account limit is what makes it safe.** `/sign-in/email` is charged
+in `perEmailQuota` (bucket `passwordSignIn`: 5 at once, then 10 an hour),
+keyed on the address, before Better Auth looks anything up. No header moves
+it. It counts every attempt, not only failures — a before hook cannot know
+the outcome, and a guesser's attempts are failures anyway. The cost: someone
+can keep one address's bucket empty and block its **password** sign-in. The
+email code is untouched by it, so the owner still gets in.
+
+**The per-IP key now comes from the platform, not the client.**
+`src/routes/api/auth/$.ts` drops `X-Forwarded-For`, `X-Real-IP` and
+`x-interw-client-ip` from the client and sends the address Vercel's edge
+wrote into `X-Forwarded-For` as `x-interw-client-ip`
+(`convex/lib/clientIp.ts`); `advanced.ipAddress.ipAddressHeaders` reads only
+that header. A name no platform sets, so legitimate traffic lands in its own
+bucket whatever Convex's ingress does with `X-Forwarded-For`. Custom headers
+do reach Convex HTTP actions unchanged — the Resend webhook's `svix-*`
+signature headers depend on it.
+
+**What stays unknown offline**, and why it no longer matters for passwords:
+
+- What Convex's ingress does with a client-supplied `X-Forwarded-For` on a
+  direct `.convex.site` request (pass through, append, overwrite). Better
+  Auth no longer reads that header at all.
+- A direct request can still name any `x-interw-client-ip`, so the per-IP
+  rules (sign-in, code sends, reset) remain bypassable from outside the web
+  domain. Every endpoint that matters for guessing — password sign-in, code
+  sends, reset and verification emails — also has its per-address bucket; the
+  code itself allows five tries per code.
+- A direct request with **no** client-IP header lands in Better Auth's shared
+  `no-trusted-ip` bucket per path. Only direct callers share it: every
+  browser request goes through the proxy and carries its own address.
+- On a host other than Vercel, whether its proxy overwrites
+  `X-Forwarded-For` is that host's contract. Check it before trusting the
+  per-IP key there.
+
+Closing the direct path for good means the proxy proving itself to Convex
+(a shared secret on both sides, or refusing `/api/auth/*` on `.convex.site`
+unless it carries one). Not done: it needs a secret set on both the Vercel
+project and the Convex deployment, and the per-account bucket already bounds
+guessing.
+
+## Super-admin is the operator's address, not the first sign-up
+
+`provisionAppUser` (`convex/lib/auth.ts`) used to make the first row in
+`users` a super-admin. On an empty deployment — a fresh one, or right after
+`admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
+code flow creates accounts for any address. Now a **new** row is super-admin
+only when Better Auth reports its address verified and it equals
+`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
+promoted: fail closed.
+
+- Existing rows are never touched: the flag is set on insert only. Deployments
+  that already have their super-admins keep them, with or without the
+  variable, and `/app/admin` still promotes others.
+- An operator who signed up **before** setting the variable is not promoted
+  retroactively: a flag that changes on a later sign-in would be a flag an
+  env edit can grant silently. Promote from `/app/admin`, or the dashboard on
+  a deployment with no super-admin at all.
+- `pnpm run setup:prod` mirrors `SUPER_ADMIN_EMAIL` from dev.
 
 ## Invitations no longer pre-verify anything
 
@@ -308,12 +384,15 @@ applies — same trap as the `SITE_URL` guard below.
 BA's built-in `rateLimit` block with `storage: 'database'` is wired
 into the Convex adapter — no separate component to install. BA writes
 to an auto-created `rateLimit` table on the BA-side schema. We rely
-on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP.
-Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
+on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP — an IP
+a direct caller can claim, see "Brute force: the IP is a claim, the account
+is not". Keys must be real endpoint paths — `convex/authEmailCode.test.ts`
+asserts it.
 
 `convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
 *separate* — it covers application-level limits (invitations, chat, and the
-per-address email quotas, charged by the `perEmailQuota` hook). Do not
+per-address quotas on emails and password sign-in, charged by the
+`perEmailQuota` hook). Do not
 confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
 key on Convex mutations/actions.
 
@@ -393,6 +472,31 @@ it should ever come from. It is read inside the middleware's server handler,
 never at module scope — `src/start.ts` is the isomorphic Start entry, and
 `process` does not exist in the browser.
 
+It is validated before it is spliced (`cspOrigin` in
+`src/lib/security-headers.ts`): an `https:` origin whose host is only letters,
+digits, dots and hyphens, and nothing after it. `new URL()` alone is not
+enough — it accepts `https://host;x` and keeps `;x` in the origin, which would
+append a directive of the operator's typo. A malformed value is dropped, and
+`media-src` falls back to `https:` as if it were unset.
+
+### `img-src` names hosts, and one of them comes from the build
+
+`img-src` used to end in a bare `https:`, which let any image the page was
+made to render — model output, above all — call any host with whatever the
+URL carried. It now lists what actually serves our images: `'self'`, `data:`,
+the **Convex deployment origin** (avatars and org logos resolve to
+`<deployment>.convex.cloud/api/storage/…`), the media bucket, and
+`https://*.googleusercontent.com` (the avatar Better Auth copies from a Google
+sign-in into `users.avatarUrl`).
+
+The Convex origin comes from `VITE_CONVEX_URL`, **inlined at build time** in
+`src/start.ts`. A build without it ships a policy that blocks every avatar and
+logo — `pnpm test:smoke` fails on that. If the deployment is ever put behind
+a Convex custom domain, `ctx.storage.getUrl` returns that domain and it must
+be added here. A new image source (another OAuth provider's avatars, images
+from the bucket) is a capability: add its host in the same PR, with an
+assertion in `security-headers.test.ts` on the URL it needs to load.
+
 ## A return-URL search param needs the URL parser, not a regex
 
 `/login` takes `?redirect=` and, after a successful `signIn.email`, calls
@@ -456,8 +560,13 @@ staging and production"). Vercel installs with the pnpm named in
 ```
 DEPLOY_CONVEX=true  →  npx convex deploy --cmd-url-env-var-name VITE_CONVEX_URL \
                                           --cmd 'pnpm build:app'
-otherwise           →  pnpm build:app          (vite build && tsc --noEmit)
+otherwise           →  pnpm build:app          (vite build)
 ```
+
+`build:app` does not type-check: `pnpm lint` runs `tsc`, and running it twice
+cost ~20 s of every CI run for nothing new. The consequence is that a type
+error no longer fails a Vercel build — CI's `check` job is the gate, so a
+branch that deploys must be one whose CI is green.
 
 So every push to an environment's branch **also** deploys Convex functions
 and schema in lockstep. You should never run `pnpm exec convex deploy --prod`
@@ -633,6 +742,21 @@ this by setting `node-linker=hoisted`, pointing `package-import-method` at
 back into real bytes. The one thing that would break it is moving the pnpm
 store off the workspace volume: `clonefile()` cannot cross volumes, and the
 275 MB would become 6.8 GB overnight.
+
+## Agent worktrees sit inside the repository
+
+Claude Code checks each agent out under `.claude/worktrees/<name>/` — a full
+copy of the repository, inside it. Two globs then reach every copy: `tsc`'s
+`include: ["**/*.ts", …]` and `eslint .`. With a handful of agents running,
+`pnpm lint` in the main checkout linted every one of them and ran out of
+memory, and `tsc` reported each type error once per copy.
+
+Both ignore the directory now (`globalIgnores` in `eslint.config.mjs`,
+`exclude` in `tsconfig.json`). The trap in the second: setting `exclude`
+**replaces** TypeScript's default instead of extending it, so `node_modules`
+has to be listed again or `tsc` walks into it. Vitest is unaffected — its
+`include` is rooted at `src/` and `convex/`. A new tool that globs from the
+repository root needs the same exclusion.
 
 ## Convex skills were pruned — do not re-vendor them
 
@@ -875,6 +999,18 @@ skills (plugin cache *and* `.agents/skills/`)
 and double the update machinery — so we deliberately don't. Let the
 marketplace own Resend.
 
+## Resend is a US processor, and moving it to the EU is undecided
+
+Every other candidate-data processor is European (Mistral, the Scaleway
+bucket, Convex in EU West); Resend, which receives the address of every
+candidate it invites, is not. The move (audit C6.5) has **no decision
+yet**. Its cost is not an env var: `@convex-dev/resend` is a Convex component,
+so switching to an EU sender (Scaleway TEM, Brevo) means replacing the
+component — sending, the erasure hook on its tables (§ "Components keep their
+own copies of candidate data"), the 30-day cleanup cron — and re-wiring the
+delivery webhook (`/resend-webhook`, `RESEND_WEBHOOK_SECRET`). Decide it
+explicitly before the processor list is published; don't drift into it.
+
 ## macOS Finder duplicates
 
 Any `* 2.ts` / `* 2.tsx` file (created by Finder copy/paste or "Save as"
@@ -1024,11 +1160,10 @@ a *build-time* omission. Chasing that message by adding `CONVEX_SITE_URL` to
 the running app appears to work on some paths and leaves the client bundle
 wrong. The fix is always a rebuild with the variables present.
 
-## Trade-offs vs PROJECT_BRIEF.md
+## Trade-offs vs the original brief
 
-Choices that diverge from the brief, with rationale. See
-`/Users/benjaminbouquet/.claude/plans/glistening-puzzling-kay.md` for the full
-audit.
+Choices that diverge from the product brief the template was built from (the
+brief itself is not in this repository), with rationale.
 
 - **Better Auth `organization()` plugin not loaded** — its tables are not Convex
   first-class (no `withIndex` joins). We mirror orgs/members/invitations in our
@@ -1046,7 +1181,8 @@ audit.
 - **Super-admin lacks impersonate** — out of scope for MVP, needs a careful
   session-signing flow.
 - **Sentry only on the front-end** — Convex Dashboard logs cover errors;
-  Sentry-on-Convex would need a fetch-to-envelope helper.
+  Sentry-on-Convex would need a fetch-to-envelope helper. What the front-end
+  sends is in § "Sentry collects errors only".
 
 ## Color theme picker SSR flash
 
@@ -1213,6 +1349,28 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   the organisations. The way out for a solo owner is to delete the
   organisation first (§ "Deleting an organisation"): one being deleted no
   longer counts as sole-owned.
+- **Deleting the last super admin orphaned the platform.** Same three layers
+  as `sole_owner`: `cascadeDelete` throws `last_super_admin` (the code
+  `admin.setSuperAdmin` already uses for a self-demotion), `/delete-user`
+  refuses with `LAST_SUPER_ADMIN` before mailing, the link's callback lands
+  on `blocked` for someone who became the last one meanwhile, and
+  `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
+
+## A removed member keeps their credit — and their creator rights on return
+
+Removing someone from an organisation deletes their membership, their team
+rows and their report share links (`revokeMemberGrants`), never the ids that
+credit their work (`projects.createdBy`, `sessions.recruiterDecisionBy`,
+`decisionEvents.actorId`, `invitations.invitedBy`, …). Screens resolve those
+ids through `memberName` (`convex/lib/memberName.ts`), which keeps the name
+and flags `removed`, and render them with `src/components/MemberName.tsx`;
+a deleted account has no name left and reads "Former member". A new screen
+that credits someone goes through the same pair rather than reading `users`
+itself. Authorisation does not read that flag: a removed creator is
+locked out by `requireOrgMember` like anyone else. If they are re-invited,
+`createdBy` still names them, so they regain creator rights on their own roles
+(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
+their work — but it is the one thing removal does not reset.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -1296,6 +1454,29 @@ and ~10 MB of data burned **4.8 GB of Database Bandwidth** this way.
    migration has cleared the field from every row — the widen → migrate →
    narrow pattern.
 
+## Bumping a SHA-pinned GitHub Action
+
+Every `uses:` in `.github/workflows/ci.yml` names a full commit SHA with its
+release as a trailing comment (why: the comment at the top of the file). What
+a retagged action could reach there is the `e2e` job's `CONVEX_DEPLOY_KEY`.
+
+To bump one by hand, resolve the tag to the commit it points at. For an
+*annotated* tag that is the `^{}` line, not the tag object above it:
+
+```bash
+git ls-remote https://github.com/pnpm/action-setup refs/tags/v4.4.0 'refs/tags/v4.4.0^{}'
+# a15d…  refs/tags/v4.4.0        <- the tag object: not this one
+# fc06…  refs/tags/v4.4.0^{}     <- the commit: pin this
+```
+
+A lightweight tag prints a single line, which is the commit. Replace the SHA
+**and** the comment in every job that uses the action — a comment that
+disagrees with its SHA is worse than none. Renovate's `github-actions` manager
+reads this `@<sha> # vX.Y.Z` form and bumps both together once the app is
+installed. The pins were taken from what each major tag (`@v4`) resolved to on
+the day, not from the newest release, so pinning changed no behaviour — which
+is why `pnpm/action-setup` sits on v4.3.0 although v4.4.0 exists.
+
 ## release-please was removed (failed on every merge with `other side closed`)
 
 The `release-please.yml` workflow turned the **Release please** check red on
@@ -1327,8 +1508,8 @@ or approve pull requests` (the Actions setting is off by default on new
 repos), and even repaired it would have produced empty changelogs because the
 commits there don't follow Conventional Commits. Re-enabling needs all four:
 the Actions setting, the `version` field, the manifest bootstrap, **and**
-Conventional Commits discipline. For this template's actual release flow
-(manual notes + tag), see `release-tag.yml`.
+Conventional Commits discipline. Interw cuts no versioned releases at all —
+see `CHANGELOG.md`.
 
 ## Skills: the standard `skills` CLI, and why Convex rules load via `convex/CLAUDE.md`
 
@@ -1391,6 +1572,18 @@ you touch this area:
    We keep only the core (GFM: tables, lists). Likewise `tool.tsx` replaces the
    upstream Shiki `CodeBlock` with a local `<pre>`. Comments mark both trims in
    the files.
+3. **Loaded on demand.** `AiPanelHost` imports the panel with `React.lazy`
+   and renders nothing while it is closed (the default), so streamdown's
+   131 KB gzip stay out of the recruiter layout until the panel opens
+   (474 → 301 KB gzip for the layout's static closure). A static import of
+   anything under `src/components/ai/` or `ai-elements/` from a layout undoes
+   that; `AiPanelHost.lazy.test.ts` fails if it happens.
+4. **Links lead into the app only.** `allowedLinkPrefixes` (rehype-harden,
+   reached through `defaultRehypePlugins.harden`) is the app origin, and the
+   `a` renderer re-checks every href, because harden passes `mailto:`,
+   `xmpp:`, `irc:` and `blob:` through whatever the prefix list says. There
+   is no `allowedLinkPrefixes` prop on `<Streamdown>` in 2.5 — the options
+   belong to the harden plugin entry.
 
 ## AI Elements (AI panel) — trimmed vendoring
 
@@ -1515,6 +1708,16 @@ with the bump: `pnpm codegen:api:check` only guards `api.d.ts`, so a stale
 `server.d.ts` sails through CI and reappears as a phantom diff for whoever
 next runs `convex dev`.
 
+`.mcp.json` pins the same version for the Convex MCP server
+(`npx -y convex@<version> mcp start`). Renovate moves it with `convex` (the
+`customManagers` regex in `renovate.json`); a bump by hand must move it in the
+same PR. It is an exact `npx` pin rather than `pnpm exec convex` because
+Claude Code starts MCP servers when a session opens, before anyone has run
+`pnpm install` on a fresh clone, and `pnpm exec` finds nothing without
+`node_modules`. It is not `@latest` because that fetched
+and ran the newest registry release on every start, on machines holding
+Convex credentials — never the version the lockfile had been reviewed at.
+
 ## Convex type inference collapses on two specific cycles
 
 Both produce the same misleading symptom: `tsc` reports
@@ -1583,7 +1786,18 @@ them — where the app cannot search. So the candidate-reading tools record a
 `chatThreadSessions` row in the same transaction as the read, and
 `purge.deleteChildRows` deletes those whole threads. Any new tool that returns
 candidate data must record the same row, or its output survives erasure.
-Threads created before this change carry no row and are not covered.
+Threads created before this change carry no row, so erasure cannot find them;
+they are purged once by `migrations.purgeLegacyAssistantThreads`, an hourly
+cron that fixes its cutoff at its first run on each deployment (on staging,
+that also takes the threads created between the two changes — deliberately),
+deletes every thread older than it with its `chatThreadSessions` rows, and
+sets `doneAt` after a full pass finds none left. The component lists no
+threads globally: the pass walks `users.listUsersWithThreads`, which reads the
+component's own table, so a removed member's scope is reached too; only a
+thread with no `userId` is invisible to it, and the app never creates one.
+This is the owner's one-off retention decision, not a pipeline catch-up
+script: it repairs no lost step, and once `doneAt` is set on every deployment
+the function, its cron and the `migrations` table can be deleted.
 `chat.listMessages` answers an empty page for a thread that no longer exists,
 because erasure may delete a thread a recruiter has open.
 
@@ -1700,6 +1914,22 @@ and handing a transcription model a WebM **video** container is the difference
 between a timestamped transcript and a provider error. The extra upload is a
 few hundred kilobytes against a recording of tens of megabytes.
 
+**The risk is Safari, iOS above all.** WebKit has a history of misbehaving
+with two `MediaRecorder`s live on the same tracks: one of them returns an
+empty blob, `stop()` never fires its final `dataavailable`, or `start()`
+throws `InvalidStateError`. Nothing in CI catches it — the e2e WebKit project
+runs desktop WebKit on a fake device, not iOS Safari on a real camera — so the
+only guard is TESTING.md IB10 played **on an iPhone** after every change to
+`src/lib/media/recorder.ts` or any iOS major. The symptom to look for: an
+answer with an audio object and no video (or the reverse) while the screen
+said it saved normally, or a "Saving…" that never ends.
+
+If it breaks, the fallback is one recorder: record video-with-sound only, and
+extract the audio track server-side at transcription time (the transcription
+job would take the video key and demux before calling the provider). That
+costs a larger download per transcription and a demux step, which is why it is
+not the default.
+
 ## An answer is saved when its audio lands; the video is extra
 
 The candidate runner uploads the audio, calls `markSegmentUploaded`, and only
@@ -1777,6 +2007,25 @@ hard-code `audio/webm`, which was wrong for every Safari answer.
 Plain `video/mp4` stays in the list after the codec-qualified entries for a
 Safari that answers no codec query.
 
+## E2E fixtures are opt-in per deployment
+
+`convex/e2e.ts` holds the browser test's seed (`seedE2eSession`) and its
+database check (`e2eSessionState`). They are internal functions, so only a
+deploy key reaches them — but a deploy key is exactly what a production
+deploy has too, and `npx convex run e2e:seedE2eSession` against production
+would create a fake org and a real outgoing email.
+
+So each fixture refuses unless the deployment's Convex env has
+`E2E_FIXTURES=enabled`. Set it on dev and on staging, never on production.
+The gate is an explicit opt-in rather than an `APP_ENV` check because staging
+— where CI runs the browser test — runs with `APP_ENV=production` (see
+README § deployment); an `APP_ENV === 'development'` gate would have turned
+the e2e job red on staging and left nothing to tell prod from staging.
+
+The refusal is a plain `Error` with an English message, not a `ConvexError`
+code: nobody but a developer ever sees it, and a code would need user-facing
+copy in `errors:codes`.
+
 ## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
 
 Two things stand between a Playwright run in a Claude Code cloud session and
@@ -1795,6 +2044,31 @@ a real deployment, and neither is in this repo:
 Do not spend the afternoon on it: run the candidate e2e in CI, where the
 runner reaches the deployment directly. Locally, `pnpm test` covers the
 reducer, the recorder and the server; the browser path needs CI or a phone.
+
+## Playwright's Linux WebKit cannot record: the e2e runs on macOS
+
+Playwright's WebKit for Linux (WebKit 26.6, Playwright webkit v2359 on
+`ubuntu-latest`) has **no `MediaRecorder` at all**: `page.evaluate` throws
+`ReferenceError: Can't find variable: MediaRecorder` (measured on CI,
+2026-09-25). The candidate page then detects no recording format and shows
+"This browser can't record video interviews", so no `<video>` is ever
+rendered and `e2e/interview.spec.ts` fails at its first preview check with
+"element(s) not found". No fake device, `getUserMedia` stub or audio-only
+path can help: nothing can be recorded. Safari has had `MediaRecorder` since
+14.1, so this is the Linux build, not the product.
+
+The CI `e2e` job therefore runs on `macos-latest`, where Playwright's WebKit
+records, and both browsers run in that one job: split into a Linux and a macOS
+job, the two took two places in the `e2e-staging` concurrency group and a run
+queued on `main` cancelled the waiting one. Running `--project=webkit` on a
+Linux machine reproduces the failure; it does not prove a regression.
+
+Only two branches of the device check render no `<video>`: a browser that
+encodes no format (above), and a camera that failed as busy or missing while
+the microphone worked ("Audio only — your camera isn't available"). A refused
+permission keeps the `<video>` on screen, so "not found" never means "no
+permission". To tell them apart, read the page snapshot in the report's
+`error-context.md`.
 
 ## The candidate surface switches the shared i18n instance
 
@@ -1829,8 +2103,11 @@ recorded as MP4 wherever the browser can"), and the obvious fixes each fail:
 Nothing new is opened for it: the bucket's CORS rule already allows `GET`
 (`TESTING.md` P2a), `Content-Length` is a CORS-safelisted header, `connect-src`
 takes `https:` and `media-src` already lists `blob:`. The cost is one full
-download (≈ 7.5 MB a minute) before the first frame; only the active answer is
-kept, and its object URL is revoked on switch.
+download (≈ 7.5 MB a minute) before the first frame. The copy does not expire,
+so the 50-minute re-signing (`useSessionMedia`) must not fetch it again: the
+download is keyed on the answer, and only a failed one retries, with the next
+fresh URL. Only the active answer is kept, and its object URL is revoked on
+switch.
 
 Two rules survive from the streaming days:
 
@@ -1842,30 +2119,109 @@ Two rules survive from the streaming days:
 A `play()` refused after the wait (iOS no longer sees the click as the cause)
 turns into a visible "Play from 3:30" button, never a click that did nothing.
 
-## Para-verbal analysis is computed, not generated
+## Para-verbal analysis was removed
 
-The six delivery figures (speaking rate, hesitation, silence, time used,
-consistency, speaking time) come from `convex/lib/paraverbal.ts`, computed
-deterministically from the transcript's timestamps. No model scores them.
+Reports used to carry six "delivery" figures (speaking rate, hesitation,
+silence, time used, consistency, speaking time), computed from the transcript's
+timestamps by a `convex/lib/paraverbal.ts` that no longer exists. They were
+retired on 2026-09-24 (audit 2026-09-15, Pipe M9): nothing computes, writes or
+reads them any more, and neither the recruiter page nor a share link shows them.
 
-This stack has no audio-capable model. A "vocal warmth" or "confidence" score
-would therefore be an invention wearing the clothes of a measurement — and
-nothing in a hiring report may be invented. Rate, hesitation and pausing are
-the measurable substance of para-verbal delivery anyway, they cost nothing
-extra, and being deterministic they are unit-tested and identical on a replay,
-which the pipeline's idempotency requires.
+Deterministic was not the same as right. The audit found the rate divided by
+recording time rather than speaking time, silence before the first word never
+counted, a perfect "pauses" score on a transcript with no timings at all, two
+dimensions scoring the same quantity, and a hesitation list full of ordinary
+words (`genre`, `enfin`, `actually`) applied regardless of the interview
+language — penalising registers of speech, which is a fairness problem in a
+hiring report, not a rounding one. Fixing all of that would have produced
+better-computed figures about how someone talks, and nobody could say what a
+recruiter should do with them. Removing them was the product call.
 
-If an audio-capable model is added later, extend the dimension union in
-`convex/schema.ts` — do not quietly start generating the existing six.
+Traps if it ever comes back:
 
-The answer length those figures are divided by is `segments.measuredSeconds`,
-written by `saveTranscript` from the provider's `usage.total_seconds` (fallback:
-the end of the last timed word; else absent, and the answer is left out of the
-profile). `segments.durationSeconds` is what the candidate's browser reported:
-a clamped display hint that nothing in the report may read. It used to feed
-pace, concision, engagement and every quote anchor — the person being assessed
+- `reports.paraverbal` is still in `convex/schema.ts`, optional and loosely
+  typed, only so reports written before the removal keep validating. Do not
+  read it: the values are the flawed ones above. Drop it after a migration has
+  cleared it from existing rows.
+- `saveReport` omits the field from its `report` validator, so a new write
+  fails loudly instead of reviving it.
+- The stack still has no audio-capable model. A "confidence" or "vocal warmth"
+  score would be an invention dressed as a measurement.
+
+What stays is the rule it taught, in `CLAUDE.md` § Access control: a measurement
+never depends on an argument. The answer length served to the recruiter's page and
+used to anchor quotes is `segments.measuredSeconds`, written by `saveTranscript` from
+the provider's `usage.total_seconds` (fallback: the end of the last timed word;
+else absent). `segments.durationSeconds` is what the candidate's browser
+reported: a clamped display hint that nothing in the report may read. It used
+to feed the delivery figures and every quote anchor — the person being assessed
 chose their own measurement (audit 2026-09-22,
 `convex/pipeline.ts:reportInputs:candidate-reported-durationSeconds-in-report`).
+
+## A role's team decides who sees it and who is mailed
+
+Since 2026-09-24 (audit T04, decision 3) every role has a **team**: its creator
+plus the colleagues they tick. The team is the whole visibility model inside an
+organisation:
+
+- **Sees the role**: the team, plus every org admin and owner. Anyone else gets
+  `not_found`, never "forbidden" (`canSeeProject` / `filterVisibleProjects` in
+  `convex/lib/projectAccess.ts` — every project read goes through them).
+- **Is mailed "report ready"**: the team only, membership re-checked at send
+  time. Admins and owners see every role but are mailed only about the ones
+  they are on. The old rule mailed up to 200 members of the org per report.
+- **Edits the team**: the creator, an admin or an owner
+  (`requireProjectOwnerOrAdmin`), at creation or from the Team dialog.
+
+Traps:
+
+- **The creator is never a row.** They are on the team by construction
+  (`project.createdBy`), so they cannot be unticked and the person who opened
+  the search always hears about it. `setTeam` silently drops their id. Code
+  that lists "the team" must add `createdBy` to the `projectShares` rows.
+- **The table is still called `projectShares`.** Renaming a Convex table is a
+  copy migration. The rows of the former "restricted" roles already meant
+  exactly "named colleagues", and a former "open" role had none — so the
+  existing data *is* the team, with no migration, lazy or otherwise.
+- **`projects.restricted` is legacy and read by nothing.** It stays optional in
+  the schema only because existing rows carry it. A role saved as "open to
+  everyone" is now visible to its creator, admins and owners only — accepted
+  before launch. Never read the flag again; drop it once a migration has
+  cleared it.
+- **`setTeam` replaces the whole list.** A client that sends it before loading
+  the current team wipes it; that is how the old dialog de-restricted a
+  confidential role on "open, then Save" (B8). The dialog seeds from
+  `projects.team` and cannot save until it has. The list is capped at 100
+  (`team_too_large`).
+- **Leaving revokes the grants**, in one helper (`revokeMemberGrants`):
+  `removeMember` drops the person's team rows in that org and revokes the
+  report share links they created there; `users.cascadeDelete` does the same in
+  every org. A share link acts for whoever made it, so it must not outlive
+  their membership (h03).
+
+## A role's intro is a video, or nothing
+
+Decision n° 1 of 24/09: the intro modes are `none` and `video`. The written
+and audio intros are gone from the selector and from `projects.update`, and
+`requestIntroUpload` only issues a slot for a video type — without a camera
+the take is refused, never saved as audio. A role with no intro, or in video
+mode with nothing recorded, sends the candidate from the device check straight
+to question 1 (`opensOnIntro` in `src/lib/interview-machine.ts`): an intro
+screen with nothing on it was a dead end.
+
+**The trap: `text` and `audio` are still in the `projects` table's validator.**
+Narrowing a stored union before the rows are rewritten fails the schema check
+on push — same widen-then-narrow rule as the hot `users` row above. So:
+
+- the argument and return validators use `introModeValidator` (`none | video`);
+  the table uses `storedIntroModeValidator`, which also admits the two retired
+  literals;
+- every read goes through `effectiveIntroMode` (`convex/lib/candidateView.ts`),
+  which reads a retired mode as `none` — nothing waits on the migration;
+- `internal.media.migrateLegacyIntroModes` rewrites those rows (and releases
+  an audio intro's object). It is **not** run by any deploy: run it once per
+  deployment, then drop the two literals from `schema.ts` in a later deploy.
+  `introText` is kept, read by nothing, until then.
 
 ## The shadcn CLI rewrites files you did not ask it to
 
@@ -2249,3 +2605,209 @@ vendors document — or leave `DEPLOY_CONVEX` off that branch, point
 another route. The second works, at the cost of front end and back end no
 longer shipping together: a push updates the site and not the functions,
 silently.
+
+## Signed playback URLs: sign on what there is to play, never on the query
+
+A Convex query result changes identity on **every** write to the rows it read.
+An effect that re-signs playback URLs whenever `forSession` changes therefore
+re-signs on a note, a decision, a `jobLog` row — and a SigV4 URL differs on
+every signature (`X-Amz-Date`), so the `<video>` gets a new `src` and restarts
+at 0:00. The opposite mistake (sign once) leaves every citation dead after the
+URLs' hour. Both lived in the same effect (audit 2026-09-15, recruiter E3).
+
+The pattern is `src/hooks/useSessionMedia.ts`: signing depends on a key naming
+only what there is to play (`sessionMediaKey`: segment ids with an upload,
+documents, `mediaPurgedAt`), re-signs on a 50-minute timer and on the player's
+`error` event — except within 30 s of a fresh signature, which is a file that
+cannot play, not an expiry, and shows an error instead of looping.
+
+Trap: swapping a `<video>`'s `src` resets it to 0:00, paused, even for the
+same file. `AnswerPlayer` sets `src` imperatively and restores `currentTime`
+(and playback) on `loadedmetadata`; don't move `src` back into JSX.
+
+## Decisions and report links are team-level
+
+`reports.setDecision` and `shares.create` require `requireProjectAccess` — the
+role's team plus org owners and admins — and no rank above that (audit Back
+F2). This is deliberate: the team is the set of people hiring for the role, so
+it is who reads the reports, who decides and who may show a report to someone
+outside. Accountability comes from naming who acted, not from a rank:
+`recruiterDecisionBy` and `decisionEvents` record every decision, and a share
+link records its creator and is revoked when they leave the org (h03). Actions
+that destroy or close things for candidates (archive, delete a role, cancel a
+link, erase a candidate, relaunch an analysis) sit one tier higher,
+`requireProjectOwnerOrAdmin`. Do not "harden" decisions to owner/admin without
+a product decision: it would stop the people doing the hiring from recording it.
+
+## The server reads a few UI strings from `src/locales`
+
+`convex/lib/publishReadiness.ts` must recognise the example question and
+criterion the wizard seeds, and `convex/reports.ts` names downloaded documents
+in the recruiter's language. Both import the locale JSON directly
+(`convex/tsconfig.json` has `resolveJsonModule` for it; esbuild bundles JSON
+from outside `convex/` like any other import). A second copy of the strings in
+`convex/` would drift the day the copy changes, and the publish gate would
+silently stop recognising the example. Changing that copy is therefore a
+behaviour change: a role seeded with the old text is no longer caught.
+
+## Every thrown error code needs `errors:codes.<code>`
+
+`errorMessageKey` resolves a Convex error code against the domain namespace
+first, then the shared `errors:codes`. `src/lib/convex-errors.test.ts` reads
+every `ConvexError(` in `convex/` and fails on a code with no en or fr message.
+A computed code (`new ConvexError(someVariable)`) fails the test until it is
+registered in the test's `DYNAMIC` map with the codes it can carry — derive
+them from the code itself (as for `gate.state` and `publishBlockers`), never
+list them by hand.
+
+## An answer's byte cap and PUT lifetime come from its question
+
+`reserveSegment` used to accept 300 MB per answer and sign its PUT for 15
+minutes, whatever the question. Both now follow `question.maxResponseSeconds`
+(`convex/interview.ts`):
+
+- **Bytes**: `(maxResponseSeconds + 5) × rate + 1 MB`, with 512 KB/s for video
+  and 32 KB/s for audio — **four times** what the recorder asks for
+  (`src/lib/media/recorder.ts`: 1 Mbit/s, 64 kbit/s). The headroom is
+  deliberate: `videoBitsPerSecond` is a request, a browser may overshoot it,
+  and a candidate gets one attempt. If you raise the recorder's bitrates,
+  raise these with them, or long answers start failing `media_too_large`
+  before they upload.
+- **PUT lifetime**: `maxResponseSeconds + 3 min`. S3 checks expiry when the
+  request *starts*, so the window has to cover the audio upload, the video
+  PUT that follows it and the client's retries (1 s, 2 s backoff) — not the
+  transfer itself. Shortening it further breaks the video retry on a slow
+  uplink; lengthening it re-opens the "bytes land after `finish` or erasure"
+  window h01/h02 described.
+
+## `expired` is written by a cron, a day after the role's deadline
+
+`sessions.expireOverdueSessions` runs hourly and moves `pending` and
+`in_progress` sessions to `expired` once their role's `expiresAt` is more than
+**24 hours** old (B6). Three things follow from that:
+
+- **The grace day is load-bearing.** `interview.finish` lets a candidate who
+  recorded their answers finish after the role's deadline. Expire at the
+  deadline itself and that path dies: the session is `expired`, not
+  `in_progress`, and `finish` refuses it. Do not shorten the grace below the
+  time a candidate might reasonably need to come back and press Finish.
+- **Only the role's deadline is a window.** A role without `expiresAt` never
+  expires its sessions; retention (`purgeAfter`, set at invitation) bounds
+  what an unopened invitation keeps.
+- **`expired` is terminal.** Pushing the deadline back after the cron ran does
+  not reopen those links — the recruiter re-invites. Before it ran, it does.
+
+The pass is bounded (25 roles, 200 session writes) and reschedules itself
+with the same cursor until the range is drained. It rescans every
+past-deadline role each hour: two indexed reads per role, empty once drained.
+
+## A dashboard figure is a bounded scan, and says when it saturated
+
+There is no count operator. `dashboard.overview` reads, per figure, the index
+that answers it (`by_org_and_invited` for the 30-day window,
+`by_org_and_status` for completed interviews and roles), at most 400 rows
+each, and returns `capped` for any scan that hit the bound; the page renders
+it `400+`. It used to take the org's last 400 sessions of any status and
+compute everything from them, so "decisions so far" dropped as pending
+invitations piled up (Back M3). Same rule on `/app/admin` (`1000+`). If you
+need exact totals, denormalise a counter in the mutation that changes the
+status — do not raise the cap on a reactive query.
+
+## Reduced motion collapses durations, and spares the spinner
+
+`src/styles/app.css` answers `prefers-reduced-motion: reduce` once for the
+whole app instead of per component. Durations go to `0.01ms`, not
+`animation: none`: Radix waits for `animationend` before it unmounts a closing
+dialog or menu, and an animation that never runs never fires it. `.animate-spin`
+is put back afterwards, because a spinner that stops looks like a frozen page —
+its rotation is the only sign work is still in progress. A new loop that
+carries meaning the same way needs the same exemption.
+
+## `ui/command.tsx` is not vendored: the search uses cmdk directly
+
+The candidate search (⌘K) is the shadcn `CommandDialog` pattern built by hand:
+`cmdk` inside the vendored `ui/dialog`. The shadcn registry
+(`ui.shadcn.com`) was unreachable from the environment that wrote it, and
+`src/components/ui/*` is never hand-written. When the CLI works, `pnpm dlx
+shadcn@latest add command` and swapping `Command.*` for the vendored parts is
+a mechanical change. `shouldFilter={false}` must stay: results are ranked by
+the server, and cmdk would otherwise re-filter them on the client. `cmdk` is on
+the candidate-bundle ban list in `eslint.config.mjs`.
+
+## A `?raw` glob of a stylesheet is empty under Vitest
+
+`import.meta.glob('./*.css', { query: '?raw' })` returns `''` for every file in
+a Vitest run — the CSS pipeline claims `.css` before the raw loader does. A
+test that asserts on stylesheet source reads it with `readFileSync` instead
+(`src/styles/design-pass.test.ts`). `.ts`/`.tsx` sources glob fine.
+
+## Sentry collects errors only
+
+Decided in audit T15: `src/lib/sentry.ts` registers no tracing, no replay and
+uploads no source maps. `tracesSampleRate` was removed because nothing read it
+— `browserTracingIntegration()` is not among `@sentry/react`'s defaults, so the
+option only suggested a performance view that never existed.
+`beforeSendTransaction` stays although it is inert today: whoever turns
+tracing on must not be the one who ships `/s/<token>` in transaction names.
+
+What that costs: a crash report, `InterviewCrash` included, arrives with a
+minified stack. Turning that around is three changes that go together —
+`build.sourcemap: 'hidden'` in `vite.config.ts`, `@sentry/vite-plugin` with a
+`SENTRY_AUTH_TOKEN` in the Vercel build, and deleting the maps from
+`.output/public` after upload so they are never served. Replay is a separate
+decision, and not a configuration one: on `/s/**` it would film a candidate's
+interview screen for a third party.
+
+## `pnpm audit` in CI: an override, or a lockfile refresh
+
+CI runs `pnpm audit --prod --audit-level=high`. `--prod` is less of a filter
+than it sounds: `@tanstack/react-start` is a runtime dependency, so its whole
+build chain (vite, postcss, babel, browserslist) counts. When the step goes
+red, in order:
+
+1. **The patched version is already inside the parent's range** — refresh
+   the lockfile for that package only:
+   `pnpm update --depth Infinity --config.minimum-release-age=4320 <pkg>`.
+   `package.json` does not change. The flag is in minutes (three days), the
+   same cooldown `renovate.json` puts on automerge: it keeps the refresh from
+   pulling a version published this morning. Review the `pnpm-lock.yaml` diff
+   — it should touch the named packages and their own dependencies only. This
+   is how js-yaml, nanoid, postcss and browserslist were cleared.
+2. **The parent pins a vulnerable range** — add a `pnpm.overrides` entry in
+   `package.json` (never in `pnpm-workspace.yaml`, see § "pnpm 11 silently drops
+   `pnpm.overrides` and `onlyBuiltDependencies`"). Use a caret on the patched version (`^8.21.0`), not
+   `>=`: `>=` lets a future install jump the parent onto a new major it was
+   never built against. `ws` (via `convex`) and `dompurify` (via
+   `streamdown` → `mermaid`) are overridden this way; both reach users.
+
+Moderate and low advisories do not fail the step; Renovate clears most of
+them with their parents.
+
+The step can go red with no change in the PR: an advisory published overnight
+turns every branch red at once, which is the point of the gate. Never mute it
+or add `--ignore` to get a PR through — a finding that genuinely does not apply
+is argued in the PR body, and its advisory id recorded here.
+
+## The candidate bundle budget reads the start manifest
+
+`pnpm bundle:budget` (after `pnpm build:app`; in CI after `pnpm build`) fails
+above 280 KiB gzip for what `/s/$token/interview` loads: the preloads TanStack
+Start lists for `__root__`, `/s/$token` and `/s/$token/interview` in
+`.output/server/_tanstack-start-manifest*.mjs`, plus their static imports.
+Lazy `import()` chunks are not counted.
+
+- **Raised from 270 to 280 KiB on 2026-09-25**, when the audit stack met #38
+  (crash-safe takes in IndexedDB, wake lock, live mic check): 275.8 KiB, all
+  of it candidate-facing features. The reduction is its own task — load i18n
+  namespaces per route (`i18n` chunk ~50 KiB) and keep the Better Auth client
+  out of the entry chunk candidates load.
+- **It was 265.2 KiB when the budget was first set** — 4.8 KiB of headroom. The
+  shared entry chunk alone is ~148 KiB (Convex client, Better Auth client,
+  sonner). A change that crosses the line has to pay for itself, or move
+  something recruiter-only out of `~/lib/*`; raising the number is the last
+  resort and needs a reason in the PR.
+- **KiB, 1024 bytes.** Vite prints kB of 1000 bytes: the same build reads
+  271.6 kB there.
+- **A TanStack Start bump can rename or reshape the manifest.** The script
+  then fails loudly ("no start manifest", "route … is missing") rather than
+  measuring nothing — read the new manifest, don't delete the step.

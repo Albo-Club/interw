@@ -30,6 +30,11 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 2,
   },
+  // Password sign-ins: per account (keyed on a hash of the address), charged
+  // by `perEmailQuota` on every attempt. Better Auth's per-IP rule trusts a
+  // header the client can set; this one does not. Room for a few fumbles,
+  // then one guess every six minutes — the email code stays available.
+  passwordSignIn: { kind: 'token bucket', rate: 10, period: HOUR, capacity: 5 },
   // "Your password was changed" notices: per user. Only a real change sends
   // one (server-side hooks), but a burst of changes should not become a burst
   // of emails.
@@ -52,14 +57,21 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: HOUR,
     capacity: 10,
   },
-  // Candidate reads, keyed by token. Generous — a candidate reloading a page
-  // mid-interview must never be locked out — but bounded, because these are
-  // the only functions reachable without an account.
-  candidateRead: { kind: 'token bucket', rate: 240, period: MINUTE, capacity: 60 },
   // Candidate writes, keyed by token: consent, profile, segment bookkeeping.
   candidateWrite: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
   // Report share views, keyed by the resolved share, never the raw token.
   shareView: { kind: 'token bucket', rate: 120, period: MINUTE, capacity: 30 },
+  // Playback URLs for a shared report, keyed by the resolved share. Asked for
+  // once per page load and again when a URL lapses mid-playback; each call
+  // signs one URL per answer.
+  shareMedia: { kind: 'token bucket', rate: 30, period: MINUTE, capacity: 10 },
+  // Convex storage upload URLs (avatar, logo, persona), per user. Nothing is
+  // validated until the blob is attached, so an unmetered slot is free
+  // storage for anyone with an account.
+  storageUpload: { kind: 'token bucket', rate: 30, period: HOUR, capacity: 10 },
+  // Report relaunches, per recruiter. Each one can re-bill transcriptions and
+  // a deep-model completion; a stuck report needs one click, not a hundred.
+  reportRelaunch: { kind: 'token bucket', rate: 10, period: HOUR, capacity: 3 },
 })
 
 type LimitName =
@@ -68,9 +80,11 @@ type LimitName =
   | 'chatSend'
   | 'jobImport'
   | 'candidateInvite'
-  | 'candidateRead'
   | 'candidateWrite'
   | 'shareView'
+  | 'shareMedia'
+  | 'storageUpload'
+  | 'reportRelaunch'
 
 /**
  * Throws a friendly ConvexError when a limit is hit. The data payload includes

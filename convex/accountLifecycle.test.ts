@@ -24,9 +24,12 @@ function buildAuth() {
     emailChangeRequested: [] as Array<[string, string]>,
   }
   const soleOwners = new Set<string>()
+  const lastSuperAdmins = new Set<string>()
   const effects = {
     soleOwnedOrgs: (userId: string) =>
       Promise.resolve(soleOwners.has(userId) ? ['Acme'] : []),
+    lastSuperAdmin: (userId: string) =>
+      Promise.resolve(lastSuperAdmins.has(userId)),
     passwordChanged: (userId: string) => {
       calls.passwordChanged.push(userId)
       return Promise.resolve()
@@ -112,6 +115,7 @@ function buildAuth() {
     lastMailTo,
     calls,
     soleOwners,
+    lastSuperAdmins,
     context,
     signUp,
     signIn,
@@ -209,6 +213,17 @@ describe('account deletion', () => {
     expect(t.mail).toEqual([])
   })
 
+  it('is refused to the last super admin before any email goes out', async () => {
+    const t = buildAuth()
+    const { cookie, userId } = await t.signUp()
+    t.lastSuperAdmins.add(userId)
+
+    const res = await t.post('/delete-user', { callbackURL: '/account-deletion?status=deleted' }, cookie)
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { code: string }).code).toBe('LAST_SUPER_ADMIN')
+    expect(t.mail).toEqual([])
+  })
+
   it('sends a link opened elsewhere to sign in, then deletes', async () => {
     const t = buildAuth()
     const { cookie } = await t.signUp()
@@ -253,6 +268,17 @@ describe('account deletion', () => {
     const { cookie, userId } = await t.signUp()
     await t.post('/delete-user', { callbackURL: '/' }, cookie)
     t.soleOwners.add(userId)
+
+    const click = await t.get(t.lastMailTo(ALICE), cookie)
+    expect(location(click).searchParams.get('status')).toBe('blocked')
+    expect((await t.signIn()).status).toBe(200)
+  })
+
+  it('stops at the click for someone who became the last super admin meanwhile', async () => {
+    const t = buildAuth()
+    const { cookie, userId } = await t.signUp()
+    await t.post('/delete-user', { callbackURL: '/' }, cookie)
+    t.lastSuperAdmins.add(userId)
 
     const click = await t.get(t.lastMailTo(ALICE), cookie)
     expect(location(click).searchParams.get('status')).toBe('blocked')

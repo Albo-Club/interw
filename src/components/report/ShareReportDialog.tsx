@@ -20,6 +20,16 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '~/components/ui/alert-dialog'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -51,11 +61,21 @@ export function ShareReportDialog({
   const revoke = useConvexMutation(api.shares.revoke)
   const [expiry, setExpiry] = useState<(typeof EXPIRY_OPTIONS)[number]>('30')
   const [busy, setBusy] = useState(false)
+  // Revoking is irreversible and breaks access for whoever was sent the link,
+  // so it names the link and asks first (audit 2026-09-15, recruiter M5).
+  const [revoking, setRevoking] = useState<NonNullable<
+    typeof shares
+  >[number] | null>(null)
 
   const notify = (error: unknown) => {
     const { key, fallbackKey } = errorMessageKey(error, 'report')
     toast.error(t(key, { defaultValue: t(fallbackKey) }))
   }
+
+  const viewsLabel = (viewCount: number) =>
+    viewCount > 0
+      ? t('report:share.views', { count: viewCount })
+      : t('report:share.neverViewed')
 
   const copy = async (url: string) => {
     try {
@@ -96,9 +116,7 @@ export function ShareReportDialog({
                 </div>
                 <div className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="tabular-nums">
-                    {share.viewCount > 0
-                      ? t('report:share.views', { count: share.viewCount })
-                      : t('report:share.neverViewed')}
+                    {viewsLabel(share.viewCount)}
                     {share.expiresAt
                       ? ` · ${t('report:share.expiresOn', {
                           date: new Date(share.expiresAt).toLocaleDateString(
@@ -111,11 +129,7 @@ export function ShareReportDialog({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      void revoke({ shareId: share._id })
-                        .then(() => toast.success(t('report:share.revoked')))
-                        .catch(notify)
-                    }}
+                    onClick={() => setRevoking(share)}
                   >
                     {t('report:share.revoke')}
                   </Button>
@@ -172,6 +186,41 @@ export function ShareReportDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog
+        open={revoking !== null}
+        onOpenChange={(next) => {
+          if (!next) setRevoking(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('report:share.revokeConfirm.title')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {revoking &&
+                t('report:share.revokeConfirm.body', {
+                  date: new Date(revoking.createdAt).toLocaleDateString(locale),
+                  views: viewsLabel(revoking.viewCount),
+                })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common:actions.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!revoking) return
+                void revoke({ shareId: revoking._id })
+                  .then(() => toast.success(t('report:share.revoked')))
+                  .catch(notify)
+              }}
+            >
+              {t('report:share.revokeConfirm.confirm')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

@@ -197,9 +197,9 @@ share links, uploads, account lifecycle, super-admin, AI chat, security.
 - **Backend** : Convex (`^1.x`) — queries, mutations, actions, HTTP routes, file storage, components.
 - **Auth** : Better Auth via `@convex-dev/better-auth` with `emailOTP()` (sign-in code, which also creates accounts) + `convex()`; password sign-up is off. Multi-tenant (orgs/members/invitations/roles) is implemented **natively in the Convex schema** (`organizations`, `organizationMembers`, `invitations` tables). The BA `organization()` plugin is deliberately **not loaded** — its tables aren't first-class Convex (no `withIndex` joins). See `KNOWN_ISSUES.md` for trade-offs.
 - **Emails** : `@convex-dev/resend` for transactional.
-- **AI** : `@convex-dev/agent` backend + `@assistant-ui/react` front; generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
-- **File storage** : Convex native (`ctx.storage.generateUploadUrl()`), 20 MB cap.
-- **Observability** : Sentry (front + Convex actions). CORS strict, security headers, HMAC verify on webhooks.
+- **AI** : `@convex-dev/agent` backend + its `useUIMessages` hook front (`src/components/ai/`, not `@assistant-ui/react` — see `KNOWN_ISSUES.md` § "Trade-offs vs the original brief"); generation runs through `chat.sendMessage` → `streamAsync` and reaches the client by `listMessages` delta sync. There is no HTTP chat route: every generation path pays the `chatSend` bucket. Provider wired in `convex/agent.ts`, on the same Mistral-served GLM and the same `MISTRAL_API_KEY` as the interview pipeline — the model id comes from `convex/lib/ai.ts`, never from the environment. The chat agent's tools (`convex/recruiterTools.ts`) are scoped to the thread's org and **read-only**: `listRoles`, `listCandidates`, `readReport`. A hiring decision is never a tool call — see « AI and hiring » below.
+- **File storage** : Convex native (`ctx.storage.generateUploadUrl()`, 20 MB cap) for branding images only. Candidate recordings, CVs and recruiter-recorded questions go to a private S3-compatible bucket via `convex/lib/objectStore.ts` — see `KNOWN_ISSUES.md` § "Candidate recordings are NOT in Convex file storage".
+- **Observability** : Sentry on the front end only (`src/lib/sentry.ts`); the Convex side logs named events (e.g. `pipeline_step_failed`). CORS strict, security headers, HMAC verify on webhooks.
 
 ## Skills (READ BEFORE CODING)
 
@@ -423,6 +423,11 @@ export const remove = mutation({
   per-address quotas in a before hook and refuse with an `APIError` 429 —
   `perEmailQuota` in `convex/auth.ts`. See `KNOWN_ISSUES.md` § "Email
   sign-in: one code, typed or confirmed".
+- ❌ A limit on guessing a secret (password, code) keyed on the client IP
+  alone. Better Auth's IP is a request header, and `<deployment>.convex.site`
+  takes requests with any header. Give the endpoint a per-address bucket in
+  `perEmailQuota` too. See `KNOWN_ISSUES.md` § "Brute force: the IP is a
+  claim, the account is not".
 - ❌ Dedup users by `betterAuthId` only in any new code path. Always
   also fall back to email via `withIndex('by_email', ...)` — pattern in
   `convex/lib/auth.ts:provisionAppUser`.
@@ -565,7 +570,7 @@ verification is in `TESTING.md`.
   anchors) comes from data the server observed itself — provider output, the
   stored transcript — never from a number the candidate's client sent. A client
   value may survive as a bounded display hint only. See `KNOWN_ISSUES.md`
-  § "Para-verbal analysis is computed, not generated".
+  § "Para-verbal analysis was removed".
 
 ## Model output
 

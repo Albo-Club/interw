@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useBlocker, useNavigate } from '@tanstack/react-router'
 import {
   useConvexAction,
   useConvexMutation,
@@ -28,8 +28,10 @@ import { SegmentRecorder, detectRecorderSupport } from '~/lib/media/recorder'
 import { openTakeStore } from '~/lib/media/takeStore'
 import { uploadToSignedUrl } from '~/lib/media/upload'
 import {
+  answerAtRisk,
   initialInterviewState,
   interviewReducer,
+  opensOnIntro,
 } from '~/lib/interview-machine'
 import { Button } from '~/components/ui/button'
 import { Progress } from '~/components/ui/progress'
@@ -37,9 +39,11 @@ import { Skeleton } from '~/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
+import { PromptMedia } from '~/components/candidate/PromptMedia'
 import { RecordingMic } from '~/components/candidate/RecordingMic'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
+import { candidateHead } from '~/components/candidate/screenHead'
 
 type DeviceChoice = { camera?: string; mic?: string }
 type EventKind = FunctionArgs<typeof api.interview.logEvent>['kind']
@@ -51,6 +55,7 @@ export const Route = createFileRoute('/s/$token/interview')({
     mic: typeof search.mic === 'string' ? search.mic : undefined,
   }),
   component: InterviewRunner,
+  head: () => candidateHead('interview'),
 })
 
 /** The countdown appears for the last 30 seconds, never before. */
@@ -137,13 +142,16 @@ function InterviewRunner() {
     }
   }, [log])
 
-  /* ── Closing the tab mid-upload loses the answer, so say so. ───────────── */
-  useEffect(() => {
-    if (state.phase !== 'saving' && state.phase !== 'recording') return
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [state.phase])
+  /* ── Leaving while an answer is on this page and not on the server loses
+        it: closing the tab, reloading, or the Back button. The router's
+        blocker covers both kinds of exit, and sets `returnValue` on unload,
+        which Safari still needs before it will ask. ───────────────────────── */
+  const atRisk = answerAtRisk(state.phase)
+  useBlocker({
+    shouldBlockFn: () => !window.confirm(t('interview:run.leaveConfirm')),
+    enableBeforeUnload: atRisk,
+    disabled: !atRisk,
+  })
 
   /* ── A phone left untouched locks its screen within a minute — mid-answer,
         and a locked screen reads as leaving the page, which ends the take.
@@ -202,6 +210,16 @@ function InterviewRunner() {
     fireAndForget(preview.play(), 'camera preview autoplay')
   }, [preview, stream])
 
+  // Left anyway: the answer is gone, but the journal says it existed, so a
+  // missing answer does not read as a skipped one.
+  useEffect(
+    () => () => {
+      if (recorderRef.current) log('recording_abandoned', 'recording')
+      else if (recordingRef.current) log('recording_abandoned', 'unsent')
+    },
+    [log],
+  )
+
   useEffect(() => {
     return () => {
       if (autoStopRef.current) clearTimeout(autoStopRef.current)
@@ -217,19 +235,22 @@ function InterviewRunner() {
     if (!data || bootedRef.current) return
     bootedRef.current = true
     const needsMedia =
-      data.hasIntroMedia || data.questions.some((question) => question.hasMedia)
+      (data.introMode === 'video' && data.hasIntroMedia) ||
+      data.questions.some((question) => question.hasMedia)
     // Reported once booted, into a phase that shows it.
     const deviceFailure = openStream().then(
       () => null,
       (cause: unknown) => cause,
     )
     void (async () => {
+      let introUrl: string | null = null
       try {
         const [, urls] = await Promise.all([
           start({ token }),
           needsMedia ? promptMedia({ token }) : null,
         ])
         if (urls) {
+          introUrl = urls.intro
           setMedia({
             intro: urls.intro,
             questions: Object.fromEntries(
@@ -245,8 +266,10 @@ function InterviewRunner() {
         type: 'booted',
         resumeAt: data.nextQuestionIndex,
         total: data.questions.length,
-        showIntro:
-          data.introMode !== 'none' && data.questions.every((q) => !q.answered),
+        showIntro: opensOnIntro(
+          { mode: data.introMode, url: introUrl },
+          data.questions.map((q) => q.answered),
+        ),
       })
       const failure = await deviceFailure
       if (failure) {
@@ -513,15 +536,13 @@ function InterviewRunner() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {t('interview:run.intro.title')}
           </h1>
-          {media.intro ? (
-            <video
+          {media.intro && (
+            <PromptMedia
               src={media.intro}
-              controls
-              playsInline
-              className="bg-muted aspect-video w-full rounded-lg"
+              kind="video"
+              label={t('interview:run.intro.title')}
+              className="rounded-lg"
             />
-          ) : (
-            <p className="max-w-prose leading-relaxed">{data.introText}</p>
           )}
           <Button size="lg" onClick={() => dispatch({ type: 'introDone' })}>
             {t('interview:run.intro.continue')}
@@ -579,12 +600,14 @@ function InterviewRunner() {
 
               <section className="space-y-4 rounded-lg border p-5">
                 {current.hasMedia && media.questions[current.questionId] ? (
-                  <video
+                  <PromptMedia
                     key={current.questionId}
                     src={media.questions[current.questionId]}
-                    controls
-                    playsInline
-                    className="bg-muted aspect-video w-full rounded-md"
+                    kind={current.mediaKind ?? 'video'}
+                    label={t('interview:run.progress', {
+                      index: state.index + 1,
+                      total: state.total,
+                    })}
                   />
                 ) : null}
                 <div className="space-y-2">

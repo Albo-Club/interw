@@ -7,7 +7,9 @@ export default defineConfig([
   ...convexPlugin.configs.recommended,
   // `.agents/skills` holds upstream skill content vendored verbatim, including
   // illustrative .tsx examples that live outside any tsconfig project — linting
-  // them only produces parser errors.
+  // them only produces parser errors. `.claude/worktrees` holds agents' full
+  // checkouts of this repository: linting them multiplies the work by the
+  // number of agents, and ran out of memory.
   globalIgnores([
     'convex/_generated',
     '.output',
@@ -15,6 +17,7 @@ export default defineConfig([
     'dist',
     '.agents/skills',
     '.claude/skills',
+    '.claude/worktrees',
   ]),
   // The candidate surface (/s/$token/...) is a separate bundle on purpose:
   // it must stay small and predictable because it runs on a stranger's phone,
@@ -40,6 +43,8 @@ export default defineConfig([
                 '~/components/data-table/*',
                 '~/components/auth/*',
                 '~/components/report/*',
+                '~/components/projects/*',
+                '~/components/candidates/*',
               ],
               message:
                 'The candidate surface must not import recruiter-app components. Use ~/components/ui/* primitives or add a component under ~/components/candidate/.',
@@ -51,6 +56,7 @@ export default defineConfig([
                 '@convex-dev/agent*',
                 'streamdown',
                 '@zxcvbn-ts/*',
+                'cmdk',
               ],
               message:
                 'This library is recruiter-app-only. Keeping it out of the candidate bundle is the point — see eslint.config.mjs.',

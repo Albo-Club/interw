@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { jobOutcomeValidator, jobStepValidator } from '../../convex/schema'
 import { NAMESPACES, resources } from './i18n'
 
 /**
@@ -64,5 +65,23 @@ describe('i18n resources', () => {
       }
     }
     expect(mismatches).toEqual([])
+  })
+})
+
+/**
+ * Carried over from audit T01: `relaunch` and `purge` joined the job log with
+ * no label, so the candidate page's pipeline rows could print a raw key.
+ * The rows render every step and outcome the log can hold.
+ */
+describe('pipeline history labels', () => {
+  const steps = jobStepValidator.members.map((m) => m.value)
+  const outcomes = jobOutcomeValidator.members.map((m) => m.value)
+
+  it.each(locales)('names every job step and outcome in %s', (locale) => {
+    const pending = resources[locale].report.pending
+    expect({
+      steps: steps.filter((step) => !(step in pending.steps)),
+      outcomes: outcomes.filter((outcome) => !(outcome in pending.outcome)),
+    }).toEqual({ steps: [], outcomes: [] })
   })
 })

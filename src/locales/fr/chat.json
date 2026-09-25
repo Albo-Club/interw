@@ -44,8 +44,14 @@
   },
   "errors": {
     "rate_limited": "Ralentissez — trop de messages",
-    "default": "Impossible d'envoyer le message"
+    "default": "Impossible d'envoyer le message",
+    "prompt_too_long": "Un message est limité à {{max}} caractères. Raccourcissez le vôtre et renvoyez-le."
   },
   "imageNotShown": "[Image non affichée]",
-  "imageNotShownAlt": "[Image non affichée : {{alt}}]"
+  "imageNotShownAlt": "[Image non affichée : {{alt}}]",
+  "counter": {
+    "limit": "{{length}} caractères sur {{max}}",
+    "overLimit": "Trop long pour être envoyé."
+  },
+  "loading": "Chargement de l’assistant…"
 }

@@ -4,6 +4,7 @@
     "title": "Postes",
     "subtitle": "Les postes pour lesquels vous recrutez, et où en est chacun.",
     "new": "Nouveau poste",
+    "onTeam": "Dans l'équipe",
     "search": "Rechercher un poste",
     "empty": {
       "title": "Aucun poste pour l'instant",
@@ -56,7 +57,7 @@
     "archive": "Archiver",
     "restore": "Restaurer",
     "delete": "Supprimer",
-    "share": "Partager",
+    "team": "Équipe",
     "invite": "Inviter des candidats",
     "overview": "Vue d'ensemble",
     "questions": "Questions",
@@ -106,15 +107,25 @@
     "clearExpiry": "Pas d'expiration",
     "intro": {
       "title": "Message d'introduction",
-      "subtitle": "La première chose que voit un candidat. Un accueil enregistré donne un tout autre ton qu'un pavé de texte.",
+      "subtitle": "La première chose que voit un candidat : vous, face caméra, qui l'accueillez. Sans introduction, le candidat passe directement à la première question.",
       "mode": {
         "none": "Pas d'introduction",
-        "text": "Écrit",
-        "audio": "Audio enregistré",
-        "video": "Vidéo enregistrée"
+        "video": "Vidéo de vous"
       },
-      "text": "Texte d'introduction",
-      "textPlaceholder": "Bienvenue, et merci du temps que vous nous accordez…"
+      "media": {
+        "hint": "Tant qu'elle n'est pas enregistrée, les candidats passent directement à la première question.",
+        "record": "Enregistrer votre introduction",
+        "rerecord": "Réenregistrer",
+        "remove": "Supprimer la vidéo",
+        "stop": "Arrêter",
+        "uploading": "Envoi en cours…",
+        "uploadFailed": "Envoi impossible. Rien n'a été enregistré — réessayez.",
+        "none": "Aucune vidéo enregistrée pour l'instant.",
+        "ready": "Votre vidéo d'introduction",
+        "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez.",
+        "noCamera": "Aucune caméra détectée. L'introduction est une vidéo : branchez une caméra, puis réessayez.",
+        "unsupported": "Ce navigateur ne peut pas enregistrer de vidéo. Utilisez la dernière version de Chrome, Safari, Firefox ou Edge."
+      }
     }
   },
   "questions": {
@@ -148,7 +159,9 @@
       "uploadFailed": "Envoi impossible. Rien n'a été enregistré — réessayez.",
       "none": "Aucun enregistrement. La question sera affichée en texte.",
       "ready": "Enregistrée",
-      "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez."
+      "permissionDenied": "L'accès à la caméra ou au micro a été refusé. Autorisez-le dans votre navigateur, puis réessayez.",
+      "noCamera": "Aucune caméra ni micro détecté. Branchez-en un, puis réessayez.",
+      "unsupported": "Ce navigateur ne peut pas enregistrer. Utilisez la dernière version de Chrome, Safari, Firefox ou Edge."
     },
     "remove": "Supprimer la question",
     "removeConfirm": {
@@ -201,17 +214,21 @@
     "readyBody": "Publiez-le, puis invitez votre premier candidat.",
     "blocked": "Pas encore prêt",
     "missing": {
-      "questions": "Ajoutez au moins une question.",
-      "criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer."
+      "no_questions": "Ajoutez au moins une question.",
+      "question_not_written": "La question {{position}} contient encore le texte d'exemple. Rédigez la question que vous voulez poser.",
+      "no_criteria": "Ajoutez au moins un critère d'évaluation — sinon il n'y a rien à évaluer.",
+      "criterion_not_named": "Le critère {{position}} porte encore son nom d'exemple. Nommez ce que vous voulez évaluer."
     }
   },
-  "share": {
-    "title": "Qui voit ce poste",
-    "subtitle": "Par défaut, tout le monde dans votre organisation. Nommez des personnes pour le restreindre — les administrateurs et vous gardez toujours l'accès.",
-    "everyone": "Toute l'organisation",
-    "restricted": "Uniquement les personnes que je désigne",
-    "save": "Enregistrer les accès",
-    "saved": "Accès mis à jour"
+  "team": {
+    "title": "Équipe du poste",
+    "subtitle": "L'équipe voit ce poste et reçoit un e-mail quand le rapport d'un candidat est prêt. Les administrateurs et propriétaires voient tous les postes, mais ne reçoivent d'e-mail que pour ceux dont ils font partie.",
+    "creator": "Créateur du poste, toujours dans l'équipe",
+    "createdBy": "Créé par <name></name>",
+    "label": "Équipe",
+    "hint": "Qui suit ce poste avec vous. Modifiable ensuite.",
+    "save": "Enregistrer l'équipe",
+    "saved": "Équipe mise à jour"
   },
   "import": {
     "title": "Importer depuis une offre d'emploi",
@@ -232,7 +249,8 @@
     "title": "Supprimer ce poste ?",
     "body": "« {{title}} », ses questions et ses critères seront définitivement supprimés. Cette action est irréversible.",
     "confirm": "Supprimer le poste",
-    "hasSessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt : leurs entretiens et rapports sont conservés."
+    "hasSessions": "Ce poste a des candidats, il ne peut donc pas être supprimé. Archivez-le plutôt : leurs entretiens et rapports sont conservés.",
+    "done": "Poste supprimé."
   },
   "errors": {
     "invalid_title": "Donnez au poste un intitulé de 120 caractères maximum.",
@@ -254,6 +272,8 @@
     "invalid_url": "Ce n'est pas une adresse web publique.",
     "unsupported_media_type": "Ce format d'enregistrement n'est pas pris en charge.",
     "media_too_large": "Cet enregistrement est trop volumineux. Limitez les questions à 100 Mo.",
-    "key_mismatch": "L'envoi ne correspond pas à ce qui était attendu. Réessayez l'enregistrement."
+    "key_mismatch": "L'envoi ne correspond pas à ce qui était attendu. Réessayez l'enregistrement.",
+    "team_too_large": "Une équipe compte au maximum 100 personnes.",
+    "not_a_member": "Une des personnes choisies ne fait plus partie de l'organisation. Rechargez la page et réessayez."
   }
 }

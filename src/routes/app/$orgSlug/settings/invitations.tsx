@@ -11,6 +11,7 @@ import { Check, Copy, RotateCw, X } from 'lucide-react'
 import { api } from '../../../../../convex/_generated/api'
 import type { Id } from '../../../../../convex/_generated/dataModel'
 import { convexErrorCode } from '~/lib/convex-errors'
+import { MemberName } from '~/components/MemberName'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
@@ -46,6 +47,7 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card'
+import { AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
 const KNOWN_INVITE_ERRORS = [
   'already_invited',
@@ -80,6 +82,7 @@ function parseEmails(raw: string): Array<string> {
 
 export const Route = createFileRoute('/app/$orgSlug/settings/invitations')({
   component: InvitationsSettings,
+  errorComponent: AppRouteError,
 })
 
 function InvitationsSettings() {
@@ -402,12 +405,12 @@ function PendingRow({ inv }: { inv: PendingInvitation }) {
         </p>
         <p className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
           <span>
-            {inv.invitedByName
-              ? t('settings:invitations.sentBy', {
-                  name: inv.invitedByName,
-                  date: date(inv.sentAt),
-                })
-              : t('settings:invitations.sentOn', { date: date(inv.sentAt) })}
+            <Trans
+              t={t}
+              i18nKey="settings:invitations.sentBy"
+              values={{ date: date(inv.sentAt) }}
+              components={{ name: <MemberName member={inv.invitedBy} /> }}
+            />
           </span>
           <span>
             {t(

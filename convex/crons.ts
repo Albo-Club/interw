@@ -18,9 +18,28 @@ crons.interval(
 )
 
 crons.interval(
+  'expire the open sessions of roles past their deadline',
+  { hours: 1 },
+  internal.sessions.expireOverdueSessions,
+  { cursor: null },
+)
+
+crons.interval(
   'remove old emails from the resend component',
   { hours: 1 },
   internal.crons.cleanupResend,
+  {},
+)
+
+/**
+ * One-off: deletes the assistant threads that predate erasure tracking, then
+ * returns at once on every later tick (convex/migrations.ts). Remove with the
+ * function once every deployment's `migrations` row has `doneAt`.
+ */
+crons.interval(
+  'purge assistant threads from before erasure tracking',
+  { hours: 1 },
+  internal.migrations.purgeLegacyAssistantThreads,
   {},
 )
 

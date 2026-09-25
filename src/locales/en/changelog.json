@@ -9,6 +9,66 @@
       "title": "Quotes that land on the second, and every answer's length",
       "body": "In a report, each answer now shows its length straight away. Clicking a quote shows the answer loading, then starts it at the moment quoted. If the browser will not start playback on its own, a \"Play from\" button appears instead of a click that seems to do nothing."
     },
+    "assistant-history-purged": {
+      "title": "Older assistant conversations deleted",
+      "body": "As part of tightening how candidate data is deleted, your conversations with the assistant from before this update have been deleted. From now on, deleting a candidate also deletes every conversation in which the assistant read their data."
+    },
+    "auth-hardening-sep-25": {
+      "title": "Sign-in hardened",
+      "body": "We hardened sign-in and team invitations against misuse, and reserved administrator access to the operator's own address. Completing an email verification link now only asks for the password you chose, so you never lose it along the way."
+    },
+    "removed-members-credit": {
+      "title": "Removed teammates keep their credit",
+      "body": "When you remove someone from your organization, the decisions they made, their entries in a candidate's decision history, the invitations they sent and the roles they created still show their name, greyed out and marked \"(removed)\", instead of disappearing. A teammate whose account was deleted shows as \"Former member\". The platform's last super admin can no longer delete their account by mistake."
+    },
+    "calmer-interface": {
+      "title": "A calmer, more consistent interface",
+      "body": "Interw now uses its own typeface everywhere, respects your system's reduce-motion setting, and shows the shape of the page while it loads instead of a line of text. Candidate search (⌘K) opens as a list you can move through with the arrow keys, and is reachable from a phone. Dates follow the language of the app, the roles list marks the ones whose team you are on, and importing a job ad adds all of it or none of it."
+    },
+    "candidate-leave-guard": {
+      "title": "Candidates are warned before losing an answer",
+      "body": "A candidate who presses Back or closes the tab while an answer is recording, sending, or waiting to be retried is now asked first, and if they leave anyway the interview's log says so, so a missing answer no longer looks like a skipped one. A link opened without https now says so instead of blaming the browser, each interview screen has its own page title, and we tightened what our error reports keep from report share links."
+    },
+    "data-correctness": {
+      "title": "Honest counts, and invitations that close on time",
+      "body": "The dashboard no longer shrinks its figures as your organisation grows: a number that reached our counting limit now shows as “400+”. Invitations to a role whose deadline passed more than a day ago are marked expired. A resend to an address that bounced is refused instead of sent again, and a bounce can no longer flip back to “sent”. Two roles with the same title always get distinct links."
+    },
+    "backend-hardening": {
+      "title": "Tighter limits around links and uploads",
+      "body": "We hardened what a candidate link, a report share link and file uploads can do: expiry and time checks rely only on our servers, upload windows and sizes now match each question's length, and share links follow the same rate limits as the rest of the product. On a shared report, an answer recorded without a camera now plays as audio instead of a black video, and the internal role name is never shown."
+    },
+    "assistant-panel": {
+      "title": "A lighter, quieter assistant panel",
+      "body": "The AI assistant now stays closed until you open it, and loads only then, so recruiter pages open faster. On a phone or a narrow window it opens as a proper dialog you can leave with Escape or a tap outside. The composer shows how long your message is against the 8,000-character limit, and says so plainly when it is too long. We also tightened which links and images the assistant's answers can point to."
+    },
+    "recruiter-routes": {
+      "title": "Clearer errors, safer publishing",
+      "body": "A mistyped or deleted link now shows a clear page inside the app with a way back to your roles, and refused actions tell you why. A role can no longer be published with the example question or an unnamed criterion, and you can delete a role created by mistake. Downloaded CVs and cover letters are named in your language."
+    },
+    "candidate-page": {
+      "title": "A candidate page that keeps up with you",
+      "body": "Videos no longer restart when you save a note, and keep playing after an hour on the page; if a recording cannot load, you are told and can retry. The moments worth watching sit under the player, decisions keep their history, and when an analysis does not finish, the role's creator or an admin can relaunch it. Revoking a share link now asks first, and the cover letter has its own button."
+    },
+    "candidate-table": {
+      "title": "Compare candidates at a glance",
+      "body": "The candidate table now shows each candidate's score and AI recommendation. Sort by score, recommendation, date or length, and filter by status or by your decision. An invitation that bounced or was marked as spam is flagged on its row, and owners, admins and the role's creator can copy a candidate's link to send it themselves. When you paste a list, repeated addresses are shown before anything is sent."
+    },
+    "video-intro": {
+      "title": "Film your intro, replay your questions",
+      "body": "You can now film a short video intro for a role from its Basics step: candidates see it before the first question. The intro is a video or nothing — written and audio intros are gone, and a role that had one now opens straight on its first question. Every question you record now plays back right where you recorded it, and a recording made without a camera plays as audio for you and for candidates."
+    },
+    "role-team": {
+      "title": "Choose who follows each role",
+      "body": "Each role now has a team: you, plus the colleagues you pick when you create it or later from Team. The team sees the role and gets the email when a candidate's report is ready — nobody else in your organisation is emailed any more. Admins and owners still see every role. A role that was open to everyone is now visible to its creator, admins and owners until you add its team."
+    },
+    "evaluation-hardening": {
+      "title": "AI evaluation, hardened",
+      "body": "We hardened how reports are produced: what a candidate says, and the text of an imported job ad, are always treated as material to assess. A report now covers every answer the candidate gave, or is produced again, and it no longer has to name a strength the interview did not show."
+    },
+    "delivery-figures-removed": {
+      "title": "Delivery figures removed from reports",
+      "body": "Reports no longer include the Delivery section (speaking rate, hesitation, silence and the rest). Those figures were not reliable enough to inform a hiring decision, so we removed them. Scores, evidence, answers and recordings are unchanged, including on reports you have already received."
+    },
     "interview-survives-crash": {
       "title": "An answer survives a crash, and candidates can hear themselves first",
       "body": "While a candidate answers, the recording is now also kept on their device: if the page crashes or is closed, reopening the link sends the answer instead of losing it. They also see a live microphone meter while they talk — with a warning if we stop hearing them — and the check screen tells them when their camera shows only black and lets them record a short test to hear themselves before starting."

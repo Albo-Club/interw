@@ -1,5 +1,27 @@
 {
   "metaTitle": "Votre entretien",
+  "screens": {
+    "welcome": {
+      "title": "Bienvenue — votre entretien",
+      "description": "Découvrez le déroulé de votre entretien vidéo, puis acceptez l'enregistrement avant de commencer."
+    },
+    "check": {
+      "title": "Test caméra et micro — votre entretien",
+      "description": "Vérifiez que votre caméra et votre micro fonctionnent avant de commencer l'entretien."
+    },
+    "interview": {
+      "title": "Questions — votre entretien",
+      "description": "Répondez à chaque question en vidéo, à votre rythme. Chaque réponse est enregistrée dès que vous la terminez."
+    },
+    "done": {
+      "title": "Merci — votre entretien",
+      "description": "Vos réponses sont envoyées. Voici la suite."
+    },
+    "privacy": {
+      "title": "Vos données — votre entretien",
+      "description": "Ce qui est conservé de votre entretien, combien de temps, et comment le supprimer."
+    }
+  },
   "shell": {
     "privacy": "Vos données"
   },
@@ -89,6 +111,7 @@
     "noDevices": "Aucune caméra ni micro détecté. Branchez-en un, puis rechargez cette page.",
     "busy": "Votre caméra ou votre micro est utilisé par une autre application, par exemple un appel vidéo. Fermez-la, puis réessayez.",
     "unsupported": "Ce navigateur ne peut pas enregistrer d'entretien vidéo. Ouvrez ce lien dans une version récente de Chrome, Safari, Firefox ou Edge — sur ordinateur si possible.",
+    "insecureContext": "Cette page n'a pas été ouverte par une connexion sécurisée : votre navigateur bloque donc la caméra et le micro. Ouvrez le lien tel qu'il figure dans votre e-mail d'invitation — il commence par https://.",
     "inAppBrowser": "Vous semblez être dans un navigateur intégré à une application. L'enregistrement y échoue souvent. Ouvrez plutôt ce lien dans Safari ou Chrome.",
     "retry": "Vérifier à nouveau",
     "continue": "Tout fonctionne — commencer l'entretien",
@@ -103,6 +126,7 @@
   },
   "run": {
     "progress": "Question {{index}} sur {{total}}",
+    "leaveConfirm": "Votre réponse n'est pas encore envoyée. Si vous quittez cette page maintenant, elle sera perdue. Quitter quand même ?",
     "intro": {
       "title": "Un mot avant de commencer",
       "continue": "Je suis prêt"

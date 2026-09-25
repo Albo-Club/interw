@@ -22,7 +22,6 @@
     "strengths": "Strengths",
     "concerns": "Watch-outs",
     "answers": "Answer by answer",
-    "delivery": "Delivery",
     "highlights": "Worth watching",
     "documents": "Documents",
     "note": "Your notes"
@@ -58,21 +57,6 @@
     "playAt": "Play from {{time}}",
     "failed": "This answer could not be loaded. Reload the page to try again."
   },
-  "delivery": {
-    "subtitle": "Measured from the transcript timings, not judged by a model.",
-    "pace": "Speaking rate",
-    "paceUnit": "{{value}} words / min",
-    "fluency": "Hesitation",
-    "fluencyUnit": "{{value}} per 100 words",
-    "pauses": "Silence",
-    "pausesUnit": "{{value}}% of the time",
-    "concision": "Time used",
-    "concisionUnit": "{{value}}% of what was allowed",
-    "consistency": "Consistency",
-    "consistencyUnit": "{{value}}% variation",
-    "engagement": "Engagement",
-    "engagementUnit": "{{value}}s spoken"
-  },
   "note": {
     "placeholder": "What you thought, what to ask next time…",
     "hint": "Only your team sees this. The candidate never does.",
@@ -82,22 +66,30 @@
     "title": "The analysis is still running",
     "body": "The interview has arrived and is being transcribed and analysed. This usually takes a few minutes.",
     "failedTitle": "The analysis did not complete",
-    "failedBody": "The recordings are safe and the analysis will be retried automatically. The last steps are listed below.",
+    "failedBody": "The recordings are safe. Failed steps are retried automatically; if the analysis still has not finished, relaunch it. The last steps are listed below.",
     "steps": {
       "transcribe": "Transcription",
       "report": "Analysis",
-      "notify": "Notification"
+      "notify": "Notification",
+      "relaunch": "Relaunch",
+      "purge": "Retention"
     },
     "outcome": {
       "started": "Started",
       "succeeded": "Done",
       "failed": "Failed",
       "skipped": "Skipped"
-    }
+    },
+    "relaunch": "Relaunch the analysis",
+    "relaunched": "Analysis relaunched"
   },
   "notStarted": {
     "title": "Not started yet",
     "body": "{{name}} has been invited but has not recorded anything yet."
+  },
+  "expired": {
+    "title": "Interview window closed",
+    "body": "The role's deadline passed before {{name}} finished. To send them a new link, move the deadline back and invite them again."
   },
   "inProgress": {
     "title": "In progress",
@@ -119,13 +111,18 @@
     },
     "copy": "Copy the link",
     "copied": "Link copied",
-    "revoke": "Revoke",
+    "revoke": "Revoke…",
     "revoked": "Link revoked",
     "existing": "Active link",
     "views": "Opened {{count}} time",
     "views_other": "Opened {{count}} times",
     "neverViewed": "Not opened yet",
-    "expiresOn": "Stops working on {{date}}"
+    "expiresOn": "Stops working on {{date}}",
+    "revokeConfirm": {
+      "title": "Revoke this link?",
+      "body": "Created on {{date}}. {{views}}. Whoever has this link will no longer be able to read the report. This cannot be undone.",
+      "confirm": "Revoke the link"
+    }
   },
   "shared": {
     "title": "Interview report",
@@ -147,6 +144,29 @@
     "not_found": "This report could not be found.",
     "note_too_long": "That note is too long.",
     "share_expired": "This link has expired.",
-    "share_revoked": "This link was revoked."
+    "share_revoked": "This link was revoked.",
+    "report_exists": "The analysis is already finished.",
+    "report_in_progress": "The analysis is already running. Give it a few minutes.",
+    "session_not_completed": "The interview is not finished yet.",
+    "rate_limited": "You have relaunched a lot of analyses recently. Wait a moment and try again.",
+    "insufficient_role": "Only admins, owners and the role’s creator can do this."
+  },
+  "highlights": {
+    "kind": {
+      "strength": "Strength",
+      "personality": "Personality",
+      "watchpoint": "Watch-out"
+    },
+    "jump": "Watch from {{time}}"
+  },
+  "documents": {
+    "cv": "CV",
+    "coverLetter": "Cover letter",
+    "newTab": "(opens in a new tab)"
+  },
+  "media": {
+    "failedTitle": "The recordings could not be loaded",
+    "failedBody": "The playback link may have expired, or the connection dropped. The recordings themselves are safe.",
+    "retry": "Load them again"
   }
 }

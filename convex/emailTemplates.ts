@@ -689,19 +689,15 @@ export function newUserSignupNotificationEmail({
 }
 
 /**
- * `before + title + after`, or nothing when the role has no public title.
- * Candidate emails never fall back to the internal title (T17-1): it is the
- * recruiter's private label, and can name the person being replaced.
- */
-function aboutRole(before: string, title: string | null, after = ''): string {
-  return title === null ? '' : `${before}${title}${after}`
-}
-
-/**
  * The invitation a candidate receives. Vouvoiement in French, and no jargon:
  * most recipients have never heard of an asynchronous video interview, so the
  * email has to say what will happen, how long it takes, and that they choose
  * when.
+ *
+ * `jobTitle` is the role's public job title, or null when it has none. Never
+ * the role's internal title: that is the team's own label, and it can name
+ * the person being replaced or the budget. Without a job title the email
+ * speaks of the interview with the organisation instead.
  */
 export function candidateInvitationEmail({
   locale,
@@ -723,17 +719,23 @@ export function candidateInvitationEmail({
   const safeOrg = esc(orgName)
   const c = pick(locale, {
     en: {
-      subject: `${orgName}: your interview${aboutRole(' for ', jobTitle)}`,
-      heading: `Your interview${aboutRole(' for ', safeJob)}`,
-      intro: `Hello ${safeName}, <strong>${safeOrg}</strong> would like to hear from you${aboutRole(' about the ', safeJob, ' role')}.`,
+      subject:
+        jobTitle === null
+          ? `Your interview with ${orgName}`
+          : `${orgName}: your interview for ${jobTitle}`,
+      heading:
+        safeJob === null
+          ? `Your interview with ${safeOrg}`
+          : `Your interview for ${safeJob}`,
+      intro: `Hello ${safeName}, <strong>${safeOrg}</strong> would like to hear from you${safeJob === null ? '' : ` about the ${safeJob} role`}.`,
       how: `It is a short video interview you record on your own, from your browser, whenever suits you. You will answer a handful of questions asked on camera by the team. It takes about ${durationMinutes} minutes.`,
       needs: `You will need a working camera and microphone, and a quiet few minutes. Your answers are recorded and reviewed by ${safeOrg}.`,
       footer: `This link is personal to you — please do not forward it. If you were not expecting this, you can ignore this email.`,
-      preheader: `A short video interview${aboutRole(' for ', safeJob)}, whenever suits you.`,
+      preheader: `A short video interview ${safeJob === null ? `with ${safeOrg}` : `for ${safeJob}`}, whenever suits you.`,
       cta: 'Start the interview',
       text: [
         `Hello ${candidateName},`,
-        `${orgName} would like to hear from you${aboutRole(' about the ', jobTitle, ' role')}.`,
+        `${orgName} would like to hear from you${jobTitle === null ? '' : ` about the ${jobTitle} role`}.`,
         `It is a short video interview you record on your own, from your browser, whenever suits you. It takes about ${durationMinutes} minutes.`,
         `Start the interview:`,
         startUrl,
@@ -742,17 +744,23 @@ export function candidateInvitationEmail({
       ],
     },
     fr: {
-      subject: `${orgName} : votre entretien${aboutRole(' pour le poste de ', jobTitle)}`,
-      heading: `Votre entretien${aboutRole(' pour le poste de ', safeJob)}`,
-      intro: `Bonjour ${safeName}, <strong>${safeOrg}</strong> souhaite vous entendre${aboutRole(' au sujet du poste de ', safeJob)}.`,
+      subject:
+        jobTitle === null
+          ? `Votre entretien avec ${orgName}`
+          : `${orgName} : votre entretien pour le poste de ${jobTitle}`,
+      heading:
+        safeJob === null
+          ? `Votre entretien avec ${safeOrg}`
+          : `Votre entretien pour le poste de ${safeJob}`,
+      intro: `Bonjour ${safeName}, <strong>${safeOrg}</strong> souhaite vous entendre${safeJob === null ? '' : ` au sujet du poste de ${safeJob}`}.`,
       how: `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Vous répondrez à quelques questions posées face caméra par l'équipe. Comptez environ ${durationMinutes} minutes.`,
       needs: `Prévoyez une caméra et un micro en état de marche, et quelques minutes au calme. Vos réponses sont enregistrées et consultées par ${safeOrg}.`,
       footer: `Ce lien vous est personnel : merci de ne pas le transmettre. Si vous n'attendiez pas ce message, vous pouvez l'ignorer.`,
-      preheader: `Un court entretien vidéo${aboutRole(' pour le poste de ', safeJob)}, quand vous voulez.`,
+      preheader: `Un court entretien vidéo ${safeJob === null ? `avec ${safeOrg}` : `pour le poste de ${safeJob}`}, quand vous voulez.`,
       cta: "Commencer l'entretien",
       text: [
         `Bonjour ${candidateName},`,
-        `${orgName} souhaite vous entendre${aboutRole(' au sujet du poste de ', jobTitle)}.`,
+        `${orgName} souhaite vous entendre${jobTitle === null ? '' : ` au sujet du poste de ${jobTitle}`}.`,
         `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Comptez environ ${durationMinutes} minutes.`,
         `Commencer l'entretien :`,
         startUrl,
@@ -781,6 +789,7 @@ export function candidateInvitationEmail({
  * way a candidate can exercise the erasure the consent screen promised "at
  * any time", and without this email the only copy of that link was a page
  * they had just closed. The link carries their token, hence the footer.
+ * `jobTitle` follows the invitation's rule: the public job title, or null.
  */
 export function candidateCompletedEmail({
   locale,
@@ -802,15 +811,15 @@ export function candidateCompletedEmail({
     en: {
       subject: `${orgName}: your interview has been sent`,
       heading: 'Your interview has been sent',
-      intro: `Hello ${safeName}, thank you. Your answers${aboutRole(' for the ', safeJob, ' role')} have reached <strong>${safeOrg}</strong>, and there is nothing more for you to do.`,
+      intro: `Hello ${safeName}, thank you. Your answers${safeJob === null ? '' : ` for the ${safeJob} role`} have reached <strong>${safeOrg}</strong>, and there is nothing more for you to do.`,
       next: `${safeOrg} will review them and contact you directly.`,
       data: 'You can see what is kept about this interview, and delete all of it at any time, from your data page.',
       cta: 'See or delete my data',
       footer: 'The link above is personal to you — please do not forward it.',
-      preheader: `Your answers${aboutRole(' for ', safeJob)} have reached ${safeOrg}.`,
+      preheader: `Your answers${safeJob === null ? '' : ` for ${safeJob}`} have reached ${safeOrg}.`,
       text: [
         `Hello ${candidateName},`,
-        `Thank you. Your answers${aboutRole(' for the ', jobTitle, ' role')} have reached ${orgName}, and there is nothing more for you to do. ${orgName} will review them and contact you directly.`,
+        `Thank you. Your answers${jobTitle === null ? '' : ` for the ${jobTitle} role`} have reached ${orgName}, and there is nothing more for you to do. ${orgName} will review them and contact you directly.`,
         'You can see what is kept about this interview, and delete all of it at any time, from your data page:',
         privacyUrl,
         'This link is personal to you — please do not forward it.',
@@ -819,15 +828,15 @@ export function candidateCompletedEmail({
     fr: {
       subject: `${orgName} : votre entretien a bien été envoyé`,
       heading: 'Votre entretien a bien été envoyé',
-      intro: `Bonjour ${safeName}, merci. Vos réponses${aboutRole(' pour le poste de ', safeJob)} sont bien parvenues à <strong>${safeOrg}</strong>, et vous n'avez plus rien à faire.`,
+      intro: `Bonjour ${safeName}, merci. Vos réponses${safeJob === null ? '' : ` pour le poste de ${safeJob}`} sont bien parvenues à <strong>${safeOrg}</strong>, et vous n'avez plus rien à faire.`,
       next: `${safeOrg} va les examiner et reviendra vers vous directement.`,
       data: 'Vous pouvez consulter ce qui est conservé de cet entretien, et tout supprimer à tout moment, depuis votre page de données.',
       cta: 'Voir ou supprimer mes données',
       footer: 'Le lien ci-dessus vous est personnel : merci de ne pas le transmettre.',
-      preheader: `Vos réponses${aboutRole(' pour le poste de ', safeJob)} sont bien parvenues à ${safeOrg}.`,
+      preheader: `Vos réponses${safeJob === null ? '' : ` pour le poste de ${safeJob}`} sont bien parvenues à ${safeOrg}.`,
       text: [
         `Bonjour ${candidateName},`,
-        `Merci. Vos réponses${aboutRole(' pour le poste de ', jobTitle)} sont bien parvenues à ${orgName}, et vous n'avez plus rien à faire. ${orgName} va les examiner et reviendra vers vous directement.`,
+        `Merci. Vos réponses${jobTitle === null ? '' : ` pour le poste de ${jobTitle}`} sont bien parvenues à ${orgName}, et vous n'avez plus rien à faire. ${orgName} va les examiner et reviendra vers vous directement.`,
         'Vous pouvez consulter ce qui est conservé de cet entretien, et tout supprimer à tout moment, depuis votre page de données :',
         privacyUrl,
         'Ce lien vous est personnel : merci de ne pas le transmettre.',

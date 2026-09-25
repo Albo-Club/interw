@@ -14,7 +14,7 @@ import { ConvexError, v } from 'convex/values'
 
 import { internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
-import { candidateDocumentKeys, deleteObjects } from './lib/objectStore'
+import { deleteObjects } from './lib/objectStore'
 import type { ActionCtx } from './_generated/server'
 import type { GenericMutationCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
@@ -61,9 +61,9 @@ export const collectSessionObjects = internalQuery({
       .collect()
 
     // Segment rows are written BEFORE the upload, so even an answer whose
-    // upload failed has its keys here. Documents are signed before any row
-    // names them, so every key their slots can issue is derived instead.
-    // Either way erasure is exact rather than a scan-and-hope.
+    // upload failed has its keys here — and so are document slots, through
+    // `pendingDocumentKeys`. That is what makes erasure exact rather than a
+    // scan-and-hope.
     const keys = [
       ...new Set(
         [
@@ -74,7 +74,7 @@ export const collectSessionObjects = internalQuery({
           ]),
           session.cvKey,
           session.coverLetterKey,
-          ...candidateDocumentKeys(session.orgId, session._id),
+          ...(session.pendingDocumentKeys ?? []),
         ].filter((key): key is string => key !== undefined),
       ),
     ]
@@ -300,6 +300,7 @@ export const clearSessionMedia = internalMutation({
     await ctx.db.patch('sessions', args.sessionId, {
       cvKey: undefined,
       coverLetterKey: undefined,
+      pendingDocumentKeys: undefined,
       mediaPurgedAt: Date.now(),
     })
     await ctx.db.insert('purgeLog', {

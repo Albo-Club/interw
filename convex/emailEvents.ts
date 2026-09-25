@@ -7,13 +7,10 @@
  * them into a status on the row we wrote when we sent the mail.
  */
 
-import { v } from 'convex/values'
 import { vOnEmailEventArgs } from '@convex-dev/resend'
 
-import { internalMutation, query } from './_generated/server'
-import { requireOrgMember } from './lib/auth'
-import { canSeeProject } from './lib/projectAccess'
-import type { Doc, Id } from './_generated/dataModel'
+import { internalMutation } from './_generated/server'
+import type { Doc } from './_generated/dataModel'
 
 type DeliveryStatus = Doc<'emailLog'>['status']
 
@@ -67,51 +64,5 @@ export const record = internalMutation({
       error: RANK[status] === RANK.failed ? event.type : undefined,
     })
     return null
-  },
-})
-
-/** Recent delivery outcomes for an organisation, newest first. */
-export const recent = query({
-  args: { orgId: v.id('organizations'), limit: v.optional(v.number()) },
-  handler: async (ctx, { orgId, limit }) => {
-    const { member } = await requireOrgMember(ctx, orgId)
-    const rows = await ctx.db
-      .query('emailLog')
-      .withIndex('by_org_and_created', (q) => q.eq('orgId', orgId))
-      .order('desc')
-      .take(Math.min(limit ?? 50, 200))
-
-    // A row that names a candidate inherits the visibility of that candidate's
-    // role: a confidential search must not leak through the deliverability
-    // list any more than through the search box.
-    const visibleByProject = new Map<Id<'projects'>, boolean>()
-    const visible: typeof rows = []
-    for (const row of rows) {
-      // Team invites are admin data (`invitations.listForOrg` is admin-only).
-      if (row.invitationId && member.role === 'member') continue
-      if (row.sessionId) {
-        const session = await ctx.db.get('sessions', row.sessionId)
-        if (!session) continue
-        let ok = visibleByProject.get(session.projectId)
-        if (ok === undefined) {
-          const project = await ctx.db.get('projects', session.projectId)
-          ok =
-            project !== null &&
-            (await canSeeProject(ctx, project, member))
-          visibleByProject.set(session.projectId, ok)
-        }
-        if (!ok) continue
-      }
-      visible.push(row)
-    }
-    return visible.map((row) => ({
-      _id: row._id,
-      template: row.template,
-      recipient: row.recipient,
-      status: row.status,
-      error: row.error ?? null,
-      sessionId: row.sessionId ?? null,
-      createdAt: row.createdAt,
-    }))
   },
 })

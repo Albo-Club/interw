@@ -7,8 +7,6 @@ import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, components, internal } from './_generated/api'
-import { candidateDocumentKeys } from './lib/objectStore'
-import { introMediaKeys, questionMediaKeys } from './media'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -395,13 +393,8 @@ describe('erasure', () => {
     spy.mockRestore()
 
     const prefix = `orgs/${s.orgId}/sessions/${s.sessionId}/`
-    // Plus every document key a slot could have issued, attached or not
-    // (T17-5): a CV uploaded and never attached is named by no row.
     expect(deleted.sort()).toEqual(
-      [
-        ...['q0.m4a', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
-        ...candidateDocumentKeys(s.orgId, s.sessionId),
-      ].sort(),
+      ['q0.m4a', 'q0.weba', 'q0.webm'].map((name) => prefix + name),
     )
   })
 
@@ -492,71 +485,15 @@ describe('deleting a role', () => {
         return Promise.resolve()
       })
 
-    // A second question whose recording was uploaded and never attached:
-    // no row names it, only its slot does.
-    const { project, questions } = await t.run(async (ctx) => {
-      const row = (await ctx.db.get('projects', s.projectId))!
-      await ctx.db.insert('questions', {
-        orgId: row.orgId,
-        projectId: row._id,
-        orderIndex: 1,
-        content: 'Question 1',
-        maxResponseSeconds: 120,
-      })
-      return {
-        project: row,
-        questions: await ctx.db
-          .query('questions')
-          .withIndex('by_project', (q) => q.eq('projectId', s.projectId))
-          .collect(),
-      }
-    })
     await t
       .withIdentity({ subject: 'ba_recruiter' })
       .mutation(api.projects.remove, { projectId: s.projectId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
 
-    // What the rows name, and every key their upload slots could have issued.
-    expect(deleted.flat().sort()).toEqual(
-      [
-        ...introMediaKeys(project),
-        ...questions.flatMap(questionMediaKeys),
-      ].sort(),
-    )
-    expect(deleted.flat()).toContain('orgs/o/projects/p/q0.webm')
+    expect(deleted.flat().sort()).toEqual([
+      'orgs/o/projects/p/intro.webm',
+      'orgs/o/projects/p/q0.webm',
+    ])
     spy.mockRestore()
-  })
-
-  // A removed question took its row and left its recording in the bucket,
-  // with nothing left to find it by.
-  it('deletes the recording of a removed question', async () => {
-    const s = await seed(t)
-    const question = await t.run(async (ctx) => {
-      await ctx.db.delete('sessions', s.sessionId)
-      await ctx.db.patch('projects', s.projectId, {
-        sessionCount: 0,
-        completedSessionCount: 0,
-      })
-      return (await ctx.db
-        .query('questions')
-        .withIndex('by_project', (q) => q.eq('projectId', s.projectId))
-        .first())!
-    })
-
-    const deleted: Array<string> = []
-    const spy = vi
-      .spyOn(await import('./lib/objectStore'), 'deleteObjects')
-      .mockImplementation((keys: Array<string>) => {
-        deleted.push(...keys)
-        return Promise.resolve()
-      })
-    await t
-      .withIdentity({ subject: 'ba_recruiter' })
-      .mutation(api.questions.remove, { questionId: question._id })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
-    spy.mockRestore()
-
-    expect(deleted.sort()).toEqual(questionMediaKeys(question).sort())
-    expect(deleted).toContain('orgs/o/projects/p/q0.webm')
   })
 })

@@ -6,8 +6,6 @@ import { createThread } from '@convex-dev/agent'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, components, internal } from './_generated/api'
-import { candidateDocumentKeys } from './lib/objectStore'
-import { introMediaKeys, questionMediaKeys } from './media'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
@@ -336,17 +334,14 @@ async function namedKeys(t: T): Promise<Set<string>> {
         if (key) keys.push(key)
       }
     }
-    // A key derived from a row's ids is named by that row (T17-5): what
-    // matters is that the row still exists when the object goes.
     for (const s of await ctx.db.query('sessions').collect()) {
       if (s.cvKey) keys.push(s.cvKey)
-      keys.push(...candidateDocumentKeys(s.orgId, s._id))
     }
     for (const p of await ctx.db.query('projects').collect()) {
-      keys.push(...introMediaKeys(p))
+      if (p.introMediaKey) keys.push(p.introMediaKey)
     }
     for (const q of await ctx.db.query('questions').collect()) {
-      keys.push(...questionMediaKeys(q))
+      if (q.mediaKey) keys.push(q.mediaKey)
     }
     return keys
   })

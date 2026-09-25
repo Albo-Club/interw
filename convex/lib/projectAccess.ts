@@ -11,10 +11,10 @@
  *      confidential role exists.
  *
  * The creator is on the team by construction and is never stored as a row:
- * they cannot be dropped from it, so the person who opened the search always
- * sees it and always hears about its reports. That seat belongs to the
- * membership the role was created in (`isCreator`): removal ends it, and a
- * re-invitation does not bring it back (T17-2).
+ * they cannot be dropped from it, so the person who opened the search sees
+ * it and hears about its reports for as long as they are a member. That seat
+ * belongs to the membership the role was created in (`isCreator`): removal
+ * ends it, and a re-invitation does not bring it back (T17-2).
  */
 
 import { ConvexError } from 'convex/values'
@@ -28,7 +28,7 @@ type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 type Viewer = Pick<Doc<'organizationMembers'>, 'userId' | 'role' | 'joinedAt'>
 
 /** Admins and owners see every project in their organisation. */
-function seesEverything(role: AppRole): boolean {
+export function seesEverything(role: AppRole): boolean {
   return role === 'admin' || role === 'owner'
 }
 

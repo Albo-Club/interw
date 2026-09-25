@@ -513,32 +513,12 @@ describe('creating a second organisation', () => {
   })
 })
 
-describe('the team-invite sends in the deliverability list', () => {
+describe('the team-invite sends', () => {
   let t: ReturnType<typeof newTest>
   let w: World
   beforeEach(async () => {
     t = newTest()
     w = await seed(t)
-  })
-
-  it('are shown to admins only, like the invitations list', async () => {
-    await as(t, 'owner').mutation(api.invitations.create, {
-      orgId: w.acmeOrgId,
-      email: 'newcomer@example.test',
-      role: 'member',
-    })
-    const byMember = await as(t, 'member').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(byMember.map((row) => row.recipient)).not.toContain(
-      'newcomer@example.test',
-    )
-    const byOwner = await as(t, 'owner').query(api.emailEvents.recent, {
-      orgId: w.acmeOrgId,
-    })
-    expect(byOwner.map((row) => row.recipient)).toContain(
-      'newcomer@example.test',
-    )
   })
 
   it('go with the invitation when it is revoked', async () => {

@@ -27,7 +27,6 @@ import { v } from 'convex/values'
 import { internalAction, internalMutation, internalQuery } from './_generated/server'
 import { components, internal } from './_generated/api'
 import { deleteObjects } from './lib/objectStore'
-import { introMediaKeys, questionMediaKeys } from './media'
 import { release } from './lib/storage'
 import { eraseSession } from './purge'
 import type { ActionCtx } from './_generated/server'
@@ -206,9 +205,13 @@ export const projectBatch = internalQuery({
           .withIndex('by_project', (q) => q.eq('projectId', project._id))
           .collect()
         const keys = [
-          ...introMediaKeys(project),
-          ...questions.flatMap(questionMediaKeys),
-        ]
+          project.introMediaKey,
+          ...(project.pendingMediaKeys ?? []),
+          ...questions.flatMap((question) => [
+            question.mediaKey,
+            ...(question.pendingMediaKeys ?? []),
+          ]),
+        ].filter((key): key is string => key !== undefined)
         return { projectId: project._id, keys }
       }),
     )

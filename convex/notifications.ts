@@ -4,7 +4,7 @@ import { internalMutation } from './_generated/server'
 import { RESEND_FROM, resend } from './email'
 import { rateLimiter } from './rateLimiters'
 import { passwordChangedEmail, reportReadyEmail } from './emailTemplates'
-import { isCreator } from './lib/projectAccess'
+import { isCreator, seesEverything } from './lib/projectAccess'
 import type { Id } from './_generated/dataModel'
 
 const siteUrl = process.env.SITE_URL!
@@ -94,28 +94,45 @@ export const sendReportReady = internalMutation({
     // The role's team and nobody else: its creator plus the colleagues they
     // chose. Admins and owners see every role but are only mailed about the
     // ones they follow — an org of 40 used to get 40 emails per candidate.
-    const team = await ctx.db
+    const shares = await ctx.db
       .query('projectShares')
       .withIndex('by_project', (q) => q.eq('projectId', project._id))
       .collect()
-    const teamIds = new Set(team.map((row) => row.userId))
-    const recipients = new Set<Id<'users'>>([project.createdBy, ...teamIds])
+    const onTeam = new Set(shares.map((row) => row.userId))
+    const team = new Set<Id<'users'>>([project.createdBy, ...onTeam])
+
+    // Membership is checked here, at send time: `createdBy` and a team row are
+    // attributions inside the org, never a grant that outlives removal.
+    let audience = (
+      await Promise.all(
+        [...team].map((userId) =>
+          ctx.db
+            .query('organizationMembers')
+            .withIndex('by_org_and_user', (q) =>
+              q.eq('orgId', session.orgId).eq('userId', userId),
+            )
+            .unique(),
+        ),
+      )
+    )
+      .filter((member) => member !== null)
+      // A creator re-invited after removal is not the creator of this
+      // membership: only a team row puts them back on the list (T17-2).
+      .filter((member) => onTeam.has(member.userId) || isCreator(project, member))
+    // A creator who left alone on their role would leave its reports landing
+    // with nobody told. The admins, who can already see it, inherit it.
+    if (audience.length === 0) {
+      audience = (
+        await ctx.db
+          .query('organizationMembers')
+          .withIndex('by_org', (q) => q.eq('orgId', session.orgId))
+          .collect()
+      ).filter((member) => seesEverything(member.role))
+    }
 
     const reportUrl = `${siteUrl}/app/${org?.slug ?? ''}/candidates/${sessionId}`
     let sent = false
-    for (const userId of recipients) {
-      // Membership is re-checked at send time: `createdBy` and a team row are
-      // attributions inside the org, never a grant that outlives removal.
-      const membership = await ctx.db
-        .query('organizationMembers')
-        .withIndex('by_org_and_user', (q) =>
-          q.eq('orgId', session.orgId).eq('userId', userId),
-        )
-        .unique()
-      if (!membership) continue
-      // A creator re-invited after removal is not the creator of this
-      // membership: only a team row puts them back on the list (T17-2).
-      if (!teamIds.has(userId) && !isCreator(project, membership)) continue
+    for (const { userId } of audience) {
       const user = await ctx.db.get('users', userId)
       if (!user) continue
       const { subject, html, text } = reportReadyEmail({

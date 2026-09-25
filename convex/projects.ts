@@ -10,7 +10,6 @@ import {
 } from './schema'
 import { requireOrgMember, requireOrgRole } from './lib/auth'
 import { effectiveIntroMode } from './lib/candidateView'
-import { introMediaKeys, questionMediaKeys } from './media'
 import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
@@ -377,21 +376,21 @@ export const remove = mutation({
     // data too, and deleting only the rows left them in the bucket with
     // nothing pointing at them: unreachable by any later purge, billed
     // indefinitely, and removable only by hand.
-    const keys = introMediaKeys(project)
-    const questions = await ctx.db
-      .query('questions')
-      .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .collect()
-    for (const question of questions) {
-      keys.push(...questionMediaKeys(question))
-      await ctx.db.delete('questions', question._id)
-    }
-    const criteria = await ctx.db
-      .query('criteria')
-      .withIndex('by_project', (q) => q.eq('projectId', projectId))
-      .collect()
-    for (const criterion of criteria) {
-      await ctx.db.delete('criteria', criterion._id)
+    const keys: Array<string> = [...(project.pendingMediaKeys ?? [])]
+    if (project.introMediaKey) keys.push(project.introMediaKey)
+
+    for (const table of ['questions', 'criteria'] as const) {
+      const rows = await ctx.db
+        .query(table)
+        .withIndex('by_project', (q) => q.eq('projectId', projectId))
+        .collect()
+      for (const row of rows) {
+        if ('mediaKey' in row && row.mediaKey) keys.push(row.mediaKey)
+        if ('pendingMediaKeys' in row && row.pendingMediaKeys) {
+          keys.push(...row.pendingMediaKeys)
+        }
+        await ctx.db.delete(table, row._id)
+      }
     }
     const shares = await ctx.db
       .query('projectShares')
@@ -400,7 +399,9 @@ export const remove = mutation({
     for (const share of shares) await ctx.db.delete('projectShares', share._id)
 
     await ctx.db.delete('projects', projectId)
-    await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
+    if (keys.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.media.deleteKeys, { keys })
+    }
     return null
   },
 })

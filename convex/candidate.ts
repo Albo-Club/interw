@@ -12,7 +12,9 @@
  *  3. Writes are narrow: `acceptConsent`, `updateProfile`, `attachDocument`.
  *     There is no generic "patch these fields" mutation anywhere here, because
  *     a caller who can name fields can eventually name the wrong one.
- *  4. Every write is rate-limited on the token.
+ *  4. Every write is rate-limited on the session its token resolves to, never
+ *     on the raw token: a token that resolves to nothing writes nothing, not
+ *     even a limiter row.
  *
  * On the reads: `landing` is a reactive query and is deliberately not rate
  * limited. Convex caches queries, the payload is small, and a token cannot be
@@ -26,7 +28,6 @@ import { ConvexError, v } from 'convex/values'
 import {
   action,
   internalMutation,
-  internalQuery,
   mutation,
   query,
 } from './_generated/server'
@@ -46,10 +47,10 @@ import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
-  DOCUMENT_TYPES,
   candidateDocumentKey,
   deleteObjects,
   presignPut,
+  withPendingKey,
 } from './lib/objectStore'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
@@ -59,6 +60,14 @@ import type { DataModel, Doc } from './_generated/dataModel'
 const PHONE_MAX = 40
 const LINKEDIN_MAX = 200
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+/** Extension per accepted document type. A CV is a document, not a web page. */
+const DOCUMENT_TYPES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+}
 
 /**
  * Resolve a token to its session, or fail the same way for every token that
@@ -132,7 +141,7 @@ export const acceptConsent = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const { session, project, org } = await requireSession(ctx, token)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     const gate = evaluateSessionGate({
       session,
@@ -171,7 +180,7 @@ export const updateProfile = mutation({
   },
   handler: async (ctx, { token, phone, linkedin }) => {
     const { session, project, org } = await requireSession(ctx, token)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
     const gate = evaluateSessionGate({
       session,
@@ -241,7 +250,13 @@ async function requireDocumentSlot(
   return session
 }
 
-export const resolveDocumentUpload = internalQuery({
+/**
+ * The key an upload slot writes to, named on the session BEFORE the PUT is
+ * signed — the rule segments follow. Until `attachDocument` claims it, the
+ * key waits in `pendingDocumentKeys`, so an upload whose attach never came,
+ * or was attached under another type, is still an object erasure can name.
+ */
+export const reserveDocumentUpload = internalMutation({
   args: {
     token: v.string(),
     kind: v.union(v.literal('cv'), v.literal('cover')),
@@ -258,11 +273,13 @@ export const resolveDocumentUpload = internalQuery({
     ) {
       throw new ConvexError('document_too_large')
     }
+    await consumeLimit(ctx, 'candidateWrite', session._id)
 
-    return {
-      key: candidateDocumentKey(session.orgId, session._id, kind, extension),
-      contentType,
-    }
+    const key = candidateDocumentKey(session.orgId, session._id, kind, extension)
+    await ctx.db.patch('sessions', session._id, {
+      pendingDocumentKeys: withPendingKey(session.pendingDocumentKeys, key),
+    })
+    return { key, contentType }
   },
 })
 
@@ -282,11 +299,8 @@ export const requestDocumentUpload = action({
     ctx,
     args,
   ): Promise<{ uploadUrl: string; contentType: string }> => {
-    await ctx.runMutation(internal.candidate.consumeWriteLimit, {
-      token: args.token,
-    })
-    const target = await ctx.runQuery(
-      internal.candidate.resolveDocumentUpload,
+    const target = await ctx.runMutation(
+      internal.candidate.reserveDocumentUpload,
       args,
     )
     return {
@@ -303,14 +317,14 @@ export const requestDocumentUpload = action({
 
 /**
  * Rate limiting needs a mutation; actions borrow it through here. The token
- * resolves first: an unresolved one writes nothing, not even a limiter row
- * under a key the caller chose (T17-4).
+ * is resolved first and the bucket is its session's, so a token that resolves
+ * to nothing fails like every other one and leaves no limiter row behind.
  */
 export const consumeWriteLimit = internalMutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const { session } = await requireSession(ctx, token)
-    await consumeLimit(ctx, 'candidateWrite', token)
+    await consumeLimit(ctx, 'candidateWrite', session._id)
     return session._id
   },
 })
@@ -324,7 +338,7 @@ export const swapDocumentKey = internalMutation({
   handler: async (ctx, { token, kind, mimeType }) => {
     const session = await requireDocumentSlot(ctx, token, kind)
     // Derived, never received: the only keys this row can point at are the
-    // ones `resolveDocumentUpload` could have issued for this session.
+    // ones `reserveDocumentUpload` could have issued for this session.
     const key = candidateDocumentKey(
       session.orgId,
       session._id,
@@ -335,6 +349,11 @@ export const swapDocumentKey = internalMutation({
     const previous = kind === 'cv' ? session.cvKey : session.coverLetterKey
     await ctx.db.patch('sessions', session._id, {
       ...(kind === 'cv' ? { cvKey: key } : { coverLetterKey: key }),
+      // Named by the field above from now on. Any other pending key stays
+      // pending: its object may have landed, and erasure still has to find it.
+      pendingDocumentKeys: session.pendingDocumentKeys?.filter(
+        (pending) => pending !== key,
+      ),
       lastActivityAt: Date.now(),
     })
     return { previous: previous && previous !== key ? previous : null }

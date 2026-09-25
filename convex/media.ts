@@ -24,6 +24,7 @@ import {
   presignGet,
   presignPut,
   projectMediaKey,
+  withPendingKey,
 } from './lib/objectStore'
 import { requireProjectAccess, requireProjectEditable } from './lib/projectAccess'
 import type { Doc, Id } from './_generated/dataModel'
@@ -43,62 +44,6 @@ const INTRO_RECORDING_TYPES = ['video/webm', 'video/mp4']
 
 /** ~2 minutes of 720p WebM leaves plenty of headroom. */
 const MAX_PROJECT_MEDIA_BYTES = 100 * 1024 * 1024
-
-/** The key a role's intro slot is issued under, for one content type. */
-function introSlotKey(
-  project: Pick<Doc<'projects'>, '_id' | 'orgId'>,
-  contentType: string,
-): string {
-  return projectMediaKey(
-    project.orgId,
-    project._id,
-    'intro',
-    extensionForMimeType(contentType),
-  )
-}
-
-/** Same, for a question's recording. */
-function questionSlotKey(
-  question: Pick<Doc<'questions'>, '_id' | 'orgId' | 'projectId'>,
-  contentType: string,
-): string {
-  return projectMediaKey(
-    question.orgId,
-    question.projectId,
-    `q-${question._id}`,
-    extensionForMimeType(contentType),
-  )
-}
-
-/**
- * Every key a role's intro can be stored under, for erasure: the one its row
- * names, and every key its slot could have issued. Like candidate documents,
- * a slot is signed before any row names its key, so an upload never attached
- * is named by nothing else (T17-5). The row's own key is kept for rows written
- * before keys were checked against the slot.
- */
-export function introMediaKeys(
-  project: Pick<Doc<'projects'>, '_id' | 'orgId' | 'introMediaKey'>,
-): Array<string> {
-  return withRowKey(
-    INTRO_RECORDING_TYPES.map((type) => introSlotKey(project, type)),
-    project.introMediaKey,
-  )
-}
-
-/** Same, for a question's recording. */
-export function questionMediaKeys(
-  question: Pick<Doc<'questions'>, '_id' | 'orgId' | 'projectId' | 'mediaKey'>,
-): Array<string> {
-  return withRowKey(
-    ALLOWED_RECORDING_TYPES.map((type) => questionSlotKey(question, type)),
-    question.mediaKey,
-  )
-}
-
-function withRowKey(slotKeys: Array<string>, rowKey?: string): Array<string> {
-  return rowKey && !slotKeys.includes(rowKey) ? [...slotKeys, rowKey] : slotKeys
-}
 
 function normalizeMimeType(
   mimeType: string,
@@ -124,7 +69,7 @@ function validateSize(contentLength: number): number {
 
 /* ───────────────────────────── Upload ──────────────────────────────────── */
 
-export const resolveIntroUpload = internalQuery({
+export const reserveIntroUpload = internalMutation({
   args: {
     projectId: v.id('projects'),
     mimeType: v.string(),
@@ -134,11 +79,20 @@ export const resolveIntroUpload = internalQuery({
     const { project } = await requireProjectEditable(ctx, projectId)
     const contentType = normalizeMimeType(mimeType, INTRO_RECORDING_TYPES)
     validateSize(contentLength)
-    return { key: introSlotKey(project, contentType), contentType }
+    const key = projectMediaKey(
+      project.orgId,
+      project._id,
+      'intro',
+      extensionForMimeType(contentType),
+    )
+    await ctx.db.patch('projects', project._id, {
+      pendingMediaKeys: withPendingKey(project.pendingMediaKeys, key),
+    })
+    return { key, contentType }
   },
 })
 
-export const resolveQuestionUpload = internalQuery({
+export const reserveQuestionUpload = internalMutation({
   args: {
     questionId: v.id('questions'),
     mimeType: v.string(),
@@ -150,7 +104,16 @@ export const resolveQuestionUpload = internalQuery({
     await requireProjectEditable(ctx, question.projectId)
     const contentType = normalizeMimeType(mimeType)
     validateSize(contentLength)
-    return { key: questionSlotKey(question, contentType), contentType }
+    const key = projectMediaKey(
+      question.orgId,
+      question.projectId,
+      `q-${question._id}`,
+      extensionForMimeType(contentType),
+    )
+    await ctx.db.patch('questions', question._id, {
+      pendingMediaKeys: withPendingKey(question.pendingMediaKeys, key),
+    })
+    return { key, contentType }
   },
 })
 
@@ -173,7 +136,7 @@ export const requestIntroUpload = action({
     ctx,
     args,
   ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
-    const target = await ctx.runQuery(internal.media.resolveIntroUpload, args)
+    const target = await ctx.runMutation(internal.media.reserveIntroUpload, args)
     return {
       uploadUrl: await presignPut(
         target.key,
@@ -197,7 +160,10 @@ export const requestQuestionUpload = action({
     ctx,
     args,
   ): Promise<{ uploadUrl: string; key: string; contentType: string }> => {
-    const target = await ctx.runQuery(internal.media.resolveQuestionUpload, args)
+    const target = await ctx.runMutation(
+      internal.media.reserveQuestionUpload,
+      args,
+    )
     return {
       uploadUrl: await presignPut(
         target.key,
@@ -224,22 +190,28 @@ export const requestQuestionUpload = action({
  */
 function issuedType(
   key: string,
-  slotKey: (contentType: string) => string,
+  slotKey: (extension: string) => string,
   types: ReadonlyArray<string>,
 ): string | null {
-  return types.find((type) => slotKey(type) === key) ?? null
+  return (
+    types.find((type) => slotKey(extensionForMimeType(type)) === key) ?? null
+  )
 }
 
 export const swapIntroKey = internalMutation({
   args: { projectId: v.id('projects'), key: v.string() },
   handler: async (ctx, { projectId, key }) => {
     const { project } = await requireProjectEditable(ctx, projectId)
-    const slotKey = (type: string) => introSlotKey(project, type)
+    const slotKey = (extension: string) =>
+      projectMediaKey(project.orgId, projectId, 'intro', extension)
     if (!issuedType(key, slotKey, INTRO_RECORDING_TYPES)) {
       throw new ConvexError('key_mismatch')
     }
     const previous = project.introMediaKey
-    await ctx.db.patch('projects', projectId, { introMediaKey: key })
+    await ctx.db.patch('projects', projectId, {
+      introMediaKey: key,
+      pendingMediaKeys: project.pendingMediaKeys?.filter((k) => k !== key),
+    })
     return { previous: previous && previous !== key ? previous : null }
   },
 })
@@ -250,15 +222,24 @@ export const swapQuestionKey = internalMutation({
     const question = await ctx.db.get('questions', questionId)
     if (!question) throw new ConvexError('not_found')
     await requireProjectEditable(ctx, question.projectId)
-    const slotKey = (contentType: string) =>
-      questionSlotKey(question, contentType)
+    const slotKey = (extension: string) =>
+      projectMediaKey(
+        question.orgId,
+        question.projectId,
+        `q-${questionId}`,
+        extension,
+      )
     const type = issuedType(key, slotKey, ALLOWED_RECORDING_TYPES)
     if (!type) throw new ConvexError('key_mismatch')
     // Read off the key, like the key itself: it decides whether the prompt is
     // played in <audio> or <video>, and the client's word is not needed.
     const mediaKind = type.startsWith('video/') ? 'video' : 'audio'
     const previous = question.mediaKey
-    await ctx.db.patch('questions', questionId, { mediaKey: key, mediaKind })
+    await ctx.db.patch('questions', questionId, {
+      mediaKey: key,
+      mediaKind,
+      pendingMediaKeys: question.pendingMediaKeys?.filter((k) => k !== key),
+    })
     return { previous: previous && previous !== key ? previous : null }
   },
 })

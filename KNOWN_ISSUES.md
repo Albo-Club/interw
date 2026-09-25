@@ -2153,6 +2153,9 @@ organisation:
 - **Is mailed "report ready"**: the team only, membership re-checked at send
   time. Admins and owners see every role but are mailed only about the ones
   they are on. The old rule mailed up to 200 members of the org per report.
+  One exception: when nobody on the team is still a member (a creator who
+  left alone on their role), the admins and owners are mailed instead, so a
+  report never lands with nobody told.
 - **Edits the team**: the creator, an admin or an owner
   (`requireProjectOwnerOrAdmin`), at creation or from the Team dialog.
 
@@ -2160,7 +2163,7 @@ Traps:
 
 - **The creator is never a row.** They are on the team by construction
   (`project.createdBy`), so they cannot be unticked and the person who opened
-  the search always hears about it. `setTeam` silently drops their id. Code
+  the search hears about it for as long as they are a member. `setTeam` silently drops their id. Code
   that lists "the team" must add `createdBy` to the `projectShares` rows.
 - **The table is still called `projectShares`.** Renaming a Convex table is a
   copy migration. The rows of the former "restricted" roles already meant
@@ -2679,6 +2682,9 @@ minutes, whatever the question. Both now follow `question.maxResponseSeconds`
   what an unopened invitation keeps.
 - **`expired` is terminal.** Pushing the deadline back after the cron ran does
   not reopen those links — the recruiter re-invites. Before it ran, it does.
+- **The grace is for finishing, not for sending.** `invite` and
+  `resendInvitation` refuse `project_expired` from the deadline itself: a link
+  mailed during the grace day would open on "This interview has closed".
 
 The pass is bounded (25 roles, 200 session writes) and reschedules itself
 with the same cursor until the range is drained. It rescans every

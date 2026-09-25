@@ -9,7 +9,6 @@ import { useConvex } from 'convex/react'
 import {
   useConvexMutation,
   useConvexPaginatedQuery,
-  useConvexQuery,
 } from '@convex-dev/react-query'
 import { useTranslation } from 'react-i18next'
 import { UserPlus } from 'lucide-react'
@@ -17,7 +16,7 @@ import { toast } from 'sonner'
 
 import { api } from '../../../convex/_generated/api'
 import { buildCandidateColumns } from './columns'
-import { deliveryIssues, matchesFilters } from './candidate-rows'
+import { matchesFilters } from './candidate-rows'
 import type { SortingState } from '@tanstack/react-table'
 import type {
   CandidateRow,
@@ -67,7 +66,6 @@ const STATUSES = [
 const DECISIONS = ['none', 'shortlisted', 'maybe', 'hired', 'rejected'] as const
 
 export function CandidatesTable({
-  orgId,
   projectId,
   orgSlug,
   canInvite,
@@ -75,7 +73,6 @@ export function CandidatesTable({
   onInvite,
   locale,
 }: {
-  orgId: Id<'organizations'>
   projectId: Id<'projects'>
   orgSlug: string
   canInvite: boolean
@@ -90,9 +87,6 @@ export function CandidatesTable({
     { projectId },
     { initialNumItems: PAGE_SIZE },
   )
-  // The org's latest 200 sends, already narrowed server-side to the roles
-  // this caller can see. A bounce older than that window is not flagged.
-  const events = useConvexQuery(api.emailEvents.recent, { orgId, limit: 200 })
   const resend = useConvexMutation(api.sessions.resendInvitation)
   const cancel = useConvexMutation(api.sessions.cancel)
   const [pendingCancel, setPendingCancel] = useState<CandidateRow | null>(null)
@@ -148,7 +142,7 @@ export function CandidatesTable({
       orgSlug,
       locale,
       canManage,
-      deliveryIssues: deliveryIssues(events ?? []),
+      canInvite,
       onCopyLink: copyLink,
       onResend: (row) => {
         resend({ sessionId: row._id })
@@ -158,7 +152,7 @@ export function CandidatesTable({
       onCancel: setPendingCancel,
       t,
     })
-  }, [orgSlug, locale, canManage, events, convex, resend, notify, t])
+  }, [orgSlug, locale, canManage, canInvite, convex, resend, notify, t])
 
   const rows = useMemo(
     () =>

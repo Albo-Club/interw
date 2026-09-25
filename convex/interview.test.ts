@@ -4,7 +4,7 @@ import { register as registerRateLimiter } from '@convex-dev/rate-limiter/test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, internal } from './_generated/api'
-import { segmentKey } from './lib/objectStore'
+import { playbackMedia, segmentKey } from './lib/objectStore'
 import schema from './schema'
 import type { Doc, Id } from './_generated/dataModel'
 
@@ -588,6 +588,67 @@ describe('one resume cursor, on the server', () => {
       audio: AUDIO,
     })
     expect(slot.status).toBe('reserved')
+  })
+})
+
+/**
+ * An answer whose video upload failed kept its `videoKey` — written before the
+ * upload, for erasure — and the report signed it: the recruiter got a 404 for
+ * an answer whose audio had arrived.
+ */
+describe('a video counts once it has landed', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+
+  beforeEach(async () => {
+    t = newTest()
+    s = await seedOpen(t)
+  })
+
+  async function reserveWithVideo() {
+    const slot = await t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      audio: AUDIO,
+      video: { mimeType: 'video/mp4', contentLength: 5_000 },
+    })
+    if (slot.status !== 'reserved') throw new Error('expected a reservation')
+    return slot.segmentId
+  }
+
+  const playable = (segmentId: Id<'segments'>) =>
+    t.run(async (ctx) => playbackMedia((await ctx.db.get('segments', segmentId))!))
+
+  it('plays the audio until the video is confirmed', async () => {
+    const segmentId = await reserveWithVideo()
+    await t.mutation(api.interview.markSegmentUploaded, {
+      token: s.token,
+      segmentId,
+      durationSeconds: 30,
+    })
+    expect(await playable(segmentId)).toEqual({
+      key: segmentKey(s.orgId, s.sessionId, 0, 'weba'),
+      kind: 'audio',
+    })
+
+    await t.mutation(api.interview.markVideoUploaded, {
+      token: s.token,
+      segmentId,
+    })
+    expect(await playable(segmentId)).toEqual({
+      key: segmentKey(s.orgId, s.sessionId, 0, 'mp4'),
+      kind: 'video',
+    })
+  })
+
+  it("refuses to confirm another candidate's video", async () => {
+    const segmentId = await reserveWithVideo()
+    await expect(
+      t.mutation(api.interview.markVideoUploaded, {
+        token: 'x'.repeat(43),
+        segmentId,
+      }),
+    ).rejects.toThrow('not_found')
   })
 })
 

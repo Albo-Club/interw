@@ -33,8 +33,9 @@ export type Phase =
   | 'finishing'
   | 'finishFailed'
 
-/** Why the last recording stopped, when it was not the candidate's choice. */
-export type StopReason = 'finished' | 'timeUp' | 'interrupted'
+/** Why the last recording stopped, when it was not the candidate's choice.
+ *  `recovered`: it was found on this device after a reload, and sent. */
+export type StopReason = 'finished' | 'timeUp' | 'interrupted' | 'recovered'
 
 export type InterviewState = {
   phase: Phase
@@ -63,6 +64,8 @@ export type InterviewEvent =
   /** The camera or microphone could not be opened, or the recorder not started. */
   | { type: 'deviceFailed'; error: string }
   | { type: 'recordingStarted' }
+  /** A take for the current question survived a reload and is being sent. */
+  | { type: 'recovered' }
   | { type: 'stopRequested'; reason: StopReason }
   | { type: 'stopFailed' }
   | {
@@ -152,6 +155,13 @@ export function interviewReducer(
     case 'recordingStarted':
       return state.phase === 'prompt'
         ? { ...state, ...cleared, phase: 'recording' }
+        : state
+
+    // The same attempt, carried over a reload: it goes straight to saving,
+    // and the screen says what happened once it lands.
+    case 'recovered':
+      return state.phase === 'intro' || state.phase === 'prompt'
+        ? { ...state, ...cleared, phase: 'saving', stopReason: 'recovered' }
         : state
 
     case 'stopRequested':

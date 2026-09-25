@@ -36,7 +36,7 @@ import schema, {
   paraverbalValidator,
 } from './schema'
 import { complete, transcribe  } from './lib/ai'
-import { getObjectStream } from './lib/objectStore'
+import { getObjectStream, mimeTypeForKey } from './lib/objectStore'
 import { computeParaverbal } from './lib/paraverbal'
 import { reportPrompt } from './lib/prompts'
 import { buildReport } from './lib/reportBuilder'
@@ -311,7 +311,7 @@ export const transcribeSegment = internalAction({
       const result = await transcribe(stream, {
         language: context.language,
         fileName: key.split('/').pop() ?? 'answer',
-        contentType: context.audioKey ? 'audio/webm' : 'video/webm',
+        contentType: mimeTypeForKey(key),
       })
       await ctx.runMutation(internal.pipeline.saveTranscript, {
         segmentId,

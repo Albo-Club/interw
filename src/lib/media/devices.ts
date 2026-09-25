@@ -108,6 +108,24 @@ export function assessMicLevels(levels: ReadonlyArray<number>): MicVerdict {
   return 'good'
 }
 
+/**
+ * Below this mean brightness (0..255) a frame is black: a lens cover, a
+ * privacy shutter, a laptop lid half closed. A dim room reads well above it.
+ */
+export const DARK_FRAME_BRIGHTNESS = 12
+
+/** Mean brightness of an RGBA frame, 0..255 — what `getImageData` returns. */
+export function frameBrightness(rgba: Uint8ClampedArray): number {
+  const pixels = rgba.length / 4
+  if (pixels === 0) return 0
+  let sum = 0
+  for (let i = 0; i < rgba.length; i += 4) {
+    // Rec. 601 luma: what the eye calls bright, not the plain channel mean.
+    sum += 0.299 * rgba[i] + 0.587 * rgba[i + 1] + 0.114 * rgba[i + 2]
+  }
+  return sum / pixels
+}
+
 /** What a refused camera or microphone means for the candidate. */
 export type MediaFailure = 'permissionDenied' | 'busy' | 'noDevices'
 
@@ -120,12 +138,14 @@ export type MediaFailure = 'permissionDenied' | 'busy' | 'noDevices'
  * case at work is `NotReadableError`: the camera is held by a video call, and
  * "allow it in your address bar" is the wrong advice for it.
  */
+function mediaErrorName(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'name' in error
+    ? String(error.name)
+    : ''
+}
+
 export function classifyMediaError(error: unknown): MediaFailure | null {
-  const name =
-    typeof error === 'object' && error !== null && 'name' in error
-      ? String(error.name)
-      : ''
-  switch (name) {
+  switch (mediaErrorName(error)) {
     case 'NotAllowedError':
     case 'SecurityError':
       return 'permissionDenied'
@@ -142,6 +162,33 @@ export function classifyMediaError(error: unknown): MediaFailure | null {
 
 export type InterviewStream = { stream: MediaStream; audioOnly: boolean }
 
+type DeviceChoice = { cameraId?: string; micId?: string; video: boolean }
+type GetUserMedia = (constraints: MediaStreamConstraints) => Promise<MediaStream>
+
+/**
+ * Speech, mono. Stated rather than left to each browser's defaults, which
+ * differ: one channel is all transcription uses, and echo cancellation is what
+ * keeps a question played through laptop speakers out of the answer.
+ */
+const SPEECH: MediaTrackConstraints = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+  channelCount: 1,
+}
+
+/** Some webcams default to 60 fps: twice the encoding work, for a face. */
+const CAMERA: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  frameRate: { ideal: 24, max: 30 },
+}
+
+/** A device chosen on the check screen that no longer resolves. */
+const isStaleChoice = (choice: DeviceChoice, error: unknown) =>
+  Boolean(choice.cameraId || choice.micId) &&
+  mediaErrorName(error) === 'OverconstrainedError'
+
 /**
  * The stream an interview records from.
  *
@@ -150,6 +197,10 @@ export type InterviewStream = { stream: MediaStream; audioOnly: boolean }
  * microphone the candidate had just rejected. Without a choice it asks for the
  * front camera, which a phone does not otherwise guarantee.
  *
+ * A choice that no longer resolves — the headset was unplugged, the webcam
+ * swapped since the check — is stale, not refused: the defaults are opened
+ * instead. It used to read as "no camera" and record the interview audio-only.
+ *
  * When the camera is missing, busy or no longer there, it falls back to the
  * microphone alone: the audio is what gets transcribed and assessed, and
  * losing the whole interview to a webcam held by a video call is the worse
@@ -157,19 +208,26 @@ export type InterviewStream = { stream: MediaStream; audioOnly: boolean }
  * answer, and asking again for half of it would be ignoring it.
  */
 export async function openInterviewStream(
-  {
-    cameraId,
-    micId,
-    video,
-  }: { cameraId?: string; micId?: string; video: boolean },
-  getUserMedia: (
-    constraints: MediaStreamConstraints,
-  ) => Promise<MediaStream> = (constraints) =>
+  choice: DeviceChoice,
+  getUserMedia: GetUserMedia = (constraints) =>
     navigator.mediaDevices.getUserMedia(constraints),
 ): Promise<InterviewStream> {
-  const audio: MediaTrackConstraints | true = micId
-    ? { deviceId: { exact: micId } }
-    : true
+  try {
+    return await open(choice, getUserMedia)
+  } catch (error) {
+    if (!isStaleChoice(choice, error)) throw error
+    return open({ video: choice.video }, getUserMedia)
+  }
+}
+
+async function open(
+  choice: DeviceChoice,
+  getUserMedia: GetUserMedia,
+): Promise<InterviewStream> {
+  const { cameraId, micId, video } = choice
+  const audio: MediaTrackConstraints = micId
+    ? { ...SPEECH, deviceId: { exact: micId } }
+    : SPEECH
   if (video) {
     try {
       const stream = await getUserMedia({
@@ -178,14 +236,15 @@ export async function openInterviewStream(
           ...(cameraId
             ? { deviceId: { exact: cameraId } }
             : { facingMode: 'user' }),
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          ...CAMERA,
         },
       })
       return { stream, audioOnly: false }
     } catch (error) {
       const failure = classifyMediaError(error)
       if (failure === null || failure === 'permissionDenied') throw error
+      // Retried on the defaults by the caller, camera included.
+      if (isStaleChoice(choice, error)) throw error
     }
   }
   return { stream: await getUserMedia({ audio, video: false }), audioOnly: true }

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  candidateCompletedEmail,
+  candidateInvitationEmail,
   invitationEmail,
   newEmailVerificationEmail,
+  newUserSignupNotificationEmail,
   organizationDeletedEmail,
+  reportReadyEmail,
   verificationEmail,
 } from './emailTemplates'
 
@@ -76,5 +80,59 @@ describe('email templates', () => {
     expect(text).toContain('avec le rôle Admin')
     expect(text).toContain('le 1er octobre 2026 (UTC)')
     expect(html).toContain('<strong>Alice &lt;b&gt;</strong>')
+  })
+
+  // Audit T12 (h10): a subject is a header. A value typed by a user — their
+  // name, their organisation's, a role title — must not break it into two
+  // lines, nor push the rest of the subject out of sight.
+  it('keep every user-supplied value in a subject on one bounded line', () => {
+    const hostile = `Acme\r\nBcc: victim@example.test${'x'.repeat(500)}`
+    const subjects = (['en', 'fr'] as const).flatMap((locale) => [
+      invitationEmail({
+        locale,
+        inviterName: hostile,
+        orgName: hostile,
+        role: 'member',
+        expiresAt: Date.now(),
+        acceptUrl: 'https://app.test/accept-invite/t',
+      }).subject,
+      candidateInvitationEmail({
+        locale,
+        candidateName: hostile,
+        jobTitle: hostile,
+        orgName: hostile,
+        startUrl: 'https://app.test/s/t',
+        durationMinutes: 10,
+      }).subject,
+      candidateCompletedEmail({
+        locale,
+        candidateName: hostile,
+        jobTitle: hostile,
+        orgName: hostile,
+        privacyUrl: 'https://app.test/s/t/data',
+      }).subject,
+      reportReadyEmail({
+        locale,
+        candidateName: hostile,
+        jobTitle: hostile,
+        score: 50,
+        recommendation: 'hire',
+        reportUrl: 'https://app.test/r/t',
+      }).subject,
+      organizationDeletedEmail({ locale, orgName: hostile, deletedBy: hostile })
+        .subject,
+    ])
+    subjects.push(
+      newUserSignupNotificationEmail({
+        email: hostile,
+        betterAuthId: 'ba',
+        isFirst: false,
+      }).subject,
+    )
+    for (const subject of subjects) {
+      expect(subject).not.toMatch(/[\r\n]/)
+      expect(subject).toContain('Acme Bcc: victim@example.test')
+      expect(subject.length).toBeLessThan(250)
+    }
   })
 })

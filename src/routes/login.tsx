@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { useConvexQuery } from '@convex-dev/react-query'
 
+import { api } from '../../convex/_generated/api'
 import { authClient } from '~/lib/auth-client'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
 import { useAuthState, useRedirectWhenAuthenticated } from '~/lib/auth-state'
-import { internalRedirectSearch } from '~/lib/safe-redirect'
+import { internalRedirectSearch, invitationTokenOf } from '~/lib/safe-redirect'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Spinner } from '~/components/ui/spinner'
@@ -63,9 +65,16 @@ const SOCIAL_ERRORS: Partial<Record<string, string>> = {
 function LoginPage() {
   const search = Route.useSearch()
   const { redirect, verifyToken, verifyExpired } = search
-  const { t } = useTranslation(['auth'])
+  const { t } = useTranslation(['auth', 'common'])
   const navigate = useNavigate()
   const { user } = useAuthState()
+  // Back from an invitation (`/register` included): the address is the
+  // invited one, as on the accept page, or the account would not match it.
+  const inviteToken = invitationTokenOf(redirect)
+  const invitation = useConvexQuery(
+    api.invitations.preview,
+    inviteToken ? { token: inviteToken } : 'skip',
+  )
   // True while this page is signing someone in: the page then leaves on its
   // own, once the new account has a name.
   const [busy, setBusy] = useState(false)
@@ -76,7 +85,29 @@ function LoginPage() {
 
   if (fromVerifyLink && user && !busy) return <OtherAccountCard email={user.email} />
 
-  const isInviteFlow = redirect?.startsWith('/accept-invite/') ?? false
+  const title =
+    search.mode === 'signup' ? t('auth:signIn.titleSignup') : t('auth:signIn.title')
+  // Held until the invitation is read: the field's value is set on mount.
+  if (inviteToken && invitation === undefined) {
+    return (
+      <AuthShell
+        title={title}
+        description={
+          <span
+            role="status"
+            className="inline-flex items-center justify-center gap-2"
+          >
+            <Spinner />
+            {t('common:loadingEllipsis')}
+          </span>
+        }
+      >
+        {null}
+      </AuthShell>
+    )
+  }
+  const isInviteFlow = !!inviteToken
+  const lockedEmail = invitation?.kind === 'ok' ? invitation.email : undefined
   const notices = [
     search.error && {
       tone: 'error' as const,
@@ -89,9 +120,7 @@ function LoginPage() {
 
   return (
     <EmailSignIn
-      title={
-        search.mode === 'signup' ? t('auth:signIn.titleSignup') : t('auth:signIn.title')
-      }
+      title={title}
       description={
         isInviteFlow
           ? t('auth:signIn.descriptionInvite')
@@ -108,6 +137,7 @@ function LoginPage() {
           <AlertDescription>{n.text}</AlertDescription>
         </Alert>
       ))}
+      lockedEmail={lockedEmail}
       initialEmail={search.email}
       redirect={redirect}
       verifyToken={verifyToken}

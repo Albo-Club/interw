@@ -110,8 +110,19 @@ export function createI18n(locale: Locale): I18nInstance {
     ns: NAMESPACES,
     defaultNS,
     resources,
+    // `t()` returns text that React escapes when it renders it, so escaping
+    // here would print `&amp;`. `<Trans>` is the exception: it parses its
+    // interpolated string for tags, so a value is escaped for that parse and
+    // unescaped once after it. See KNOWN_ISSUES.md § "i18n (react-i18next)
+    // SSR".
     interpolation: { escapeValue: false },
-    react: { useSuspense: false },
+    react: {
+      useSuspense: false,
+      transDefaultProps: {
+        tOptions: { interpolation: { escapeValue: true } },
+        shouldUnescape: true,
+      },
+    },
   })
   return instance
 }

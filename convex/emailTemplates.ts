@@ -11,6 +11,8 @@
  * sync with the front-end `auth` namespace where the flows overlap.
  */
 
+import { clampLine } from './lib/names'
+
 export type EmailLocale = 'en' | 'fr'
 
 const APP_NAME = 'interw'
@@ -93,8 +95,8 @@ function plainText(parts: Array<string>): string {
 // before interpolation into the HTML branch — otherwise a self-set name like
 // `x</strong><a href="https://evil">…</a>` injects markup into a
 // DKIM-authenticated email (phishing vector). URLs too: their query string
-// carries caller-chosen values such as a `callbackURL`. Plain-text branches and
-// subjects are not HTML and use the raw values.
+// carries caller-chosen values such as a `callbackURL`. Plain-text branches
+// are not HTML and use the raw values; subjects go through `inSubject`.
 function esc(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -103,6 +105,11 @@ function esc(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 }
+
+// A subject is a header: a user-supplied value in it stays on one line, and
+// short enough that the subject still says what the email is about.
+const SUBJECT_VALUE_MAX = 80
+const inSubject = (value: string) => clampLine(value, SUBJECT_VALUE_MAX)
 
 function pick<T>(locale: EmailLocale, copy: Record<EmailLocale, T>): T {
   return copy[locale] ?? copy.en
@@ -160,7 +167,7 @@ export function invitationEmail({
   const date = longDate(locale, expiresAt)
   const c = pick(locale, {
     en: {
-      subject: `${inviterName} invited you to ${orgName} on ${APP_NAME}`,
+      subject: `${inSubject(inviterName)} invited you to ${inSubject(orgName)} on ${APP_NAME}`,
       heading: `Join ${safeOrg} on ${APP_NAME}`,
       intro: (inviter: string, org: string) =>
         `${inviter} invited you to join ${org} on ${APP_NAME} as ${role === 'admin' ? 'an admin' : 'a member'}.`,
@@ -176,7 +183,7 @@ export function invitationEmail({
       ctaText: 'Accept the invitation:',
     },
     fr: {
-      subject: `${inviterName} vous invite à rejoindre ${orgName} sur ${APP_NAME}`,
+      subject: `${inSubject(inviterName)} vous invite à rejoindre ${inSubject(orgName)} sur ${APP_NAME}`,
       heading: `Rejoindre ${safeOrg} sur ${APP_NAME}`,
       intro: (inviter: string, org: string) =>
         `${inviter} vous invite à rejoindre ${org} sur ${APP_NAME} avec le rôle ${role === 'admin' ? 'Admin' : 'Membre'}.`,
@@ -664,7 +671,7 @@ export function newUserSignupNotificationEmail({
 }) {
   const displayName = name ?? '(no name)'
   const tag = isFirst ? ' [FIRST USER]' : ''
-  const subject = `[${APP_NAME}] New signup: ${email}${tag}`
+  const subject = `[${APP_NAME}] New signup: ${inSubject(email)}${tag}`
   const heading = isFirst ? 'First user signed up' : 'New user signed up'
   const paragraphs = [
     `<strong>Email:</strong> ${esc(email)}`,
@@ -714,7 +721,7 @@ export function candidateInvitationEmail({
   const safeOrg = esc(orgName)
   const c = pick(locale, {
     en: {
-      subject: `${orgName}: your interview for ${jobTitle}`,
+      subject: `${inSubject(orgName)}: your interview for ${inSubject(jobTitle)}`,
       heading: `Your interview for ${safeJob}`,
       intro: `Hello ${safeName}, <strong>${safeOrg}</strong> would like to hear from you about the ${safeJob} role.`,
       how: `It is a short video interview you record on your own, from your browser, whenever suits you. You will answer a handful of questions asked on camera by the team. It takes about ${durationMinutes} minutes.`,
@@ -733,7 +740,7 @@ export function candidateInvitationEmail({
       ],
     },
     fr: {
-      subject: `${orgName} : votre entretien pour le poste de ${jobTitle}`,
+      subject: `${inSubject(orgName)} : votre entretien pour le poste de ${inSubject(jobTitle)}`,
       heading: `Votre entretien pour le poste de ${safeJob}`,
       intro: `Bonjour ${safeName}, <strong>${safeOrg}</strong> souhaite vous entendre au sujet du poste de ${safeJob}.`,
       how: `Il s'agit d'un court entretien vidéo que vous enregistrez seul, depuis votre navigateur, au moment qui vous convient. Vous répondrez à quelques questions posées face caméra par l'équipe. Comptez environ ${durationMinutes} minutes.`,
@@ -791,7 +798,7 @@ export function candidateCompletedEmail({
   const safeOrg = esc(orgName)
   const c = pick(locale, {
     en: {
-      subject: `${orgName}: your interview has been sent`,
+      subject: `${inSubject(orgName)}: your interview has been sent`,
       heading: 'Your interview has been sent',
       intro: `Hello ${safeName}, thank you. Your answers for the ${safeJob} role have reached <strong>${safeOrg}</strong>, and there is nothing more for you to do.`,
       next: `${safeOrg} will review them and contact you directly.`,
@@ -808,7 +815,7 @@ export function candidateCompletedEmail({
       ],
     },
     fr: {
-      subject: `${orgName} : votre entretien a bien été envoyé`,
+      subject: `${inSubject(orgName)} : votre entretien a bien été envoyé`,
       heading: 'Votre entretien a bien été envoyé',
       intro: `Bonjour ${safeName}, merci. Vos réponses pour le poste de ${safeJob} sont bien parvenues à <strong>${safeOrg}</strong>, et vous n'avez plus rien à faire.`,
       next: `${safeOrg} va les examiner et reviendra vers vous directement.`,
@@ -865,7 +872,7 @@ export function reportReadyEmail({
   const safeJob = esc(jobTitle)
   const c = pick(locale, {
     en: {
-      subject: `${candidateName} — interview report ready (${jobTitle})`,
+      subject: `${inSubject(candidateName)} — interview report ready (${inSubject(jobTitle)})`,
       heading: `${safeCandidate}'s interview is ready to review`,
       intro: `<strong>${safeCandidate}</strong> has completed their interview for <strong>${safeJob}</strong>.`,
       score: `Overall score: <strong>${score}/100</strong> · Recommendation: <strong>${esc(recommendation)}</strong>`,
@@ -882,7 +889,7 @@ export function reportReadyEmail({
       ],
     },
     fr: {
-      subject: `${candidateName} — rapport d'entretien disponible (${jobTitle})`,
+      subject: `${inSubject(candidateName)} — rapport d'entretien disponible (${inSubject(jobTitle)})`,
       heading: `L'entretien de ${safeCandidate} est prêt à être consulté`,
       intro: `<strong>${safeCandidate}</strong> a terminé son entretien pour le poste de <strong>${safeJob}</strong>.`,
       score: `Score global : <strong>${score}/100</strong> · Recommandation : <strong>${esc(recommendation)}</strong>`,
@@ -931,7 +938,7 @@ export function organizationDeletedEmail({
   const safeActor = esc(deletedBy)
   const c = pick(locale, {
     en: {
-      subject: `${orgName} was deleted on ${APP_NAME}`,
+      subject: `${inSubject(orgName)} was deleted on ${APP_NAME}`,
       heading: `${safeOrg} was deleted`,
       intro: `<strong>${safeActor}</strong> deleted the organization <strong>${safeOrg}</strong>.`,
       followup: `Its roles, candidates, interview recordings and reports are being permanently erased, and nobody can access it any more. This cannot be undone.`,
@@ -944,7 +951,7 @@ export function organizationDeletedEmail({
       ],
     },
     fr: {
-      subject: `${orgName} a été supprimée sur ${APP_NAME}`,
+      subject: `${inSubject(orgName)} a été supprimée sur ${APP_NAME}`,
       heading: `${safeOrg} a été supprimée`,
       intro: `<strong>${safeActor}</strong> a supprimé l'organisation <strong>${safeOrg}</strong>.`,
       followup: `Ses postes, candidats, enregistrements d'entretien et rapports sont en cours d'effacement définitif, et plus personne n'y a accès. Cette action est irréversible.`,

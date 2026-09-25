@@ -41,6 +41,7 @@ import type * as lib_instructions from "../lib/instructions.js";
 import type * as lib_invitations from "../lib/invitations.js";
 import type * as lib_locale from "../lib/locale.js";
 import type * as lib_memberName from "../lib/memberName.js";
+import type * as lib_names from "../lib/names.js";
 import type * as lib_objectStore from "../lib/objectStore.js";
 import type * as lib_projectAccess from "../lib/projectAccess.js";
 import type * as lib_prompts from "../lib/prompts.js";
@@ -114,6 +115,7 @@ declare const fullApi: ApiFromModules<{
   "lib/invitations": typeof lib_invitations;
   "lib/locale": typeof lib_locale;
   "lib/memberName": typeof lib_memberName;
+  "lib/names": typeof lib_names;
   "lib/objectStore": typeof lib_objectStore;
   "lib/projectAccess": typeof lib_projectAccess;
   "lib/prompts": typeof lib_prompts;

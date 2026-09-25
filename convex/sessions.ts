@@ -23,6 +23,7 @@ import {
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
 import { generateToken } from './lib/tokens'
+import { normalizeEmail } from './lib/invitations'
 import { eraseSession } from './purge'
 import { consumeLimit } from './rateLimiters'
 import { RESEND_FROM, resend } from './email'
@@ -92,7 +93,7 @@ export const listByProject = query({
 
 function normalizeCandidate(input: { name: string; email: string }) {
   const name = input.name.trim()
-  const email = input.email.trim().toLowerCase()
+  const email = normalizeEmail(input.email)
   if (!name || name.length > NAME_MAX) throw new ConvexError('invalid_name')
   if (!EMAIL_RE.test(email)) throw new ConvexError('invalid_email')
   return { name, email }

@@ -221,3 +221,32 @@ describe('email change progress', () => {
     ).toBeNull()
   })
 })
+
+// Audit T12 (h10): a display name goes into email subjects and one-line UI.
+describe('display names', () => {
+  it('are stored on one line, and refused past the form cap', async () => {
+    const { t, alice } = await world(false)
+    const asAlice = t.withIdentity({ subject: 'ba_alice' })
+    await asAlice.mutation(api.users.updateProfile, {
+      name: 'Alice\r\nBcc: victim@example.test',
+    })
+    expect((await t.run((ctx) => ctx.db.get('users', alice)))?.name).toBe(
+      'Alice Bcc: victim@example.test',
+    )
+    await expect(
+      asAlice.mutation(api.users.updateProfile, { name: 'x'.repeat(81) }),
+    ).rejects.toThrow('invalid_name')
+  })
+
+  it('from Better Auth are made safe, since a sync cannot refuse', async () => {
+    const { t, alice } = await world(false)
+    await t.mutation(internal.users.syncBetterAuthUser, {
+      betterAuthId: 'ba_alice',
+      email: 'alice@example.test',
+      name: `Alice\n${'x'.repeat(200)}`,
+    })
+    const name = (await t.run((ctx) => ctx.db.get('users', alice)))?.name
+    expect(name).toMatch(/^Alice x+$/)
+    expect(name).toHaveLength(80)
+  })
+})

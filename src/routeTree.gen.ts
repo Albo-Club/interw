@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app/index'
 import { Route as RShareTokenRouteImport } from './routes/r/$shareToken'
 import { Route as LoginCodeRouteImport } from './routes/login_.code'
+import { Route as ApplyApplyTokenRouteImport } from './routes/apply.$applyToken'
 import { Route as AppOnboardingRouteImport } from './routes/app/onboarding'
 import { Route as AppMeRouteImport } from './routes/app/me'
 import { Route as AppAdminRouteImport } from './routes/app/admin'
@@ -92,6 +93,11 @@ const RShareTokenRoute = RShareTokenRouteImport.update({
 const LoginCodeRoute = LoginCodeRouteImport.update({
   id: '/login_/code',
   path: '/login/code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyApplyTokenRoute = ApplyApplyTokenRouteImport.update({
+  id: '/apply/$applyToken',
+  path: '/apply/$applyToken',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppOnboardingRoute = AppOnboardingRouteImport.update({
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/apply/$applyToken': typeof ApplyApplyTokenRoute
   '/login/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/apply/$applyToken': typeof ApplyApplyTokenRoute
   '/login/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app': typeof AppIndexRoute
@@ -304,6 +312,7 @@ export interface FileRoutesById {
   '/app/admin': typeof AppAdminRoute
   '/app/me': typeof AppMeRoute
   '/app/onboarding': typeof AppOnboardingRoute
+  '/apply/$applyToken': typeof ApplyApplyTokenRoute
   '/login_/code': typeof LoginCodeRoute
   '/r/$shareToken': typeof RShareTokenRoute
   '/app/': typeof AppIndexRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/apply/$applyToken'
     | '/login/code'
     | '/r/$shareToken'
     | '/app/'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/apply/$applyToken'
     | '/login/code'
     | '/r/$shareToken'
     | '/app'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/app/admin'
     | '/app/me'
     | '/app/onboarding'
+    | '/apply/$applyToken'
     | '/login_/code'
     | '/r/$shareToken'
     | '/app/'
@@ -443,6 +455,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   STokenRouteRoute: typeof STokenRouteRouteWithChildren
   AcceptInviteTokenRoute: typeof AcceptInviteTokenRoute
+  ApplyApplyTokenRoute: typeof ApplyApplyTokenRoute
   LoginCodeRoute: typeof LoginCodeRoute
   RShareTokenRoute: typeof RShareTokenRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -518,6 +531,13 @@ declare module '@tanstack/react-router' {
       path: '/login/code'
       fullPath: '/login/code'
       preLoaderRoute: typeof LoginCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply/$applyToken': {
+      id: '/apply/$applyToken'
+      path: '/apply/$applyToken'
+      fullPath: '/apply/$applyToken'
+      preLoaderRoute: typeof ApplyApplyTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/onboarding': {
@@ -789,6 +809,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   STokenRouteRoute: STokenRouteRouteWithChildren,
   AcceptInviteTokenRoute: AcceptInviteTokenRoute,
+  ApplyApplyTokenRoute: ApplyApplyTokenRoute,
   LoginCodeRoute: LoginCodeRoute,
   RShareTokenRoute: RShareTokenRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

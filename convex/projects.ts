@@ -14,11 +14,14 @@ import { memberName } from './lib/memberName'
 import {
   filterVisibleProjects,
   leaveTeam,
+  requireProjectAccess,
   requireProjectEditable,
   requireProjectOwnerOrAdmin,
   sharedProjectIds,
 } from './lib/projectAccess'
 import { publishBlockers } from './lib/publishReadiness'
+import { siteUrl } from './lib/siteUrl'
+import { generateToken } from './lib/tokens'
 import { uniqueSlug } from './lib/slug'
 import { normalizeWeights } from './lib/weights'
 import type { MutationCtx } from './_generated/server'
@@ -156,6 +159,10 @@ export const getBySlug = query({
         personaName: project.personaName ?? null,
         introMode: effectiveIntroMode(project),
         hasIntroMedia: project.introMediaKey !== undefined,
+        applyUrl:
+          project.applyToken === undefined
+            ? null
+            : siteUrl(`/apply/${project.applyToken}`),
         maxDurationMinutes: project.maxDurationMinutes,
         candidateFields: project.candidateFields,
       },
@@ -329,6 +336,22 @@ export const publish = mutation({
     if (project.status !== 'active') {
       await ctx.db.patch('projects', projectId, { status: 'active' })
     }
+    return null
+  },
+})
+
+/**
+ * Give the role its public candidate link. Idempotent: the link, once made,
+ * stays the same, so it can live in an ATS template or on a job board. Any
+ * member who can invite to the role can open it to the public — it is the
+ * same power, without typing the names.
+ */
+export const enableApplyLink = mutation({
+  args: { projectId: v.id('projects') },
+  handler: async (ctx, { projectId }) => {
+    const { project } = await requireProjectAccess(ctx, projectId)
+    if (project.applyToken !== undefined) return null
+    await ctx.db.patch('projects', projectId, { applyToken: generateToken() })
     return null
   },
 })

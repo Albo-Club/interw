@@ -1,6 +1,10 @@
 {
   "metaTitle": "Your interview",
   "screens": {
+    "apply": {
+      "title": "Apply — your interview",
+      "description": "Tell us who you are, then record a short video interview from your browser."
+    },
     "welcome": {
       "title": "Welcome — your interview",
       "description": "Read how your video interview works, then agree to be recorded before you start."
@@ -46,6 +50,18 @@
       "title": "You've already completed this interview",
       "body": "Thank you — there is nothing more to do. Your answers have been sent, and the team will contact you directly."
     }
+  },
+  "apply": {
+    "title": "Interview for {{jobTitle}}",
+    "titleNoRole": "Interview with {{org}}",
+    "intro": "{{org}} would like to hear from you. It is a short video interview, about {{count}} minutes, that you record on your own from this browser.",
+    "name": "Full name",
+    "email": "Email address",
+    "emailHint": "{{org}} will use it to get back to you about this role.",
+    "submit": "Start",
+    "submitting": "Starting…",
+    "closed": "This role is not accepting interviews at the moment.",
+    "expired": "The deadline for this role has passed."
   },
   "welcome": {
     "greeting": "Hello {{name}}",

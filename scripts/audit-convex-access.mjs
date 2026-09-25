@@ -110,6 +110,8 @@ const GUARDS = [
   'provisionAppUser',
   // Candidate surface: resolving a token IS the access check.
   'resolveSessionByToken',
+  // A role's public link: resolving its apply token IS the access check.
+  'requireApplyProject',
 ]
 
 const KINDS = new Set([

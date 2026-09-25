@@ -1,4 +1,8 @@
 {
+  "public-candidate-link": {
+    "title": "One link for every candidate",
+    "body": "A live role can now have a public candidate link. Create it from the role page, then paste it into your ATS email template or your job ad: whoever opens it enters their name and email and starts the interview straight away, and shows up in the role's candidate list like anyone you invited. Archiving the role or letting its deadline pass closes the link."
+  },
   "transcription-restored": {
     "title": "Interviews are transcribed and assessed again",
     "body": "Answers recorded by candidates are transcribed again, with the timing of each passage, and the report follows as soon as the interview ends. Interviews that stayed without a report can be relaunched."

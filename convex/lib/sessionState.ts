@@ -54,6 +54,30 @@ export function isPastDeadline(
   return project.expiresAt !== undefined && now > project.expiresAt
 }
 
+/**
+ * Whether the role itself takes candidates, whatever the session. Shared by
+ * `evaluateSessionGate` and the role's public link (convex/apply.ts), so a
+ * new reason to close a role closes both.
+ */
+export function roleGate(
+  project: ProjectLike,
+  org: OrgLike,
+  now: number,
+): 'closed' | 'expired' | null {
+  // An organisation being deleted closes every link at once, and must: its
+  // erasure collects the keys to delete from the rows, so an upload reserved
+  // after that point would land in the bucket with nothing left to name it.
+  if (org.deletingAt !== undefined) return 'closed'
+
+  // The role's own expiry closes every link at once — the usual reason is
+  // "we have finished hiring", so it reads as expired, not as an error.
+  if (isPastDeadline(project, now)) return 'expired'
+  // Draft or archived: nobody should be able to sit an interview that is not
+  // live, including through a link that was sent while it was.
+  if (project.status !== 'active') return 'closed'
+  return null
+}
+
 export function evaluateSessionGate({
   session,
   project,
@@ -80,17 +104,8 @@ export function evaluateSessionGate({
   if (session.status === 'cancelled') return blocked('cancelled')
   if (session.status === 'expired') return blocked('expired')
 
-  // An organisation being deleted closes every link at once, and must: its
-  // erasure collects the keys to delete from the rows, so an upload reserved
-  // after that point would land in the bucket with nothing left to name it.
-  if (org.deletingAt !== undefined) return blocked('closed')
-
-  // The role's own expiry closes every link at once — the usual reason is
-  // "we have finished hiring", so it reads as expired, not as an error.
-  if (isPastDeadline(project, now)) return blocked('expired')
-  // Draft or archived: nobody should be able to sit an interview that is not
-  // live, including through a link that was sent while it was.
-  if (project.status !== 'active') return blocked('closed')
+  const closed = roleGate(project, org, now)
+  if (closed) return blocked(closed)
 
   return {
     state: session.status === 'in_progress' ? 'resumable' : 'ready',

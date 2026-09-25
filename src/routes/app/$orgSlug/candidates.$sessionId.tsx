@@ -40,6 +40,7 @@ import {
 } from '~/components/ui/alert-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { AiDisclaimer } from '~/components/report/AiDisclaimer'
+import { MemberName } from '~/components/MemberName'
 import { ShareReportDialog } from '~/components/report/ShareReportDialog'
 import { Highlights } from '~/components/report/Highlights'
 import { MediaFailedAlert } from '~/components/report/MediaFailedAlert'
@@ -616,8 +617,7 @@ function CandidateReportPage() {
               {session.recruiterDecisionBy && (
                 <p className="text-muted-foreground text-xs">
                   <DecisionBadge decision={session.recruiterDecision} />{' '}
-                  {session.recruiterDecisionBy.name ??
-                    session.recruiterDecisionBy.email}
+                  <MemberName member={session.recruiterDecisionBy} />
                 </p>
               )}
               {decisionHistory.length > 0 && (
@@ -637,9 +637,7 @@ function CandidateReportPage() {
                             : t('candidates:decision.cleared')}
                         </span>
                         <span className="text-muted-foreground min-w-0 break-words">
-                          {event.by
-                            ? (event.by.name ?? event.by.email)
-                            : t('candidates:decision.formerMember')}
+                          <MemberName member={event.by} />
                         </span>
                         <time
                           dateTime={new Date(event.at).toISOString()}

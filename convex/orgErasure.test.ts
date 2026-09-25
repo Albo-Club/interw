@@ -584,11 +584,15 @@ describe('deleting an organisation', () => {
 
   it('frees its sole owner to delete their account', async () => {
     const asOwner = as(t, 'acme', 'owner')
-    expect(await asOwner.query(api.users.accountDeletionBlockers, {})).toHaveLength(1)
+    expect(
+      (await asOwner.query(api.users.accountDeletionBlockers, {})).soleOwnedOrgs,
+    ).toHaveLength(1)
 
     await eraseAll()
 
-    expect(await asOwner.query(api.users.accountDeletionBlockers, {})).toEqual([])
+    expect(
+      (await asOwner.query(api.users.accountDeletionBlockers, {})).soleOwnedOrgs,
+    ).toEqual([])
     await t.mutation(internal.users.cascadeDelete, {
       betterAuthId: 'ba_acme_owner',
     })

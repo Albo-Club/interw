@@ -22,6 +22,7 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
+import { memberName } from './lib/memberName'
 import { relaunchPipeline } from './admin'
 import { consumeLimit } from './rateLimiters'
 import { normalizeWeights } from './lib/weights'
@@ -88,12 +89,12 @@ export const forSession = query({
     )
     const questionById = new Map(questions.map((q) => [q._id, q]))
     const decidedBy = session.recruiterDecisionBy
-      ? await ctx.db.get('users', session.recruiterDecisionBy)
+      ? await memberName(ctx, session.orgId, session.recruiterDecisionBy)
       : null
     const actors = new Map(
       await Promise.all(
         [...new Set(decisions.map((event) => event.actorId))].map(
-          async (id) => [id, await ctx.db.get('users', id)] as const,
+          async (id) => [id, await memberName(ctx, session.orgId, id)] as const,
         ),
       ),
     )
@@ -120,9 +121,7 @@ export const forSession = query({
         durationSeconds: session.durationSeconds ?? null,
         recruiterDecision: session.recruiterDecision ?? null,
         recruiterDecisionAt: session.recruiterDecisionAt ?? null,
-        recruiterDecisionBy: decidedBy
-          ? { name: decidedBy.name ?? null, email: decidedBy.email }
-          : null,
+        recruiterDecisionBy: decidedBy,
         recruiterNote: session.recruiterNote ?? null,
         mediaPurgedAt: session.mediaPurgedAt ?? null,
       },
@@ -161,15 +160,11 @@ export const forSession = query({
           }
         }),
       report: report ? serializeReport(report) : null,
-      // A departed colleague reads as null, not as an address kept alive.
-      decisionHistory: decisions.map((event) => {
-        const actor = actors.get(event.actorId)
-        return {
-          decision: event.decision ?? null,
-          at: event.at,
-          by: actor ? { name: actor.name ?? null, email: actor.email } : null,
-        }
-      }),
+      decisionHistory: decisions.map((event) => ({
+        decision: event.decision ?? null,
+        at: event.at,
+        by: actors.get(event.actorId)!,
+      })),
       // The last few pipeline transitions, so "why is there no report yet?" is
       // answerable on the page instead of in a support thread.
       // No `error`: it holds raw provider output, which is for operators.

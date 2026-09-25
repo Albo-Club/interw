@@ -174,9 +174,11 @@ object it read before updating it) — that is an accident of 1.6.30.
 
 ### Per-address quotas are charged before Better Auth runs
 
-`perEmailQuota` charges `emailCodeSend`, `passwordResetSend` or
-`verificationSend` in a before hook, for every address, and refuses with a
-real 429 (`code: 'RATE_LIMITED'`). It used to happen inside the email senders,
+`perEmailQuota` charges `emailCodeSend`, `passwordResetSend`,
+`verificationSend` or `passwordSignIn` in a before hook, for every address,
+and refuses with a real 429 (`code: 'RATE_LIMITED'`). The bucket key is an
+HMAC of the normalised address under `BETTER_AUTH_SECRET` (`makeSignature`),
+so the rate limiter's table — which nothing erases — never holds addresses. It used to happen inside the email senders,
 which was wrong three ways:
 
 1. A sender only runs for an address that has an account, so the quota
@@ -202,6 +204,80 @@ a Better Auth sender.
   returns a verified email — and (2) `accountLinking.enabled` is unchanged.
   Legacy unverified password accounts still complete their old verification
   link through `verificationRequiresCredential`.
+
+## Brute force: the IP is a claim, the account is not
+
+Better Auth's `rateLimit` is per IP, and it takes the IP from a request
+header (`@better-auth/core/dist/utils/ip.mjs:201-217`). Whoever sets the
+header chooses the bucket. Two ways that went wrong (audit 2026-09-22,
+`VALIDATION-RESULTS.md` lead 3):
+
+- The Convex adapter's proxy (`@convex-dev/better-auth/dist/react-start/index.js:38`)
+  copies every inbound header, so our `/api/auth/*` forwarded whatever the
+  client and the platform left in `X-Forwarded-For`.
+- `<deployment>.convex.site/api/auth/*` is public. A request sent straight
+  there carries any header its sender likes: a new `X-Forwarded-For` per
+  guess meant a new bucket per guess, and unlimited password guesses.
+
+**The per-account limit is what makes it safe.** `/sign-in/email` is charged
+in `perEmailQuota` (bucket `passwordSignIn`: 5 at once, then 10 an hour),
+keyed on the address, before Better Auth looks anything up. No header moves
+it. It counts every attempt, not only failures — a before hook cannot know
+the outcome, and a guesser's attempts are failures anyway. The cost: someone
+can keep one address's bucket empty and block its **password** sign-in. The
+email code is untouched by it, so the owner still gets in.
+
+**The per-IP key now comes from the platform, not the client.**
+`src/routes/api/auth/$.ts` drops `X-Forwarded-For`, `X-Real-IP` and
+`x-interw-client-ip` from the client and sends the address Vercel's edge
+wrote into `X-Forwarded-For` as `x-interw-client-ip`
+(`convex/lib/clientIp.ts`); `advanced.ipAddress.ipAddressHeaders` reads only
+that header. A name no platform sets, so legitimate traffic lands in its own
+bucket whatever Convex's ingress does with `X-Forwarded-For`. Custom headers
+do reach Convex HTTP actions unchanged — the Resend webhook's `svix-*`
+signature headers depend on it.
+
+**What stays unknown offline**, and why it no longer matters for passwords:
+
+- What Convex's ingress does with a client-supplied `X-Forwarded-For` on a
+  direct `.convex.site` request (pass through, append, overwrite). Better
+  Auth no longer reads that header at all.
+- A direct request can still name any `x-interw-client-ip`, so the per-IP
+  rules (sign-in, code sends, reset) remain bypassable from outside the web
+  domain. Every endpoint that matters for guessing — password sign-in, code
+  sends, reset and verification emails — also has its per-address bucket; the
+  code itself allows five tries per code.
+- A direct request with **no** client-IP header lands in Better Auth's shared
+  `no-trusted-ip` bucket per path. Only direct callers share it: every
+  browser request goes through the proxy and carries its own address.
+- On a host other than Vercel, whether its proxy overwrites
+  `X-Forwarded-For` is that host's contract. Check it before trusting the
+  per-IP key there.
+
+Closing the direct path for good means the proxy proving itself to Convex
+(a shared secret on both sides, or refusing `/api/auth/*` on `.convex.site`
+unless it carries one). Not done: it needs a secret set on both the Vercel
+project and the Convex deployment, and the per-account bucket already bounds
+guessing.
+
+## Super-admin is the operator's address, not the first sign-up
+
+`provisionAppUser` (`convex/lib/auth.ts`) used to make the first row in
+`users` a super-admin. On an empty deployment — a fresh one, or right after
+`admin.purgeExcept` — that is whoever reaches the sign-up form first, and the
+code flow creates accounts for any address. Now a **new** row is super-admin
+only when Better Auth reports its address verified and it equals
+`SUPER_ADMIN_EMAIL` (trimmed, lowercased). Unset or empty, nobody is
+promoted: fail closed.
+
+- Existing rows are never touched: the flag is set on insert only. Deployments
+  that already have their super-admins keep them, with or without the
+  variable, and `/app/admin` still promotes others.
+- An operator who signed up **before** setting the variable is not promoted
+  retroactively: a flag that changes on a later sign-in would be a flag an
+  env edit can grant silently. Promote from `/app/admin`, or the dashboard on
+  a deployment with no super-admin at all.
+- `pnpm run setup:prod` mirrors `SUPER_ADMIN_EMAIL` from dev.
 
 ## Invitations no longer pre-verify anything
 
@@ -308,12 +384,15 @@ applies — same trap as the `SITE_URL` guard below.
 BA's built-in `rateLimit` block with `storage: 'database'` is wired
 into the Convex adapter — no separate component to install. BA writes
 to an auto-created `rateLimit` table on the BA-side schema. We rely
-on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP.
-Keys must be real endpoint paths — `convex/authEmailCode.test.ts` asserts it.
+on it for every path in `rateLimitRules` (`convex/auth.ts`), per IP — an IP
+a direct caller can claim, see "Brute force: the IP is a claim, the account
+is not". Keys must be real endpoint paths — `convex/authEmailCode.test.ts`
+asserts it.
 
 `convex/rateLimiters.ts` (the `@convex-dev/rate-limiter` component) is
 *separate* — it covers application-level limits (invitations, chat, and the
-per-address email quotas, charged by the `perEmailQuota` hook). Do not
+per-address quotas on emails and password sign-in, charged by the
+`perEmailQuota` hook). Do not
 confuse the two : BA's limiter is per IP on the auth HTTP edge, ours is per
 key on Convex mutations/actions.
 
@@ -663,6 +742,21 @@ this by setting `node-linker=hoisted`, pointing `package-import-method` at
 back into real bytes. The one thing that would break it is moving the pnpm
 store off the workspace volume: `clonefile()` cannot cross volumes, and the
 275 MB would become 6.8 GB overnight.
+
+## Agent worktrees sit inside the repository
+
+Claude Code checks each agent out under `.claude/worktrees/<name>/` — a full
+copy of the repository, inside it. Two globs then reach every copy: `tsc`'s
+`include: ["**/*.ts", …]` and `eslint .`. With a handful of agents running,
+`pnpm lint` in the main checkout linted every one of them and ran out of
+memory, and `tsc` reported each type error once per copy.
+
+Both ignore the directory now (`globalIgnores` in `eslint.config.mjs`,
+`exclude` in `tsconfig.json`). The trap in the second: setting `exclude`
+**replaces** TypeScript's default instead of extending it, so `node_modules`
+has to be listed again or `tsc` walks into it. Vitest is unaffected — its
+`include` is rooted at `src/` and `convex/`. A new tool that globs from the
+repository root needs the same exclusion.
 
 ## Convex skills were pruned — do not re-vendor them
 
@@ -1255,6 +1349,28 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   the organisations. The way out for a solo owner is to delete the
   organisation first (§ "Deleting an organisation"): one being deleted no
   longer counts as sole-owned.
+- **Deleting the last super admin orphaned the platform.** Same three layers
+  as `sole_owner`: `cascadeDelete` throws `last_super_admin` (the code
+  `admin.setSuperAdmin` already uses for a self-demotion), `/delete-user`
+  refuses with `LAST_SUPER_ADMIN` before mailing, the link's callback lands
+  on `blocked` for someone who became the last one meanwhile, and
+  `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
+
+## A removed member keeps their credit — and their creator rights on return
+
+Removing someone from an organisation deletes their membership, their team
+rows and their report share links (`revokeMemberGrants`), never the ids that
+credit their work (`projects.createdBy`, `sessions.recruiterDecisionBy`,
+`decisionEvents.actorId`, `invitations.invitedBy`, …). Screens resolve those
+ids through `memberName` (`convex/lib/memberName.ts`), which keeps the name
+and flags `removed`, and render them with `src/components/MemberName.tsx`;
+a deleted account has no name left and reads "Former member". A new screen
+that credits someone goes through the same pair rather than reading `users`
+itself. Authorisation does not read that flag: a removed creator is
+locked out by `requireOrgMember` like anyone else. If they are re-invited,
+`createdBy` still names them, so they regain creator rights on their own roles
+(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
+their work — but it is the one thing removal does not reset.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 
@@ -1337,6 +1453,29 @@ and ~10 MB of data burned **4.8 GB of Database Bandwidth** this way.
    hot-row win holds). Only narrow the validator in a *later* deploy, after a
    migration has cleared the field from every row — the widen → migrate →
    narrow pattern.
+
+## Bumping a SHA-pinned GitHub Action
+
+Every `uses:` in `.github/workflows/ci.yml` names a full commit SHA with its
+release as a trailing comment (why: the comment at the top of the file). What
+a retagged action could reach there is the `e2e` job's `CONVEX_DEPLOY_KEY`.
+
+To bump one by hand, resolve the tag to the commit it points at. For an
+*annotated* tag that is the `^{}` line, not the tag object above it:
+
+```bash
+git ls-remote https://github.com/pnpm/action-setup refs/tags/v4.4.0 'refs/tags/v4.4.0^{}'
+# a15d…  refs/tags/v4.4.0        <- the tag object: not this one
+# fc06…  refs/tags/v4.4.0^{}     <- the commit: pin this
+```
+
+A lightweight tag prints a single line, which is the commit. Replace the SHA
+**and** the comment in every job that uses the action — a comment that
+disagrees with its SHA is worse than none. Renovate's `github-actions` manager
+reads this `@<sha> # vX.Y.Z` form and bumps both together once the app is
+installed. The pins were taken from what each major tag (`@v4`) resolved to on
+the day, not from the newest release, so pinning changed no behaviour — which
+is why `pnpm/action-setup` sits on v4.3.0 although v4.4.0 exists.
 
 ## release-please was removed (failed on every merge with `other side closed`)
 
@@ -1568,6 +1707,16 @@ typed `env` export carrying `CONVEX_CLOUD_URL` / `CONVEX_SITE_URL`). Commit it
 with the bump: `pnpm codegen:api:check` only guards `api.d.ts`, so a stale
 `server.d.ts` sails through CI and reappears as a phantom diff for whoever
 next runs `convex dev`.
+
+`.mcp.json` pins the same version for the Convex MCP server
+(`npx -y convex@<version> mcp start`). Renovate moves it with `convex` (the
+`customManagers` regex in `renovate.json`); a bump by hand must move it in the
+same PR. It is an exact `npx` pin rather than `pnpm exec convex` because
+Claude Code starts MCP servers when a session opens, before anyone has run
+`pnpm install` on a fresh clone, and `pnpm exec` finds nothing without
+`node_modules`. It is not `@latest` because that fetched
+and ran the newest registry release on every start, on machines holding
+Convex credentials — never the version the lockfile had been reviewed at.
 
 ## Convex type inference collapses on two specific cycles
 
@@ -1884,6 +2033,31 @@ a real deployment, and neither is in this repo:
 Do not spend the afternoon on it: run the candidate e2e in CI, where the
 runner reaches the deployment directly. Locally, `pnpm test` covers the
 reducer, the recorder and the server; the browser path needs CI or a phone.
+
+## Playwright's Linux WebKit cannot record: the e2e runs on macOS
+
+Playwright's WebKit for Linux (WebKit 26.6, Playwright webkit v2359 on
+`ubuntu-latest`) has **no `MediaRecorder` at all**: `page.evaluate` throws
+`ReferenceError: Can't find variable: MediaRecorder` (measured on CI,
+2026-09-25). The candidate page then detects no recording format and shows
+"This browser can't record video interviews", so no `<video>` is ever
+rendered and `e2e/interview.spec.ts` fails at its first preview check with
+"element(s) not found". No fake device, `getUserMedia` stub or audio-only
+path can help: nothing can be recorded. Safari has had `MediaRecorder` since
+14.1, so this is the Linux build, not the product.
+
+The CI `e2e` job therefore runs on `macos-latest`, where Playwright's WebKit
+records, and both browsers run in that one job: split into a Linux and a macOS
+job, the two took two places in the `e2e-staging` concurrency group and a run
+queued on `main` cancelled the waiting one. Running `--project=webkit` on a
+Linux machine reproduces the failure; it does not prove a regression.
+
+Only two branches of the device check render no `<video>`: a browser that
+encodes no format (above), and a camera that failed as busy or missing while
+the microphone worked ("Audio only — your camera isn't available"). A refused
+permission keeps the `<video>` on screen, so "not found" never means "no
+permission". To tell them apart, read the page snapshot in the report's
+`error-context.md`.
 
 ## The candidate surface switches the shared i18n instance
 
@@ -2554,7 +2728,11 @@ red, in order:
 
 1. **The patched version is already inside the parent's range** — refresh
    the lockfile for that package only:
-   `pnpm update --depth Infinity <pkg>`. `package.json` does not change. This
+   `pnpm update --depth Infinity --config.minimum-release-age=4320 <pkg>`.
+   `package.json` does not change. The flag is in minutes (three days), the
+   same cooldown `renovate.json` puts on automerge: it keeps the refresh from
+   pulling a version published this morning. Review the `pnpm-lock.yaml` diff
+   — it should touch the named packages and their own dependencies only. This
    is how js-yaml, nanoid, postcss and browserslist were cleared.
 2. **The parent pins a vulnerable range** — add a `pnpm.overrides` entry in
    `package.json` (never in `pnpm-workspace.yaml`, see § "pnpm 11 silently drops
@@ -2565,6 +2743,11 @@ red, in order:
 
 Moderate and low advisories do not fail the step; Renovate clears most of
 them with their parents.
+
+The step can go red with no change in the PR: an advisory published overnight
+turns every branch red at once, which is the point of the gate. Never mute it
+or add `--ignore` to get a PR through — a finding that genuinely does not apply
+is argued in the PR body, and its advisory id recorded here.
 
 ## The candidate bundle budget reads the start manifest
 

@@ -126,7 +126,7 @@ State your choice and why before editing.
 
   - `corepack use pnpm@<chosen version>` — writes `packageManager` WITH its
     sha512 integrity hash. Never hand-write that string.
-  - Add `engines`: `{"node": ">=22", "pnpm": "<major>.x"}` — this is the guard
+  - Add `engines`: `{"node": "24.x", "pnpm": "<major>.x"}` — this is the guard
     for anyone running with Corepack disabled.
   - In ci.yml, DELETE the `with: version:` block under `pnpm/action-setup@v4`.
     The action reads `packageManager`. Leaving a version there recreates the

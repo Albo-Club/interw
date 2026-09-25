@@ -224,6 +224,7 @@
     "title": "Role team",
     "subtitle": "The team sees this role and is emailed when a candidate's report is ready. Admins and owners see every role, but are only emailed about the ones they are on.",
     "creator": "Creator of the role, always on the team",
+    "createdBy": "Created by <name></name>",
     "label": "Team",
     "hint": "Who follows this role with you. You can change it later.",
     "save": "Save team",

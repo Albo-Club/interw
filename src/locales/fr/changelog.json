@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "data-correctness": {
+      "title": "Des chiffres justes, et des invitations qui se ferment à temps",
+      "body": "Le tableau de bord ne réduit plus ses chiffres à mesure que votre organisation grandit : un nombre qui atteint notre limite de comptage s’affiche désormais « 400+ ». Les invitations d’un poste dont la date limite est passée depuis plus d’un jour sont marquées expirées. Un renvoi vers une adresse qui a rejeté l’e-mail est refusé au lieu d’être renvoyé, et un rejet ne peut plus redevenir « envoyé ». Deux postes au même intitulé ont toujours des liens distincts."
+    },
     "backend-hardening": {
       "title": "Des limites resserrées autour des liens et des envois",
       "body": "Nous avons renforcé ce que permettent un lien candidat, un lien de partage de rapport et les envois de fichiers : les vérifications d’expiration et d’horloge ne reposent plus que sur nos serveurs, les fenêtres et tailles d’envoi suivent la durée de chaque question, et les liens de partage suivent les mêmes limites de débit que le reste du produit. Sur un rapport partagé, une réponse enregistrée sans caméra se lit désormais en audio plutôt qu’en vidéo noire, et l’intitulé interne du poste n’apparaît jamais."

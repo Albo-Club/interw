@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "data-correctness": {
+      "title": "Honest counts, and invitations that close on time",
+      "body": "The dashboard no longer shrinks its figures as your organisation grows: a number that reached our counting limit now shows as “400+”. Invitations to a role whose deadline passed more than a day ago are marked expired. A resend to an address that bounced is refused instead of sent again, and a bounce can no longer flip back to “sent”. Two roles with the same title always get distinct links."
+    },
     "backend-hardening": {
       "title": "Tighter limits around links and uploads",
       "body": "We hardened what a candidate link, a report share link and file uploads can do: expiry and time checks rely only on our servers, upload windows and sizes now match each question's length, and share links follow the same rate limits as the rest of the product. On a shared report, an answer recorded without a camera now plays as audio instead of a black video, and the internal role name is never shown."

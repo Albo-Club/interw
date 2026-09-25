@@ -2369,3 +2369,36 @@ minutes, whatever the question. Both now follow `question.maxResponseSeconds`
   transfer itself. Shortening it further breaks the video retry on a slow
   uplink; lengthening it re-opens the "bytes land after `finish` or erasure"
   window h01/h02 described.
+
+## `expired` is written by a cron, a day after the role's deadline
+
+`sessions.expireOverdueSessions` runs hourly and moves `pending` and
+`in_progress` sessions to `expired` once their role's `expiresAt` is more than
+**24 hours** old (B6). Three things follow from that:
+
+- **The grace day is load-bearing.** `interview.finish` lets a candidate who
+  recorded their answers finish after the role's deadline. Expire at the
+  deadline itself and that path dies: the session is `expired`, not
+  `in_progress`, and `finish` refuses it. Do not shorten the grace below the
+  time a candidate might reasonably need to come back and press Finish.
+- **Only the role's deadline is a window.** A role without `expiresAt` never
+  expires its sessions; retention (`purgeAfter`, set at invitation) bounds
+  what an unopened invitation keeps.
+- **`expired` is terminal.** Pushing the deadline back after the cron ran does
+  not reopen those links — the recruiter re-invites. Before it ran, it does.
+
+The pass is bounded (25 roles, 200 session writes) and reschedules itself
+with the same cursor until the range is drained. It rescans every
+past-deadline role each hour: two indexed reads per role, empty once drained.
+
+## A dashboard figure is a bounded scan, and says when it saturated
+
+There is no count operator. `dashboard.overview` reads, per figure, the index
+that answers it (`by_org_and_invited` for the 30-day window,
+`by_org_and_status` for completed interviews and roles), at most 400 rows
+each, and returns `capped` for any scan that hit the bound; the page renders
+it `400+`. It used to take the org's last 400 sessions of any status and
+compute everything from them, so "decisions so far" dropped as pending
+invitations piled up (Back M3). Same rule on `/app/admin` (`1000+`). If you
+need exact totals, denormalise a counter in the mutation that changes the
+status — do not raise the cap on a reactive query.

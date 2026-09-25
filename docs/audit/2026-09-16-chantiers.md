@@ -9,6 +9,14 @@ partagent un seul déploiement Convex de dev.
 
 ## État des lieux au 16 septembre
 
+> **Mise à jour du 25/09 : cet état des lieux est historique.** Le suivi courant
+> est [`2026-09-24-reste-a-faire.md`](./2026-09-24-reste-a-faire.md) (§0
+> avancement). Les chantiers 2 à 6 y sont repris en tâches T01 → T17, livrées en
+> PR brouillon **empilées** (chacune cible la précédente) : #35 (T01), #39 (T02),
+> #41 (T03), #43 (T04), #44 (T05), #45 (T06), #46 (T07), #47 (T08), #48 (T09),
+> #49 (T10), #50 (T11), #51 (T13), #52 (T14), #53 (T15), puis T16 (docs).
+> T12 attend les PR d'authentification #32, #36, #37 et #42.
+
 Mergé sur `main` :
 
 - **#2** — l'audit et ses annexes (`docs/audit/`).

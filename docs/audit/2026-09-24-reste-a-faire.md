@@ -13,6 +13,31 @@ Tout a été vérifié **dans le code** sur HEAD `506e527` (#30), pas seulement 
 Objectif : dire ce qui est fait et ce qui reste, puis découper le reste en tâches qu'un sous-agent
 exécute seul, **l'une après l'autre** (un seul Convex dev partagé).
 
+## 0. Avancement de la nuit (25/09)
+
+Les PR sont des brouillons **empilés** : chacune cible la branche de la tâche
+précédente, et se merge dans l'ordre (§7).
+
+| Tâche | Branche | PR | État |
+|---|---|---|---|
+| T01 | `claude/audit-T01-pipeline-purge` | #35 | brouillon |
+| T02 | `claude/audit-T02-remove-paraverbal` | #39 | brouillon |
+| T03 | `claude/audit-T03-prompts` | #41 | brouillon |
+| T04 | `claude/audit-T04-role-team` | #43 | brouillon |
+| T05 | `claude/audit-T05-video-intro` | #44 | brouillon |
+| T06 | `claude/audit-T06-candidates-table` | #45 | brouillon |
+| T07 | `claude/audit-T07-candidate-page` | #46 | brouillon |
+| T08 | `claude/audit-T08-recruiter-routes` | #47 | brouillon |
+| T09 | `claude/audit-T09-ai-panel` | #48 | brouillon |
+| T10 | `claude/audit-T10-backend-hardening` | #49 | brouillon |
+| T11 | `claude/audit-T11-data-correctness` | #50 | brouillon |
+| T12 | — | — | **en attente** des PR d'authentification #32, #36, #37, #42 (mêmes fichiers) |
+| T13 | `claude/audit-T13-candidate-leftovers` | #51 | brouillon (part de T11) |
+| T14 | `claude/audit-T14-dead-code-design` | #52 | brouillon |
+| T15 | `claude/audit-T15-ci-tooling` | #53 | brouillon |
+| T16 | `claude/audit-T16-docs` | PR empilée sur #53 | brouillon |
+| T17 | — | — | à faire |
+
 ## 1. Ce qui est fait
 
 | Bloc | Livré par | État vérifié |

@@ -1,7 +1,7 @@
 # TESTING — end-to-end validation plan
 
-Manual + automated plan to validate a fresh copy of the template before
-forking it into a production SaaS. Allow ~70 min end-to-end.
+Manual + automated plan to validate Interw before a production deployment.
+Allow ~70 min end-to-end.
 
 Prerequisites:
 
@@ -348,7 +348,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 
 | #  | Scenario | Steps | Expected |
 | -- | -------- | ----- | -------- |
-| IC1 | Transcription | After C16, watch the candidate page | Pipeline steps appear with timings; transcripts are written per segment |
+| IC1 | Transcription | After IB16, watch the candidate page | Pipeline steps appear with timings; transcripts are written per segment |
 | IC2 | Report | Wait for `report · succeeded` | Report appears: verdict, score, per-criterion scores, quotes |
 | IC3 | **Evidence anchoring** | Click a quote's timestamp | The player switches to the right answer and seeks to the moment the quote was actually said — not to 0:00 |
 | IC3b | **A quote that cannot be anchored** | Edit a transcript row so a report's quote no longer appears in it, reload the report | The quote is still shown, with **no** seek button. It must never fall back to the model's own estimate — a citation that lands on the wrong moment costs every other one its credit |
@@ -402,7 +402,7 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | IE7 | Deleting a role takes its media | Record an intro and a question prompt on a role with no candidates, delete the role | Both objects are gone from the bucket, not just the rows |
 | IE3c | One failing session does not block the purge | Make one due session's object undeletable (e.g. a bucket policy denying that key), then run IE3 with other due sessions behind it | The others are purged in the same pass; the failing one gets a `purge · failed` row in `jobLog`, a `retention_purge_failed` log line, and its `purgeAfter` pushed a day out so it no longer heads the next batch |
 | IE4 | Purge is replayable | Run the purge twice | Second pass is a no-op, not an error |
-| IE5 | No orphans | After G1, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
+| IE5 | No orphans | After IE1 or IE2, list the bucket prefix | Empty. Including any answer whose upload had failed — those keys are written before the upload for exactly this reason |
 | IE8 | **A re-recorded answer is erased too** | Record Q1 in Chrome (webm), cut the network before it is marked uploaded, resume in Safari (mp4) and finish, then Delete everything | Both `q0.weba`/`q0.webm` and `q0.m4a`/`q0.mp4` are gone from the bucket — the replaced keys stay named in `segments.supersededKeys` until erasure |
 | IE9 | Assistant threads go with the candidate | Ask the assistant for candidate X's report, keep the panel open, then delete X from another tab | The conversation disappears; the panel switches to the latest remaining thread (or the empty state) and the page does not crash. A conversation that never read X stays. `chatThreadSessions` has no row for the erased session |
 | IE10 | Resend copies expire | Convex dashboard → Crons | "remove old emails from the resend component" runs hourly; in the resend component's tables, no email is older than 30 days |

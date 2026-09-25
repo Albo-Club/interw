@@ -835,6 +835,18 @@ there too would duplicate the skills (plugin cache *and* `.agents/skills/`)
 and double the update machinery — so we deliberately don't. Let the
 marketplace own Resend.
 
+## Resend is a US processor, and moving it to the EU is undecided
+
+Every other candidate-data processor is European (Mistral, the Scaleway
+bucket, Convex in EU West); Resend, which receives the address of every
+candidate it invites, is not. The move (audit C6.5) has **no decision
+yet**. Its cost is not an env var: `@convex-dev/resend` is a Convex component,
+so switching to an EU sender (Scaleway TEM, Brevo) means replacing the
+component — sending, the erasure hook on its tables (§ "Components keep their
+own copies of candidate data"), the 30-day cleanup cron — and re-wiring the
+delivery webhook (`/resend-webhook`, `RESEND_WEBHOOK_SECRET`). Decide it
+explicitly before the processor list is published; don't drift into it.
+
 ## macOS Finder duplicates
 
 Any `* 2.ts` / `* 2.tsx` file (created by Finder copy/paste or "Save as"
@@ -984,11 +996,10 @@ a *build-time* omission. Chasing that message by adding `CONVEX_SITE_URL` to
 the running app appears to work on some paths and leaves the client bundle
 wrong. The fix is always a rebuild with the variables present.
 
-## Trade-offs vs PROJECT_BRIEF.md
+## Trade-offs vs the original brief
 
-Choices that diverge from the brief, with rationale. See
-`/Users/benjaminbouquet/.claude/plans/glistening-puzzling-kay.md` for the full
-audit.
+Choices that diverge from the product brief the template was built from (the
+brief itself is not in this repository), with rationale.
 
 - **Better Auth `organization()` plugin not loaded** — its tables are not Convex
   first-class (no `withIndex` joins). We mirror orgs/members/invitations in our
@@ -1258,8 +1269,8 @@ or approve pull requests` (the Actions setting is off by default on new
 repos), and even repaired it would have produced empty changelogs because the
 commits there don't follow Conventional Commits. Re-enabling needs all four:
 the Actions setting, the `version` field, the manifest bootstrap, **and**
-Conventional Commits discipline. For this template's actual release flow
-(manual notes + tag), see `release-tag.yml`.
+Conventional Commits discipline. Interw cuts no versioned releases at all —
+see `CHANGELOG.md`.
 
 ## sync-skills.yml (cron + auto-PR) was removed — CI drift check replaced it
 

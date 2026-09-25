@@ -45,9 +45,8 @@ import type { DataModel, Doc, Id } from './_generated/dataModel'
  * a Convex log search on `pipeline_step_failed` finds every one of them
  * without knowing which step to ask about.
  *
- * Not Sentry: the Convex side has no SDK wired up, and `CLAUDE.md`'s claim
- * that it does is one of the stale statements chantier 5 is to fix. A named
- * line is the honest version of the same thing until then.
+ * Not Sentry: the Convex side has no SDK wired up (`CLAUDE.md` § Stack). A
+ * named line is the honest version of the same thing.
  */
 function logStepFailure(
   step: 'transcribe' | 'report' | 'notify',

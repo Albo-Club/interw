@@ -46,6 +46,14 @@ export type SessionGate = {
   needsConsent: boolean
 }
 
+/** The role's deadline has passed: no link to it opens any more. */
+export function isPastDeadline(
+  project: Pick<ProjectLike, 'expiresAt'>,
+  now: number,
+): boolean {
+  return project.expiresAt !== undefined && now > project.expiresAt
+}
+
 export function evaluateSessionGate({
   session,
   project,
@@ -79,9 +87,7 @@ export function evaluateSessionGate({
 
   // The role's own expiry closes every link at once — the usual reason is
   // "we have finished hiring", so it reads as expired, not as an error.
-  if (project.expiresAt !== undefined && now > project.expiresAt) {
-    return blocked('expired')
-  }
+  if (isPastDeadline(project, now)) return blocked('expired')
   // Draft or archived: nobody should be able to sit an interview that is not
   // live, including through a link that was sent while it was.
   if (project.status !== 'active') return blocked('closed')

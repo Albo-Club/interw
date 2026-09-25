@@ -9,6 +9,10 @@
       "title": "Les e-mails aux candidats ne nomment le poste que par son intitulé",
       "body": "L’invitation et la confirmation que reçoit un candidat ne désignent plus le poste que par l’intitulé affiché au candidat. Un poste sans intitulé est présenté comme un entretien avec votre organisation, jamais sous le nom que votre équipe lui donne. Nous avons aussi renforcé le suivi des fichiers envoyés, pour que supprimer un candidat, une question ou un poste supprime chacun des fichiers qui lui appartiennent, et renforcé la protection du lien d’entretien du candidat."
     },
+    "share-highlights-and-deadlines": {
+      "title": "Extraits marquants sur les rapports partagés, plus d'invitations mortes",
+      "body": "Un rapport partagé liste désormais les moments à regarder, comme le rapport dans l'application. Une invitation qui a rebondi est signalée sur son candidat, quel que soit le nombre d'e-mails envoyés depuis par l'organisation. Un poste archivé ou dont la date limite est passée n'envoie plus d'invitations ni de relances qui ouvriraient sur un entretien fermé, et quand le créateur d'un poste part sans personne d'autre dans son équipe, les admins sont prévenus quand un rapport est prêt."
+    },
     "assistant-history-purged": {
       "title": "Anciennes conversations avec l’assistant supprimées",
       "body": "Dans le cadre du renforcement de la suppression des données des candidats, vos conversations avec l’assistant antérieures à cette mise à jour ont été supprimées. Désormais, supprimer un candidat supprime aussi chaque conversation dans laquelle l’assistant a lu ses données."

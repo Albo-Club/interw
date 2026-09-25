@@ -11,8 +11,8 @@
  *      confidential role exists.
  *
  * The creator is on the team by construction and is never stored as a row:
- * they cannot be dropped from it, so the person who opened the search always
- * sees it and always hears about its reports.
+ * they cannot be dropped from it, so the person who opened the search sees
+ * it and hears about its reports for as long as they are a member.
  */
 
 import { ConvexError } from 'convex/values'
@@ -25,7 +25,7 @@ import type { DataModel, Doc, Id } from '../_generated/dataModel'
 type Ctx = GenericQueryCtx<DataModel> | GenericMutationCtx<DataModel>
 
 /** Admins and owners see every project in their organisation. */
-function seesEverything(role: AppRole): boolean {
+export function seesEverything(role: AppRole): boolean {
   return role === 'admin' || role === 'owner'
 }
 

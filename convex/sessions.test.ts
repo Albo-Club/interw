@@ -216,6 +216,52 @@ describe('the recruiter list', () => {
     })
     expect(JSON.stringify(page)).not.toContain('xxxx')
   })
+
+  /** PR #45: a bounce older than the org's last 200 emails went unflagged. */
+  it('flags a failed invitation per candidate, however much mail came after', async () => {
+    await t.run(async (ctx) => {
+      const session = async (name: string) =>
+        ctx.db.insert('sessions', {
+          orgId: f.orgId,
+          projectId: f.projectId,
+          accessToken: name.padEnd(43, 'x'),
+          candidateName: name,
+          candidateEmail: `${name.toLowerCase()}@example.test`,
+          status: 'pending',
+          lastQuestionIndex: 0,
+          invitedBy: f.recruiter,
+          invitedAt: 0,
+        })
+      const log = async (
+        sessionId: Id<'sessions'> | undefined,
+        status: 'sent' | 'delivered' | 'bounced',
+        template = 'candidate-invitation',
+      ) =>
+        ctx.db.insert('emailLog', {
+          orgId: f.orgId,
+          template,
+          recipient: 'x@example.test',
+          status,
+          sessionId,
+          createdAt: 0,
+        })
+      await log(await session('Bounced'), 'bounced')
+      const retried = await session('Retried')
+      await log(retried, 'bounced')
+      await log(retried, 'delivered')
+      await log(await session('Reported'), 'bounced', 'report-ready')
+      for (let i = 0; i < 250; i++) await log(undefined, 'sent')
+    })
+
+    const { page } = await asRecruiter(t).query(api.sessions.listByProject, {
+      projectId: f.projectId,
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    const issues = Object.fromEntries(
+      page.map((row) => [row.candidateName, row.deliveryIssue]),
+    )
+    expect(issues).toEqual({ Bounced: 'bounced', Retried: null, Reported: null })
+  })
 })
 
 /**

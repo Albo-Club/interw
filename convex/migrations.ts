@@ -139,7 +139,8 @@ const ROLE_BATCH = 100
  * touch: a creator removed and re-invited got every role they had opened back
  * (audit T17-2). `projects.create` now writes the row and nothing reads
  * `createdBy` as a grant, so roles from before need theirs, once. A creator
- * who is no longer a member gets none — removal is exactly what revokes it.
+ * who is no longer a member, or who left and was re-invited since, gets none —
+ * removal is exactly what revokes it.
  *
  * One walk over `projects`, a bounded page per step. Idempotent: a role whose
  * creator already holds a seat is left alone, so a tick landing mid-walk, or a
@@ -162,7 +163,9 @@ export const backfillCreatorSeats = internalMutation({
           q.eq('orgId', project.orgId).eq('userId', project.createdBy),
         )
         .unique()
-      if (!member) continue
+      // Membership rows are only ever inserted, so one newer than the role
+      // means the creator left and came back: removal already revoked the seat.
+      if (!member || member._creationTime > project._creationTime) continue
       const seat = await ctx.db
         .query('projectShares')
         .withIndex('by_project_and_user', (q) =>

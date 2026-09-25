@@ -539,4 +539,23 @@ describe('migrations.backfillCreatorSeats', () => {
     )
     expect(state?.doneAt).toBeDefined()
   })
+
+  it('does not seat a creator who left and was re-invited before the migration', async () => {
+    const legacy = await legacyRole(w.users.teammate, 'legacy-returned')
+    await t.run(async (ctx) => {
+      const membership = (await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', w.orgId).eq('userId', w.users.teammate),
+        )
+        .unique())!
+      await ctx.db.delete('organizationMembers', membership._id)
+      const { _id, _creationTime, ...fields } = membership
+      await ctx.db.insert('organizationMembers', { ...fields, role: 'member' })
+    })
+
+    await run()
+
+    expect(await teamOf(t, legacy)).toEqual([])
+  })
 })

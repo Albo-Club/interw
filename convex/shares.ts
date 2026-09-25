@@ -17,13 +17,15 @@
 
 import { ConvexError, v } from 'convex/values'
 
-import { action, internalQuery, mutation, query } from './_generated/server'
+import { action, internalMutation, mutation, query } from './_generated/server'
 import { internal } from './_generated/api'
 import {
   criteriaScoresValidator,
   fitMatrixValidator,
+  mediaKindValidator,
   recommendationValidator,
 } from './schema'
+import { toSharedAnswerView } from './lib/candidateView'
 import { effectiveNow } from './lib/clock'
 import { requireProjectAccess } from './lib/projectAccess'
 import { generateToken, looksLikeToken } from './lib/tokens'
@@ -34,6 +36,9 @@ import type { GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
 export type ShareState = 'active' | 'expired' | 'revoked' | 'not_found'
+
+/** The longest a link may be issued for. `null` is the way to say "never". */
+const MAX_SHARE_DAYS = 365
 
 function shareUrl(token: string): string {
   const siteUrl = process.env.SITE_URL
@@ -112,6 +117,16 @@ export const create = mutation({
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))
       .unique()
     if (!report) throw new ConvexError('no_report')
+    // NaN, Infinity or a huge number stored an expiry that never arrives, and
+    // a negative one a link dead at birth yet still listed.
+    if (
+      expiresInDays !== null &&
+      (!Number.isInteger(expiresInDays) ||
+        expiresInDays < 1 ||
+        expiresInDays > MAX_SHARE_DAYS)
+    ) {
+      throw new ConvexError('invalid_expiry')
+    }
 
     const token = generateToken()
     await ctx.db.insert('reportShares', {
@@ -171,7 +186,8 @@ const shareViewReturns = v.object({
     v.null(),
     v.object({
       organisationName: v.string(),
-      jobTitle: v.string(),
+      /** The public title only; null when the role has none. */
+      jobTitle: v.union(v.string(), v.null()),
       candidateName: v.string(),
       completedAt: v.union(v.number(), v.null()),
       overallScore: v.number(),
@@ -196,6 +212,7 @@ const shareViewReturns = v.object({
           segmentId: v.id('segments'),
           questionIndex: v.number(),
           question: v.string(),
+          mediaKind: v.union(mediaKindValidator, v.null()),
         }),
       ),
     }),
@@ -246,7 +263,9 @@ export const view = query({
       state: 'active' as const,
       report: {
         organisationName: org?.name ?? '',
-        jobTitle: project?.jobTitle ?? project?.title ?? '',
+        // Never the internal `title`: that is the recruiter's own label, and
+        // the candidate is not shown it either (lib/candidateView.ts).
+        jobTitle: project?.jobTitle ?? null,
         // Name only. No email, phone, LinkedIn, CV or recruiter note: nothing
         // about reviewing an assessment requires them.
         candidateName: session.candidateName,
@@ -267,12 +286,10 @@ export const view = query({
         fitMatrix: report.fitMatrix ?? null,
         answers: segments
           .sort((a, b) => a.questionIndex - b.questionIndex)
-          .map((segment) => ({
-            segmentId: segment._id,
-            questionIndex: segment.questionIndex,
-            // By id, not by index: see convex/pipeline.ts.
-            question: questionById.get(segment.questionId)?.content ?? '',
-          })),
+          // By id, not by index: see convex/pipeline.ts.
+          .map((segment) =>
+            toSharedAnswerView(segment, questionById.get(segment.questionId)),
+          ),
       },
     }
   },
@@ -295,7 +312,11 @@ export const recordView = mutation({
   },
 })
 
-export const resolveSharedMedia = internalQuery({
+/**
+ * A mutation, not a query, because it spends from the limiter — keyed on the
+ * resolved share like `recordView`, so an unresolved token writes nothing.
+ */
+export const resolveSharedMedia = internalMutation({
   args: { token: v.string(), now: v.number() },
   handler: async (ctx, { token, now }) => {
     // Its only caller is the action below, which passes the server's clock.
@@ -303,6 +324,7 @@ export const resolveSharedMedia = internalQuery({
     // remembering.
     const resolved = await resolveShare(ctx, token, effectiveNow(now))
     if (resolved.state !== 'active') return null
+    await consumeLimit(ctx, 'shareMedia', resolved.share._id)
     const report = await ctx.db.get('reports', resolved.share.reportId)
     if (!report) return null
     const segments = await ctx.db
@@ -333,7 +355,7 @@ export const sharedMediaUrls = action({
     ctx,
     { token },
   ): Promise<Array<{ segmentId: Id<'segments'>; url: string }>> => {
-    const segments = await ctx.runQuery(internal.shares.resolveSharedMedia, {
+    const segments = await ctx.runMutation(internal.shares.resolveSharedMedia, {
       token,
       now: Date.now(),
     })

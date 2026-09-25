@@ -22,6 +22,25 @@ const DEFAULT_QUESTION_COUNT = 6
 const DEFAULT_CRITERIA_COUNT = 4
 const MIN_USABLE_TEXT = 400
 
+/** Bounds `draftSchema` enforces, shared with the prompt so it never asks for
+ *  a draft that is bound to fail validation. */
+const QUESTION_RANGE = { min: 3, max: 15 } as const
+const CRITERIA_RANGE = { min: 2, max: 8 } as const
+
+/**
+ * The count the prompt asks for. Clamped rather than refused: the UI sends
+ * none, and an out-of-range number used to reach the prompt as is, which
+ * guaranteed a billed completion that then failed `draftSchema`.
+ */
+export function draftCount(
+  requested: number | undefined,
+  fallback: number,
+  range: { min: number; max: number },
+): number {
+  if (requested === undefined || !Number.isFinite(requested)) return fallback
+  return Math.min(range.max, Math.max(range.min, Math.round(requested)))
+}
+
 const draftSchema = z.object({
   title: z.string().min(1).max(120),
   jobTitle: z.string().min(1).max(120),
@@ -32,8 +51,8 @@ const draftSchema = z.object({
         content: z.string().min(10).max(1000),
       }),
     )
-    .min(3)
-    .max(15),
+    .min(QUESTION_RANGE.min)
+    .max(QUESTION_RANGE.max),
   criteria: z
     .array(
       z.object({
@@ -42,8 +61,8 @@ const draftSchema = z.object({
         weight: z.number().int().min(1).max(100),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(CRITERIA_RANGE.min)
+    .max(CRITERIA_RANGE.max),
 })
 
 export type InterviewDraft = z.infer<typeof draftSchema>
@@ -90,8 +109,16 @@ export const importFromUrl = action({
     // and a model handed 80 characters will invent an entire role.
     if (pageText.length < MIN_USABLE_TEXT) throw new ConvexError('page_too_thin')
 
-    const questionCount = args.questionCount ?? DEFAULT_QUESTION_COUNT
-    const criteriaCount = args.criteriaCount ?? DEFAULT_CRITERIA_COUNT
+    const questionCount = draftCount(
+      args.questionCount,
+      DEFAULT_QUESTION_COUNT,
+      QUESTION_RANGE,
+    )
+    const criteriaCount = draftCount(
+      args.criteriaCount,
+      DEFAULT_CRITERIA_COUNT,
+      CRITERIA_RANGE,
+    )
     const { system, user } = jobImportPrompt({
       language: context.language,
       pageText,

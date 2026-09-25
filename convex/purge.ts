@@ -66,7 +66,6 @@ export const collectSessionObjects = internalQuery({
         [
           segment.videoKey,
           segment.audioKey,
-          segment.thumbnailKey,
           ...(segment.supersededKeys ?? []),
         ].filter((key): key is string => key !== undefined),
       ),
@@ -258,7 +257,6 @@ export const clearSessionMedia = internalMutation({
       await ctx.db.patch('segments', segment._id, {
         videoKey: undefined,
         audioKey: undefined,
-        thumbnailKey: undefined,
         supersededKeys: undefined,
       })
     }

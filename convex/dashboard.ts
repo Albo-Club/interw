@@ -11,6 +11,7 @@ import { v } from 'convex/values'
 
 import { query } from './_generated/server'
 import { requireOrgMember } from './lib/auth'
+import { effectiveNow } from './lib/clock'
 import { filterVisibleProjects } from './lib/projectAccess'
 
 /** How far back the activity figures look. */
@@ -21,7 +22,9 @@ export const overview = query({
   args: { orgId: v.id('organizations'), now: v.number() },
   handler: async (ctx, { orgId, now }) => {
     const { user, member } = await requireOrgMember(ctx, orgId)
-    const since = now - WINDOW_DAYS * 24 * 60 * 60 * 1000
+    // The caller's clock keeps the window reactive; it does not choose it.
+    // See convex/lib/clock.ts.
+    const since = effectiveNow(now) - WINDOW_DAYS * 24 * 60 * 60 * 1000
 
     const allProjects = await ctx.db
       .query('projects')

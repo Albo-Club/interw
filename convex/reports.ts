@@ -313,7 +313,7 @@ export const sessionMediaUrls = action({
     ctx,
     { sessionId, language },
   ): Promise<{
-    segments: Array<{ segmentId: Id<'segments'>; url: string; kind: string }>
+    segments: Array<{ segmentId: Id<'segments'>; url: string; kind: 'audio' | 'video' }>
     cv: string | null
     coverLetter: string | null
   }> => {

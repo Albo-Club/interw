@@ -120,3 +120,35 @@ export type CandidateLandingView = {
   project: CandidateProjectView
   gate: SessionGate & { resumeAtIndex: number }
 }
+
+/**
+ * One answer as a share link lists it. Not a candidate view, but the same
+ * rule: a share holder is outside the account, so what they get of a segment
+ * row is listed here field by field — never its keys, its transcript state or
+ * the candidate's own duration hint.
+ *
+ * `mediaKind` says which element plays it: an answer recorded without a
+ * camera is audio, and a `<video>` over an audio file is a black box.
+ */
+export type SharedAnswerView = {
+  segmentId: Doc<'segments'>['_id']
+  questionIndex: number
+  question: string
+  mediaKind: 'audio' | 'video' | null
+}
+
+export function toSharedAnswerView(
+  segment: Doc<'segments'>,
+  question: Pick<Doc<'questions'>, 'content'> | undefined,
+): SharedAnswerView {
+  return {
+    segmentId: segment._id,
+    questionIndex: segment.questionIndex,
+    question: question?.content ?? '',
+    mediaKind: segment.videoKey
+      ? 'video'
+      : segment.audioKey
+        ? 'audio'
+        : null,
+  }
+}

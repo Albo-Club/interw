@@ -98,6 +98,9 @@ function SharedReport() {
 
   const report = data.report
   const criterionById = new Map(report.criteria.map((c) => [c._id, c]))
+  const kindBySegment = new Map(
+    report.answers.map((answer) => [answer.segmentId, answer.mediaKind]),
+  )
   const questionLabels = Object.fromEntries(
     report.answers.map((answer) => [
       answer.segmentId,
@@ -120,7 +123,9 @@ function SharedReport() {
           <h1 className="text-3xl font-semibold tracking-tight">
             {report.candidateName}
           </h1>
-          <p className="text-muted-foreground">{report.jobTitle}</p>
+          {report.jobTitle && (
+            <p className="text-muted-foreground">{report.jobTitle}</p>
+          )}
         </header>
 
         <Card>
@@ -154,7 +159,12 @@ function SharedReport() {
 
         {media && media.length > 0 && (
           <AnswerPlayer
-            segments={media.map((entry) => ({ ...entry, kind: 'video' }))}
+            segments={media.map((entry) => ({
+              ...entry,
+              // An answer recorded without a camera is audio: a <video> over
+              // it is a black box with a play button.
+              kind: kindBySegment.get(entry.segmentId) ?? 'video',
+            }))}
             cue={cue}
             activeSegmentId={activeSegment}
             onSelect={setActiveSegment}

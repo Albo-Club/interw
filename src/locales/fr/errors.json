@@ -37,6 +37,7 @@
     "insufficient_role": "Seuls les admins, les propriétaires et le créateur du poste peuvent faire cela.",
     "invalid_content": "Une question doit avoir un texte, de 1000 caractères au plus.",
     "invalid_duration": "Choisissez une durée entre 5 et 120 minutes.",
+    "invalid_expiry": "Un lien dure entre 1 et 365 jours, ou n'expire pas.",
     "invalid_email": "Cette adresse e-mail n'est pas valide.",
     "invalid_job_title": "L'intitulé du poste doit faire 120 caractères au plus.",
     "invalid_label": "Un critère doit avoir un libellé, de 80 caractères au plus.",

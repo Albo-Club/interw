@@ -45,11 +45,46 @@ import { candidateCompletedEmail } from './emailTemplates'
 import type { GenericMutationCtx, GenericQueryCtx } from 'convex/server'
 import type { DataModel, Doc, Id } from './_generated/dataModel'
 
-const MAX_SEGMENT_BYTES = 300 * 1024 * 1024
 /** Newest events kept per session. See `appendSessionEvent`. */
 const MAX_SESSION_EVENTS = 200
 /** Slack over a question's time limit for the recorder's own stop latency. */
 const DURATION_MARGIN_SECONDS = 5
+
+/**
+ * What an answer may weigh, per second of the question's time limit. Four
+ * times what the recorder asks for (src/lib/media/recorder.ts: 1 Mbit/s video,
+ * 64 kbit/s audio), because `videoBitsPerSecond` is a request a browser may
+ * overshoot, and a candidate gets one attempt. The bound exists for what the
+ * bytes cost downstream — a paid transcription reads the whole object into
+ * memory — not to police the encoder.
+ */
+const VIDEO_BYTES_PER_SECOND = 512 * 1024
+const AUDIO_BYTES_PER_SECOND = 32 * 1024
+/** Container headers and a first keyframe, whatever the length. */
+const CONTAINER_OVERHEAD_BYTES = 1024 * 1024
+
+/**
+ * How long a segment's PUT URL stays valid. The upload starts the moment the
+ * recording stops, and at the recorder's bitrate it lasts about as long as
+ * the answer on a slow uplink; the margin covers the audio going first and the
+ * client's retries. Past that, a URL still valid after `finish`, a
+ * cancellation or an erasure would let bytes land on an answer nothing is
+ * reading any more.
+ */
+const SEGMENT_PUT_MARGIN_SECONDS = 3 * 60
+
+function segmentByteCap(
+  maxResponseSeconds: number,
+  kind: 'audio' | 'video',
+): number {
+  const perSecond =
+    kind === 'video' ? VIDEO_BYTES_PER_SECOND : AUDIO_BYTES_PER_SECOND
+  return (
+    (maxResponseSeconds + DURATION_MARGIN_SECONDS) * perSecond +
+    CONTAINER_OVERHEAD_BYTES
+  )
+}
+
 const ALLOWED_VIDEO_TYPES = ['video/webm', 'video/mp4']
 const ALLOWED_AUDIO_TYPES = ['audio/webm', 'audio/mp4', 'audio/mpeg']
 
@@ -248,13 +283,14 @@ function validateMedia(
   mimeType: string,
   contentLength: number,
   allowed: Array<string>,
+  maxBytes: number,
 ): { contentType: string; extension: string } {
   const base = mimeType.split(';')[0].trim().toLowerCase()
   if (!allowed.includes(base)) throw new ConvexError('unsupported_media_type')
   if (
     !Number.isInteger(contentLength) ||
     contentLength <= 0 ||
-    contentLength > MAX_SEGMENT_BYTES
+    contentLength > maxBytes
   ) {
     throw new ConvexError('media_too_large')
   }
@@ -303,9 +339,15 @@ export const reserveSegment = internalMutation({
       audio.mimeType,
       audio.contentLength,
       ALLOWED_AUDIO_TYPES,
+      segmentByteCap(question.maxResponseSeconds, 'audio'),
     )
     const videoMedia = video
-      ? validateMedia(video.mimeType, video.contentLength, ALLOWED_VIDEO_TYPES)
+      ? validateMedia(
+          video.mimeType,
+          video.contentLength,
+          ALLOWED_VIDEO_TYPES,
+          segmentByteCap(question.maxResponseSeconds, 'video'),
+        )
       : null
 
     const audioKey = segmentKey(
@@ -379,6 +421,8 @@ export const reserveSegment = internalMutation({
       segmentId,
       audio: { key: audioKey, contentType: audioMedia.contentType },
       video: videoSlot,
+      uploadTtlSeconds:
+        question.maxResponseSeconds + SEGMENT_PUT_MARGIN_SECONDS,
     }
   },
 })
@@ -413,7 +457,7 @@ export const requestSegmentUpload = action({
         uploadUrl: await presignPut(
           slot.audio.key,
           slot.audio.contentType,
-          undefined,
+          slot.uploadTtlSeconds,
           args.audio.contentLength,
         ),
         contentType: slot.audio.contentType,
@@ -424,7 +468,7 @@ export const requestSegmentUpload = action({
               uploadUrl: await presignPut(
                 slot.video.key,
                 slot.video.contentType,
-                undefined,
+                slot.uploadTtlSeconds,
                 args.video.contentLength,
               ),
               contentType: slot.video.contentType,

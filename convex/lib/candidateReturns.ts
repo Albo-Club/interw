@@ -79,3 +79,17 @@ export const sessionGateReturns = v.object({
   needsConsent: v.boolean(),
   resumeAtIndex: v.number(),
 })
+
+/** What `candidate.privacySummary` tells the token holder is held about them:
+ *  their own name and address, then counts and booleans only. */
+export const candidatePrivacyReturns = v.object({
+  organisationName: v.string(),
+  language: languageValidator,
+  candidateName: v.string(),
+  candidateEmail: v.string(),
+  answerCount: v.number(),
+  hasTranscript: v.boolean(),
+  hasAnalysis: v.boolean(),
+  hasDocuments: v.boolean(),
+  completedAt: v.union(v.number(), v.null()),
+})

@@ -428,7 +428,6 @@ export default defineSchema({
     questionIndex: v.number(),
     videoKey: v.optional(v.string()),
     audioKey: v.optional(v.string()),
-    thumbnailKey: v.optional(v.string()),
     /** Keys this slot was reserved under before and no longer is. Re-reserving
      *  an answer in another container, or without video, changes its keys,
      *  and the earlier object would otherwise be named nowhere — out of reach

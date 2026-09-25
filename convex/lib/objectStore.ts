@@ -28,12 +28,13 @@
  *   2. The bucket is private. Nothing is readable without a signed URL.
  *   3. A signed URL is only ever minted by a function that has ALREADY checked
  *      access: matching candidate token, org membership, or a valid share.
- *   4. Read URLs live 1 hour, write URLs 15 minutes.
+ *   4. Read URLs live 1 hour, write URLs 15 minutes at most — a candidate's
+ *      answer slot less (see `requestSegmentUpload` in convex/interview.ts).
  *   5. Keys are `orgs/{orgId}/sessions/{sessionId}/…`, which makes purging a
  *      session a matter of deleting a known, enumerable set.
  */
 
-import { presign } from './sigv4'
+import { presign, uriEncodePath } from './sigv4'
 
 export const READ_URL_TTL_SECONDS = 60 * 60
 export const WRITE_URL_TTL_SECONDS = 15 * 60
@@ -90,10 +91,7 @@ export function resolveTarget(
   key: string,
 ): { origin: string; path: string } {
   const url = new URL(config.origin)
-  const encodedKey = key
-    .split('/')
-    .map((s) => encodeURIComponent(s))
-    .join('/')
+  const encodedKey = uriEncodePath(key)
   if (config.forcePathStyle) {
     return {
       origin: `${url.protocol}//${url.host}`,
@@ -236,14 +234,6 @@ export function segmentKey(
   extension: string,
 ): string {
   return `${sessionPrefix(orgId, sessionId)}/q${questionIndex}.${extension}`
-}
-
-export function thumbnailKey(
-  orgId: string,
-  sessionId: string,
-  questionIndex: number,
-): string {
-  return `${sessionPrefix(orgId, sessionId)}/q${questionIndex}.jpg`
 }
 
 export function candidateDocumentKey(

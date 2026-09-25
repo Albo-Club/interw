@@ -37,6 +37,7 @@
     "insufficient_role": "Only admins, owners and the role’s creator can do this.",
     "invalid_content": "A question needs text, up to 1000 characters.",
     "invalid_duration": "Choose a length between 5 and 120 minutes.",
+    "invalid_expiry": "A link lasts between 1 and 365 days, or has no expiry.",
     "invalid_email": "That is not a valid email address.",
     "invalid_job_title": "The job title must be 120 characters or fewer.",
     "invalid_label": "A criterion needs a label, up to 80 characters.",

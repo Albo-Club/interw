@@ -549,7 +549,6 @@ describe('one resume cursor, on the server', () => {
     })
     const privacy = await t.query(api.candidate.privacySummary, {
       token: s.token,
-      now: Date.now(),
     })
     expect(questions.language).toBe('fr')
     expect(privacy.language).toBe('fr')
@@ -588,6 +587,74 @@ describe('one resume cursor, on the server', () => {
       audio: AUDIO,
     })
     expect(slot.status).toBe('reserved')
+  })
+})
+
+/**
+ * h01/h02, h09. Every answer could weigh 300 MB whatever the question's time
+ * limit — and a paid transcription reads the whole object into memory — and
+ * its PUT URL stayed valid for 15 minutes, well past `finish`, a cancellation
+ * or an erasure.
+ */
+describe('an answer slot is sized by its question', () => {
+  let t: ReturnType<typeof newTest>
+  let s: OpenSeed
+  const MB = 1024 * 1024
+
+  beforeEach(async () => {
+    vi.stubEnv('OBJECT_STORE_ENDPOINT', 'https://s3.example.test')
+    vi.stubEnv('OBJECT_STORE_REGION', 'fr-par')
+    vi.stubEnv('OBJECT_STORE_BUCKET', 'media')
+    vi.stubEnv('OBJECT_STORE_ACCESS_KEY_ID', 'test-access-key')
+    vi.stubEnv('OBJECT_STORE_SECRET_ACCESS_KEY', 'test-secret-key')
+    t = newTest()
+    s = await seedOpen(t)
+    await t.run(async (ctx) => {
+      await ctx.db.patch('questions', s.questionIds[0], {
+        maxResponseSeconds: 60,
+      })
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const reserve = (audioBytes: number, videoBytes?: number) =>
+    t.mutation(internal.interview.reserveSegment, {
+      token: s.token,
+      questionIndex: 0,
+      audio: { mimeType: 'audio/webm', contentLength: audioBytes },
+      video:
+        videoBytes === undefined
+          ? undefined
+          : { mimeType: 'video/webm', contentLength: videoBytes },
+    })
+
+  it('refuses a video no 60-second answer could produce', async () => {
+    await expect(reserve(1_000, 100 * MB)).rejects.toThrow('media_too_large')
+    await expect(reserve(10 * MB)).rejects.toThrow('media_too_large')
+  })
+
+  it('still takes several times what the recorder asks for', async () => {
+    // 60 s at 1 Mbit/s is ~7.5 MB of video and ~0.5 MB of audio.
+    const slot = await reserve(2 * MB, 30 * MB)
+    expect(slot.status).toBe('reserved')
+  })
+
+  it('signs the PUT for the answer’s length plus a margin, not 15 minutes', async () => {
+    const slot = await t.action(api.interview.requestSegmentUpload, {
+      token: s.token,
+      questionIndex: 0,
+      audio: { mimeType: 'audio/webm', contentLength: 1_000 },
+      video: { mimeType: 'video/webm', contentLength: 2_000 },
+    })
+    if (slot.status !== 'reserved') throw new Error('expected a slot')
+    for (const url of [slot.audio.uploadUrl, slot.video!.uploadUrl]) {
+      expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe(
+        String(60 + 3 * 60),
+      )
+    }
   })
 })
 

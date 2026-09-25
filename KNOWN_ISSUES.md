@@ -1968,10 +1968,60 @@ the report needs was already in the bucket. A failed video is logged as an
 
 The trap is on the reading side: such a segment still carries its `videoKey`
 (written before the upload, which is what keeps erasure exact), and no object
-sits behind it. A player given a signed URL for it gets a 404 that looks like
-a signing bug. There is no `videoUploaded` column yet — adding one is a schema
-change, outside the candidate surface — so until then, treat a failed video
-load on a segment as "this answer is audio only", not as an error.
+sits behind it — a signed URL for it is a 404 that looks like a signing bug.
+So a key is not proof of an object: `reserveSegment` writes
+`videoUploaded: false` next to the key, `markVideoUploaded` flips it once the
+PUT succeeded, and every player picks its source through `playbackMedia`
+(`convex/lib/objectStore.ts`) rather than `videoKey ?? audioKey`. Rows older
+than the flag have it absent and are taken as uploaded.
+
+## An answer is copied to IndexedDB while it records
+
+`SegmentRecorder` starts both recorders with a 2 s timeslice and hands every
+chunk to `onChunk`; the runner writes it to `src/lib/media/takeStore.ts`
+(IndexedDB `interw-takes`). A reload finds the take for the question it
+resumes on and sends it — the same attempt, not a second one. The in-memory
+chunks are still what a normal `stop()` uploads, after the final flush: the
+IndexedDB copy is only ever read after a reload.
+
+Traps worth knowing:
+
+- **Best effort, never blocking.** Safari private browsing and a full disk
+  refuse IndexedDB; every write is `fireAndForget`, and recording works from
+  memory exactly as before. Do not make a write awaited on the recording path.
+- **It is candidate video on the candidate's device.** A take is deleted when
+  the server holds the answer, on skip, on finish, when the candidate erases
+  their data from this browser, and after 24 h whoever it belongs to (a shared
+  computer must not keep it). Erasure from anywhere else cannot reach it —
+  that is why the 24 h cut exists.
+- **A crashed take has no final flush.** Concatenated WebM/fMP4 chunks still
+  play; the last ≤ 2 s are lost, and the duration is the time between the
+  take's start and its last chunk.
+- **A recorder with no audio after 6 s never will.** The tick fires
+  `onFailure`, the runner stops the take, and the empty-take path offers to
+  record again — seconds in, instead of after two minutes.
+
+## Video is recorded as MP4 wherever the browser can
+
+`VIDEO_MIME_PREFERENCES` puts H.264/AAC MP4 first (Chrome and Edge 126+,
+Safari) and keeps WebM only as the Firefox branch. Two reasons, both on the
+recruiter's side, not the candidate's:
+
+- **MediaRecorder's WebM has no duration and no cues.** The player reports an
+  unknown duration and seeks wherever it guesses, which quietly breaks "jump
+  to the quote". Its MP4 is fragmented, which carries its own timing.
+- **WebM playback on Safari, iOS above all, varies by version.** A recruiter on
+  an iPhone could not always watch an answer recorded in Chrome.
+
+The **audio** file is deliberately left alone: WebM/Opus on Chrome and
+Firefox, M4A on Safari. It is what gets transcribed, and the transcription
+path already takes both — changing it would risk the answer for no gain.
+The transcription call labels the file with `mimeTypeForKey(key)`; it used to
+hard-code `audio/webm`, which was wrong for every Safari answer.
+
+Firefox answers therefore stay WebM, with the seeking problem above, until
+something re-muxes them server-side. Plain `video/mp4` stays in the list
+after the codec-qualified entries for a Safari that answers no codec query.
 
 ## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
 

@@ -5,6 +5,14 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "interview-survives-crash": {
+      "title": "Une réponse survit à un plantage, et les candidats peuvent s’écouter avant de commencer",
+      "body": "Pendant qu’un candidat répond, l’enregistrement est désormais aussi conservé sur son appareil : si la page plante ou se ferme, rouvrir le lien envoie la réponse au lieu de la perdre. Il voit aussi un indicateur de micro pendant qu’il parle — avec une alerte si nous ne l’entendons plus — et l’écran de vérification le prévient quand sa caméra n’affiche que du noir et lui permet d’enregistrer un court test pour s’écouter avant de commencer."
+    },
+    "recordings-play-everywhere": {
+      "title": "Des réponses lisibles partout, et un téléphone qui reste allumé",
+      "body": "Les réponses enregistrées sous Chrome, Edge ou Safari utilisent désormais un format que tous les navigateurs lisent, iPhone compris : sauter à une citation dans un rapport tombe au bon endroit. Le téléphone ne verrouille plus son écran en pleine réponse, un micro pris par un appel termine proprement la réponse au lieu d’enregistrer du silence, et quand la vidéo d’une réponse n’a pas pu être envoyée, vous entendez quand même ce que le candidat a dit."
+    },
     "delete-organization": {
       "title": "Supprimer une organisation",
       "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."

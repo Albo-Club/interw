@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "hardening-sep-25": {
+      "title": "Encore plus de robustesse",
+      "body": "Nous avons renforcé la façon dont les liens de partage de rapports, les liens candidats et notre suivi des erreurs traitent les accès, et resserré quelques limites : un message à l’assistant a désormais une longueur maximale, et un lien de partage dure au plus un an. Un e-mail rejeté reste aussi signalé comme tel dans votre suivi des envois."
+    },
     "delete-organization": {
       "title": "Supprimer une organisation",
       "body": "Le propriétaire d'une organisation peut désormais la supprimer depuis ses paramètres, après avoir saisi son nom pour confirmer. Tous les postes, enregistrements de candidats, CV, transcriptions, rapports et conversations avec l'assistant qu'elle contient sont effacés définitivement, et ses membres sont prévenus par e-mail. Être le seul propriétaire d'une organisation ne vous empêche plus de supprimer votre compte : supprimez d'abord l'organisation, puis votre compte."

@@ -204,7 +204,7 @@ Server rules are covered by `convex/invitations.test.ts`; these rows check the s
 | INV-2  | Paste `a@test.local, b@test.local` + a line with an existing member's address, send | One result line per address: two "Invitation sent", one "Already a member of this organization"; toast "2 invitations sent"; only the failed address stays in the box |
 | INV-3  | "Resend" on a pending row | Second email received with the same link; "Expires on" moves 7 days out; "Invited by" becomes the admin who resent |
 | INV-4  | "Copy link" on a pending row | Toast "Invite link copied"; the clipboard holds `<SITE_URL>/accept-invite/<token>` |
-| INV-5  | Invite `bounced@resend.dev` (Resend's bounce test address; needs `RESEND_TEST_MODE=false` and the webhook set up) | After the webhook fires, the row says the email bounced, in red |
+| INV-5  | Invite `bounced@resend.dev` (Resend's bounce test address; needs `RESEND_TEST_MODE=false` and the webhook set up) | After the webhook fires, the row says the email bounced, in red. Replaying that email's earlier `email.sent` message from the Resend webhook page leaves it bounced |
 | INV-6  | Invite `carol@test.local`, then Carol signs up at `/register` **without** the link | Onboarding shows "Alice invited you to join Acme as Member — Join Acme" above the create form; Join lands in `/app/acme` with the welcome toast, no duplicate org |
 | INV-7  | Invite an existing user of another org (Bob, member of Beta) to Acme | Inside Beta, a banner under the header offers "Join Acme"; after joining, the banner is gone and Bob is in `/app/acme` |
 | INV-8  | Signed in as someone else, check onboarding / the banner | Never shows an invitation addressed to another email |
@@ -265,6 +265,7 @@ Server rules are covered by `convex/invitations.test.ts`; these rows check the s
 | C5  | While a long answer streams, click **Stop**             | Generation aborts                                                 |
 | C6  | Spam 30 messages in 1 min                               | `chatSend` rate-limit triggers (also gates approvals). `POST https://<deployment>.convex.site/api/chat` → `404`: no chat entry point outside the metered mutations |
 | C7  | New chat (+), rename and delete a conversation          | Title updates; thread + messages removed                          |
+| C7b | Paste more than 8,000 characters and send               | Toast "Message too long" ("Message trop long" in FR), the text stays in the box, nothing is added to the thread |
 | C8  | From `/app/beta`, verify Acme threads are NOT listed    | Org isolation confirmed (scope `${orgId}:${userId}`)             |
 
 ## Level 6 — Security + deployment (5 min)
@@ -283,6 +284,7 @@ Server rules are covered by `convex/invitations.test.ts`; these rows check the s
 | S9a | Open a PR, then look at both Vercel projects | Each shows the PR's deployment as **Canceled** by the ignored build step. A PR that *builds* has a path to a deploy key — see `KNOWN_ISSUES.md` § "Vercel previews must never carry a deploy key" |
 | S10 | **Import a job ad refuses to reach inwards** | Paste, in turn: `http://169.254.169.254/latest/meta-data/`, `http://[::1]/`, `http://2130706433/`, `http://100.64.0.1/`, `http://printer.local/`, and a URL that 302s to any of them | All refused with `invalid_url`. The request is made by the deployment, not the browser, and its content comes back summarised by a model — so the channel is readable, not just reachable. `convex/lib/safeUrl.test.ts` holds the full table. The connection is also pinned to the addresses the check approved (DNS rebinding) — `convex/jobImportFetch.test.ts` covers it, and asserts the TLS server name is still the hostname |
 | S11 | **Where the evaluation runs** | Read a `report` request body in the Convex logs | It carries `provider: { data_collection: 'deny', allow_fallbacks: false }`, and the prompt carries the transcript but **not** the candidate's name |
+| S12 | **Access tokens stay out of Sentry**: with `VITE_SENTRY_DSN` set, open a candidate `/s/<token>` and a shared `/r/<token>` link, then throw from the console (`setTimeout(() => { throw new Error('probe') })`) | In the Sentry event, `request.url`, the transaction name and every navigation / fetch breadcrumb read `/s/[token]` and `/r/[token]`. `src/lib/sentry.test.ts` covers the scrub |
 
 ---
 
@@ -381,10 +383,11 @@ Safari is the one that matters: it takes the MP4 branch of the recorder.
 | ID1 | Decision | Set Shortlisted, then click it again | Sets, then clears. Shows who decided and when |
 | ID2 | Private note | Type a note, blur | Saved. Never appears on any candidate or shared surface |
 | ID3 | Share link | Share → 7 days → Create | Link copied. Opening it in a private window shows the report |
+| ID3b | Share expiry is bounded | Call `shares:create` with `expiresInDays` set to `0`, `-1`, `1.5`, `366`, `1e12` | Each refused with `invalid_expiry`, and no share appears in the list. `null` (never) and 1 to 365 whole days are the only accepted values |
 | ID4 | Share withholds | On the shared page, search the HTML | No recruiter note, no candidate email, phone, LinkedIn, CV link, or internal role title |
 | ID5 | Revoke | Revoke, reload the shared page | "This link was revoked". Playback URLs stop being issued |
 | ID6 | Expiry | Create a link, set `expiresAt` to the past | "This link has expired" |
-| ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions` on a closed role |
+| ID6b | **Expiry with a hostile clock** | Against the same expired link, call the deployment directly: `shares:view {token, now: 0}`, then `shares:sharedMediaUrls {token, now: 0}` | Both answer `expired` / `[]`. `now` is the viewer's clock and the viewer is whoever holds the link; it keeps the expiry visible without polling, and decides nothing. Same for `interview:questions`, `candidate:landing` and `sessions:linkStatus` on a closed role (both read `expired`), and `dashboard:overview {orgId, now: 0}` counts no invitation older than 30 days |
 | ID6c | Unresolved tokens never reach the limiter | Call `shares:recordView` with 40 random tokens | Each returns `null`; the share's `viewCount` is unchanged and no rate-limiter row is written for them — the bucket is keyed on the resolved share |
 | ID7 | Search | ⌘K, type three letters of a candidate's name | Finds them across roles. A member who cannot see a restricted role does **not** see its candidates here |
 | ID8 | **Removal ends access** | Share a restricted role with member B, have B create another role, remove B, complete an interview on each, re-invite B as a plain member | B receives no "report ready" email while removed, and after re-invite does **not** see the restricted role (its share row went with the membership) |

@@ -9,6 +9,26 @@ import { rateLimiter } from './rateLimiters'
 import schema from './schema'
 import type { Id } from './_generated/dataModel'
 
+vi.mock('./auth', () => ({
+  authComponent: {
+    safeGetAuthUser: async (ctx: {
+      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
+    }) => {
+      const identity = await ctx.auth.getUserIdentity()
+      return identity ? { _id: identity.subject } : null
+    },
+    getAuthUser: async (ctx: {
+      auth: { getUserIdentity: () => Promise<{ subject: string } | null> }
+    }) => {
+      const identity = await ctx.auth.getUserIdentity()
+      if (!identity) throw new Error('Unauthenticated')
+      return { _id: identity.subject }
+    },
+    registerRoutes: () => {},
+  },
+  createAuth: () => ({}),
+}))
+
 const modules = import.meta.glob('./**/*.ts')
 const NOW = 1_900_000_000_000
 const DAY = 24 * 60 * 60 * 1000
@@ -260,5 +280,57 @@ describe('shares.recordView', () => {
     expect(share?.viewCount).toBe(30)
     expect(share?.lastViewedAt).toBeTypeOf('number')
     expect(limit).toHaveBeenCalledTimes(35)
+  })
+})
+
+/**
+ * Audit 2026-09-22, h03. NaN, Infinity or a huge count wrote an expiry that
+ * never came; a negative one wrote a link dead at creation, still listed.
+ */
+describe('shares.create', () => {
+  let t: ReturnType<typeof newTest>
+  let sessionId: Id<'sessions'>
+
+  beforeEach(async () => {
+    vi.stubEnv('SITE_URL', 'https://interw.test')
+    t = newTest()
+    await seed(t)
+    sessionId = await t.run(async (ctx) => {
+      const session = (await ctx.db.query('sessions').first())!
+      const user = (await ctx.db.query('users').first())!
+      await ctx.db.insert('organizationMembers', {
+        orgId: session.orgId,
+        userId: user._id,
+        role: 'owner',
+        joinedAt: 0,
+      })
+      return session._id
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  const create = (expiresInDays: number | null) =>
+    t
+      .withIdentity({ subject: 'ba_1' })
+      .mutation(api.shares.create, { sessionId, expiresInDays })
+
+  it('accepts no expiry, or a whole number of days up to a year', async () => {
+    for (const days of [null, 1, 30, 365]) {
+      await expect(create(days)).resolves.toEqual({ url: expect.any(String) })
+    }
+  })
+
+  it('refuses any other expiry, and writes nothing', async () => {
+    for (const days of [0, -1, 1.5, 366, 1e12, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await expect(create(days)).rejects.toThrow(/invalid_expiry/)
+    }
+    const shares = await t.run(async (ctx) =>
+      ctx.db.query('reportShares').collect(),
+    )
+    // Only the one the seed wrote.
+    expect(shares).toHaveLength(1)
   })
 })

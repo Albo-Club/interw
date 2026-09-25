@@ -22,6 +22,7 @@ import {
   requireProjectAccess,
   requireProjectOwnerOrAdmin,
 } from './lib/projectAccess'
+import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate } from './lib/sessionState'
 import { generateToken } from './lib/tokens'
 import { eraseSession } from './purge'
@@ -287,7 +288,12 @@ export const linkStatus = query({
     if (!session) throw new ConvexError('not_found')
     const { project } = await requireProjectAccess(ctx, session.projectId)
     // No org to read: the guard above already refused one being deleted.
-    return evaluateSessionGate({ session, project, org: {}, now })
+    return evaluateSessionGate({
+      session,
+      project,
+      org: {},
+      now: effectiveNow(now),
+    })
   },
 })
 

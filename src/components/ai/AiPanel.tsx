@@ -345,10 +345,13 @@ export function AiPanel({
       })
       setAwaitingStream(true)
     } catch (err) {
+      const code = errorCode(err)
       toast.error(
-        errorCode(err) === 'rate_limited'
+        code === 'rate_limited'
           ? t('chat:errors.rate_limited')
-          : t('chat:errors.default'),
+          : code === 'prompt_too_long'
+            ? t('chat:errors.prompt_too_long')
+            : t('chat:errors.default'),
       )
       setInput(prompt)
     } finally {

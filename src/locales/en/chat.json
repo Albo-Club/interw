@@ -44,6 +44,7 @@
   },
   "errors": {
     "rate_limited": "Slow down — too many messages",
+    "prompt_too_long": "Message too long — shorten it and try again",
     "default": "Could not send message"
   },
   "imageNotShown": "[Image not shown]",

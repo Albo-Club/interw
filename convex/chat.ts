@@ -48,6 +48,9 @@ function emptyStreams(
 const ROUTE_CONTEXT_MAX = 200
 // Auto-title a thread from its first user message.
 const AUTO_TITLE_MAX = 80
+// A prompt is stored in the thread and sent to the model with every later
+// turn; nothing typed into the panel needs more.
+const PROMPT_MAX = 8_000
 
 async function authorizeThread(
   ctx: AnyCtx,
@@ -176,6 +179,7 @@ export const sendMessage = mutation({
   },
   handler: async (ctx, { orgId, threadId, prompt, context }) => {
     const { user } = await requireOrgMember(ctx, orgId)
+    if (prompt.length > PROMPT_MAX) throw new ConvexError('prompt_too_long')
     await consumeLimit(ctx, 'chatSend', user._id)
     const scope = scopeKey(orgId, user._id)
     const meta = await getThreadMetadata(ctx, components.agent, { threadId })

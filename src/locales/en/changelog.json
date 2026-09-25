@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "hardening-sep-25": {
+      "title": "More hardening under the hood",
+      "body": "We hardened how shared report links, candidate links and our error monitoring handle access, and tightened a few limits: an assistant message now has a maximum length, and a share link lasts at most a year. A bounced email also stays marked as bounced in your delivery list."
+    },
     "delete-organization": {
       "title": "Delete an organization",
       "body": "An organization's owner can now delete it from its settings, after typing its name to confirm. Every role, candidate recording, CV, transcript, report and assistant conversation in it is erased for good, and its members are told by email. Being the only owner of an organization no longer stands between you and deleting your account: delete the organization first, and your account is free to go."

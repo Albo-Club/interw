@@ -260,6 +260,30 @@ describe('the dashboard', () => {
     expect(overview.recent[0]).toMatchObject({ sessionId, score: 83 })
   })
 
+  // Audit 2026-09-22, h04. The activity window took the caller's clock raw,
+  // so `now: 0` stretched "the last 30 days" back to the epoch.
+  it('does not let the caller move the activity window', async () => {
+    await t.run(async (ctx) =>
+      ctx.db.insert('sessions', {
+        orgId: f.orgId,
+        projectId: f.projectId,
+        accessToken: 'w'.repeat(43),
+        candidateName: 'Alex Martin',
+        candidateEmail: 'alex@example.test',
+        status: 'pending',
+        lastQuestionIndex: 0,
+        invitedBy: f.userId,
+        invitedAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
+      }),
+    )
+    const overview = await asRecruiter(t).query(api.dashboard.overview, {
+      orgId: f.orgId,
+      now: 0,
+    })
+    expect(overview.pending).toBe(1)
+    expect(overview.invitedInWindow).toBe(0)
+  })
+
   it('has the queue write the headline onto the session', async () => {
     const sessionId = await t.run(async (ctx) =>
       ctx.db.insert('sessions', {

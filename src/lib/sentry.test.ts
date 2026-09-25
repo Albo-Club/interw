@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { scrubCandidateTokens } from './sentry'
+import { scrubAccessTokens } from './sentry'
 
 const token = 'tDRtkHnQY0MiWduSUxuwcZUMacZvWgtpEqZ88H_Uf-J'
 
-/** E10. The token left the browser in every event from the candidate surface. */
-describe('scrubCandidateTokens', () => {
+/**
+ * E10; audit 2026-09-22, h10. A candidate's or a share holder's token left
+ * the browser in every event from the page it opens.
+ */
+describe('scrubAccessTokens', () => {
   it('masks the token wherever it appears in an event', () => {
     const event = {
       request: { url: `https://interw.com/s/${token}/interview?camera=x` },
@@ -14,10 +17,26 @@ describe('scrubCandidateTokens', () => {
         { category: 'navigation', data: { from: `/s/${token}`, to: `/s/${token}/check` } },
       ],
     }
-    const scrubbed = JSON.stringify(scrubCandidateTokens(event))
+    const scrubbed = JSON.stringify(scrubAccessTokens(event))
     expect(scrubbed).not.toContain(token)
-    expect(scrubCandidateTokens(event).request.url).toBe(
+    expect(scrubAccessTokens(event).request.url).toBe(
       'https://interw.com/s/[token]/interview?camera=x',
+    )
+  })
+
+  it('masks a share token in a /r/ report link', () => {
+    const event = {
+      request: { url: `https://interw.com/r/${token}` },
+      transaction: `/r/${token}`,
+      breadcrumbs: [
+        { category: 'fetch', data: { url: `https://interw.com/r/${token}?x=1` } },
+        { category: 'xhr', data: { url: `/r/${token}` } },
+      ],
+    }
+    const scrubbed = JSON.stringify(scrubAccessTokens(event))
+    expect(scrubbed).not.toContain(token)
+    expect(scrubAccessTokens(event).request.url).toBe(
+      'https://interw.com/r/[token]',
     )
   })
 
@@ -30,13 +49,13 @@ describe('scrubCandidateTokens', () => {
         },
       ],
     }
-    const scrubbed = JSON.stringify(scrubCandidateTokens(event))
+    const scrubbed = JSON.stringify(scrubAccessTokens(event))
     expect(scrubbed).not.toContain('482913')
     expect(scrubbed).toContain('code=[code]')
   })
 
   it('leaves other paths alone', () => {
     const event = { request: { url: 'https://interw.com/app/acme/roles' } }
-    expect(scrubCandidateTokens(event)).toEqual(event)
+    expect(scrubAccessTokens(event)).toEqual(event)
   })
 })

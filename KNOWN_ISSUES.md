@@ -637,6 +637,21 @@ back into real bytes. The one thing that would break it is moving the pnpm
 store off the workspace volume: `clonefile()` cannot cross volumes, and the
 275 MB would become 6.8 GB overnight.
 
+## Agent worktrees sit inside the repository
+
+Claude Code checks each agent out under `.claude/worktrees/<name>/` — a full
+copy of the repository, inside it. Two globs then reach every copy: `tsc`'s
+`include: ["**/*.ts", …]` and `eslint .`. With a handful of agents running,
+`pnpm lint` in the main checkout linted every one of them and ran out of
+memory, and `tsc` reported each type error once per copy.
+
+Both ignore the directory now (`globalIgnores` in `eslint.config.mjs`,
+`exclude` in `tsconfig.json`). The trap in the second: setting `exclude`
+**replaces** TypeScript's default instead of extending it, so `node_modules`
+has to be listed again or `tsc` walks into it. Vitest is unaffected — its
+`include` is rooted at `src/` and `convex/`. A new tool that globs from the
+repository root needs the same exclusion.
+
 ## Convex skills were pruned — do not re-vendor them
 
 We vendored 6 Convex skills. **5 were removed; only `convex-create-component`
@@ -845,6 +860,19 @@ resolves to a public host. The discriminator is `SITE_URL` rather than
 and a public address in front of it, so an `APP_ENV` guard would have stayed
 silent exactly where it was needed. A deployment answering on a public host
 has real people signing up on it, whatever it calls its environment.
+
+## Resend delivery events arrive in any order
+
+The delivery webhook goes through Svix, which retries a failed delivery for up
+to a day. A retried `email.sent` can therefore land after the `email.bounced`
+it preceded, and writing each event's status as it came used to turn a bounce
+back into "sent" — the recruiter lost the one signal the log exists for.
+
+`convex/emailEvents.ts` ranks statuses (`sent` < `delivered` < the outcomes:
+bounced, complained, failed) and never moves a row backwards. Outcomes share a
+rank, so a complaint still lands on a delivered mail. The event-to-status
+table is a `Map`: an object literal indexed by the event type answers
+`'constructor'` with a function.
 
 ## Resend: two integrations (runtime Convex vs Claude Code plugin)
 

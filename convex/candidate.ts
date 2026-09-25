@@ -41,6 +41,7 @@ import {
   candidateSessionReturns,
   sessionGateReturns,
 } from './lib/candidateReturns'
+import { effectiveNow } from './lib/clock'
 import { evaluateSessionGate, loadProgress } from './lib/sessionState'
 import { looksLikeToken } from './lib/tokens'
 import {
@@ -117,7 +118,12 @@ export const landing = query({
       session: toCandidateSessionView(session),
       project: toCandidateProjectView(project, progress.questions.length),
       gate: {
-        ...evaluateSessionGate({ session, project, org, now }),
+        ...evaluateSessionGate({
+          session,
+          project,
+          org,
+          now: effectiveNow(now),
+        }),
         // The value `interview.questions` resumes at, from the same loader,
         // so the welcome screen cannot announce one question and the
         // interview open another.

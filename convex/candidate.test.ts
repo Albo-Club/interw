@@ -202,6 +202,38 @@ describe('candidate.landing', () => {
     expect(view.gate.canRecord).toBe(false)
   })
 
+  // Audit 2026-09-22, h01. The gate read the caller's clock raw, so a caller
+  // claiming an earlier one saw an expired role as open.
+  it('does not reopen an expired role for a caller whose clock is in the past', async () => {
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.acmeSessionId))!
+      await ctx.db.patch('projects', session.projectId, {
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+      })
+    })
+    const view = await t.query(api.candidate.landing, {
+      token: s.acmeToken,
+      now: 0,
+    })
+    expect(view.gate.state).toBe('expired')
+  })
+
+  // Audit 2026-09-22, h01. The gate read the caller's clock raw, so a caller
+  // claiming an earlier one saw an expired role as open.
+  it('does not reopen an expired role for a caller whose clock is in the past', async () => {
+    await t.run(async (ctx) => {
+      const session = (await ctx.db.get('sessions', s.acmeSessionId))!
+      await ctx.db.patch('projects', session.projectId, {
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+      })
+    })
+    const view = await t.query(api.candidate.landing, {
+      token: s.acmeToken,
+      now: 0,
+    })
+    expect(view.gate.state).toBe('expired')
+  })
+
   it('closes the link once the role is archived', async () => {
     await t.run(async (ctx) => {
       const session = (await ctx.db.get('sessions', s.acmeSessionId))!

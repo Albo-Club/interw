@@ -22,6 +22,24 @@ const DEFAULT_QUESTION_COUNT = 6
 const DEFAULT_CRITERIA_COUNT = 4
 const MIN_USABLE_TEXT = 400
 
+/** What the draft schema accepts, and so what a caller may ask the model for. */
+const QUESTIONS = { min: 3, max: 15 }
+const CRITERIA = { min: 2, max: 8 }
+
+/**
+ * A requested count, brought inside what the schema will accept. Asking the
+ * model for a draft the schema then refuses only burns a paid call.
+ */
+function boundedCount(
+  requested: number | undefined,
+  fallback: number,
+  bounds: { min: number; max: number },
+): number {
+  if (requested === undefined) return fallback
+  if (!Number.isFinite(requested)) throw new ConvexError('invalid_count')
+  return Math.min(bounds.max, Math.max(bounds.min, Math.round(requested)))
+}
+
 const draftSchema = z.object({
   title: z.string().min(1).max(120),
   jobTitle: z.string().min(1).max(120),
@@ -32,8 +50,8 @@ const draftSchema = z.object({
         content: z.string().min(10).max(1000),
       }),
     )
-    .min(3)
-    .max(15),
+    .min(QUESTIONS.min)
+    .max(QUESTIONS.max),
   criteria: z
     .array(
       z.object({
@@ -42,8 +60,8 @@ const draftSchema = z.object({
         weight: z.number().int().min(1).max(100),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(CRITERIA.min)
+    .max(CRITERIA.max),
 })
 
 export type InterviewDraft = z.infer<typeof draftSchema>
@@ -69,6 +87,16 @@ export const importFromUrl = action({
       internal.jobImport.resolveImportContext,
       { projectId: args.projectId },
     )
+    const questionCount = boundedCount(
+      args.questionCount,
+      DEFAULT_QUESTION_COUNT,
+      QUESTIONS,
+    )
+    const criteriaCount = boundedCount(
+      args.criteriaCount,
+      DEFAULT_CRITERIA_COUNT,
+      CRITERIA,
+    )
     await consumeLimit(ctx, 'jobImport', context.actorId)
 
     // Fetching happens in the Node runtime, which is the only place with a
@@ -90,8 +118,6 @@ export const importFromUrl = action({
     // and a model handed 80 characters will invent an entire role.
     if (pageText.length < MIN_USABLE_TEXT) throw new ConvexError('page_too_thin')
 
-    const questionCount = args.questionCount ?? DEFAULT_QUESTION_COUNT
-    const criteriaCount = args.criteriaCount ?? DEFAULT_CRITERIA_COUNT
     const { system, user } = jobImportPrompt({
       language: context.language,
       pageText,

@@ -162,5 +162,38 @@ describe('the retention clock', () => {
   })
 })
 
+/**
+ * Audit 2026-09-22, h01/h04. The recruiter's link status took the caller's
+ * clock raw, so a caller claiming an earlier one saw an expired role as open.
+ */
+describe('sessions.linkStatus', () => {
+  it('does not reopen an expired role for a caller whose clock is in the past', async () => {
+    const t = newTest()
+    const f = await seed(t)
+    const sessionId = await t.run(async (ctx) => {
+      await ctx.db.patch('projects', f.projectId, {
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+      })
+      return await ctx.db.insert('sessions', {
+        orgId: f.orgId,
+        projectId: f.projectId,
+        accessToken: 'l'.repeat(43),
+        candidateName: 'Alex Martin',
+        candidateEmail: 'alex@example.test',
+        status: 'pending',
+        lastQuestionIndex: 0,
+        invitedBy: f.recruiter,
+        invitedAt: 0,
+      })
+    })
+
+    const gate = await asRecruiter(t).query(api.sessions.linkStatus, {
+      sessionId,
+      now: 0,
+    })
+    expect(gate.state).toBe('expired')
+  })
+})
+
 /** Six months from the invitation. Mirrors INVITED_RETENTION_MS. */
 const INVITED_RETENTION_MS_EXPECTED = 183 * 24 * 60 * 60 * 1000

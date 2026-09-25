@@ -7,7 +7,9 @@ export default defineConfig([
   ...convexPlugin.configs.recommended,
   // `.agents/skills` holds upstream skill content vendored verbatim, including
   // illustrative .tsx examples that live outside any tsconfig project — linting
-  // them only produces parser errors.
+  // them only produces parser errors. `.claude/worktrees` holds agents' full
+  // checkouts of this repository: linting them multiplies the work by the
+  // number of agents, and ran out of memory.
   globalIgnores([
     'convex/_generated',
     '.output',
@@ -15,6 +17,7 @@ export default defineConfig([
     'dist',
     '.agents/skills',
     '.claude/skills',
+    '.claude/worktrees',
   ]),
   // The candidate surface (/s/$token/...) is a separate bundle on purpose:
   // it must stay small and predictable because it runs on a stranger's phone,

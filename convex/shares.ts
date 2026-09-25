@@ -100,6 +100,9 @@ export const forReport = query({
   },
 })
 
+/** The longest a share link may be set to live, in days. */
+const MAX_EXPIRY_DAYS = 365
+
 export const create = mutation({
   args: {
     sessionId: v.id('sessions'),
@@ -110,6 +113,14 @@ export const create = mutation({
     const session = await ctx.db.get('sessions', sessionId)
     if (!session) throw new ConvexError('not_found')
     const { user } = await requireProjectAccess(ctx, session.projectId)
+    // NaN or Infinity would write an expiry that never comes, a negative one
+    // a link dead at creation. `null` is how to ask for no expiry.
+    const validExpiry =
+      expiresInDays === null ||
+      (Number.isInteger(expiresInDays) &&
+        expiresInDays >= 1 &&
+        expiresInDays <= MAX_EXPIRY_DAYS)
+    if (!validExpiry) throw new ConvexError('invalid_expiry')
     const report = await ctx.db
       .query('reports')
       .withIndex('by_session', (q) => q.eq('sessionId', sessionId))

@@ -74,6 +74,8 @@ export const recent = query({
     const visibleByProject = new Map<Id<'projects'>, boolean>()
     const visible: typeof rows = []
     for (const row of rows) {
+      // Team invites are admin data (`invitations.listForOrg` is admin-only).
+      if (row.invitationId && member.role === 'member') continue
       if (row.sessionId) {
         const session = await ctx.db.get('sessions', row.sessionId)
         if (!session) continue

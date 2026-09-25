@@ -106,9 +106,9 @@ export function UserButton() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link to="/app">
+            <Link to="/app/onboarding">
               <Building2 className="mr-2 size-4" />
-              {t('account:menu.switchOrg')}
+              {t('account:menu.createOrg')}
             </Link>
           </DropdownMenuItem>
           {user.superAdmin && (

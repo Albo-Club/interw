@@ -25,6 +25,25 @@
       "insufficient_role": "Réservé aux admins ou propriétaires",
       "invalid_name": "Nom invalide",
       "default": "Échec de l'enregistrement"
+    },
+    "danger": {
+      "title": "Supprimer l'organisation",
+      "description": "Supprimez définitivement {{name}} et tout ce qu'elle contient. Cette action est irréversible.",
+      "roles_one": "{{count}} poste, avec ses questions et ses enregistrements",
+      "roles_other": "{{count}} postes, avec leurs questions et leurs enregistrements",
+      "candidates_one": "{{count}} candidat : ses enregistrements d'entretien, son CV, ses transcriptions et son rapport",
+      "candidates_other": "{{count}} candidats : leurs enregistrements d'entretien, CV, transcriptions et rapports",
+      "assistant": "Toutes les conversations avec l'assistant tenues dans cette organisation",
+      "invitations_one": "{{count}} invitation en attente",
+      "invitations_other": "{{count}} invitations en attente",
+      "members_one": "L'accès de {{count}} membre, qui sera prévenu par e-mail",
+      "members_other": "L'accès de {{count}} membres, qui seront prévenus par e-mail",
+      "action": "Supprimer l'organisation…",
+      "dialogTitle": "Supprimer {{name}} ?",
+      "dialogDescription": "Tout le monde perd l'accès immédiatement, et les données sont effacées définitivement dans l'heure. Les liens candidats et les rapports partagés cessent de fonctionner. Aucun retour en arrière n'est possible.",
+      "confirmLabel": "Saisissez <strong>{{name}}</strong> pour confirmer",
+      "confirm": "Supprimer définitivement",
+      "deleted": "{{name}} est en cours de suppression. Ses membres ont été prévenus."
     }
   },
   "members": {
@@ -39,7 +58,7 @@
     "roleUpdated": "Rôle mis à jour",
     "memberRemoved": "Membre retiré",
     "removeTitle": "Retirer ce membre ?",
-    "removeDescription": "<strong>{{label}}</strong> perdra l'accès immédiatement. Vous pourrez le réinviter plus tard.",
+    "removeDescription": "<strong>{{label}}</strong> perdra l'accès immédiatement. Cette personne pourra être réinvitée plus tard.",
     "errors": {
       "insufficient_role": "Réservé aux admins ou propriétaires",
       "owner_only": "Seul un propriétaire peut effectuer cette action",
@@ -51,28 +70,61 @@
   "invitations": {
     "noAccessTitle": "Invitations",
     "noAccessDescription": "Seuls les admins et propriétaires peuvent inviter des personnes.",
-    "inviteTitle": "Inviter un membre",
-    "inviteDescription": "Il recevra un e-mail avec un lien pour accepter.",
-    "email": "E-mail",
+    "inviteTitle": "Inviter des collègues",
+    "inviteDescription": "Chaque personne reçoit un e-mail avec un lien pour rejoindre l'organisation. Le lien reste valable 7 jours.",
+    "emails": "Adresses e-mail",
+    "emailsPlaceholder": "alex@entreprise.fr, sam@entreprise.fr…",
+    "emailsHint": "Collez une ou plusieurs adresses, séparées par des virgules ou des retours à la ligne.",
+    "invalidInList": "Une de ces adresses n'est pas valide",
     "role": "Rôle",
-    "send": "Envoyer l'invitation",
-    "sending": "Envoi…",
-    "sent": "Invitation envoyée à {{email}}",
+    "roleDescriptions": {
+      "member": "Crée des postes, invite des personnes candidates et évalue les entretiens.",
+      "admin": "Tout ce que fait un membre, plus inviter des collègues et gérer l'organisation."
+    },
+    "send": "Envoyer les invitations",
+    "sentCount_one": "{{count}} invitation envoyée",
+    "sentCount_other": "{{count}} invitations envoyées",
+    "resultSent": "Invitation envoyée",
+    "resultNotSent": "Non envoyée : la limite d'invitations est atteinte",
     "pendingTitle": "Invitations en attente",
-    "pendingDescription": "Les invitations expirent après 7 jours.",
+    "pendingDescription": "Les invitations expirent après 7 jours. Les renvoyer leur redonne 7 jours.",
     "loading": "Chargement…",
     "empty": "Aucune invitation en attente.",
-    "expiresOn": "{{role}} · expire le {{date}}",
+    "sentBy": "Invitation de {{name}}, le {{date}}",
+    "sentOn": "Envoyée le {{date}}",
+    "expiresOn": "Expire le {{date}}",
+    "expiredOn": "A expiré le {{date}}",
+    "expired": "Expirée",
+    "delivery": {
+      "bounced": "L'e-mail n'a pas pu être remis. Vérifiez l'adresse, puis révoquez et invitez à nouveau.",
+      "complained": "L'e-mail a été signalé comme spam par son destinataire.",
+      "failed": "L'e-mail n'a pas pu être envoyé. Essayez de le renvoyer."
+    },
+    "copyLink": "Copier le lien",
+    "linkCopied": "Lien d'invitation copié",
+    "copyFailed": "Impossible de copier le lien",
+    "resend": "Renvoyer",
+    "resent": "Invitation renvoyée à {{email}}",
+    "resendFailed": "Impossible de renvoyer l'invitation",
     "revoke": "Révoquer",
+    "revokeTitle": "Révoquer cette invitation ?",
+    "revokeDescription": "Le lien envoyé à <strong>{{email}}</strong> ne fonctionnera plus. Vous pourrez inviter cette adresse à nouveau plus tard.",
+    "revokeConfirm": "Révoquer l'invitation",
     "revoked": "Invitation révoquée",
     "revokeFailed": "Échec de la révocation",
     "errors": {
-      "already_invited": "Une invitation est déjà en attente pour cet e-mail",
+      "already_invited": "Une invitation est déjà en attente",
+      "already_member": "Déjà membre de cette organisation",
       "invalid_email": "E-mail invalide",
       "insufficient_role": "Vous devez être admin ou propriétaire pour inviter",
       "not_a_member": "Vous n'êtes pas membre de cette organisation",
-      "rate_limited": "Trop d'invitations — ralentissez et réessayez plus tard",
+      "rate_limited": "Limite d'invitations atteinte : environ 20 par heure. Réessayez plus tard.",
       "default": "Échec de l'envoi de l'invitation"
     }
+  },
+  "errors": {
+    "confirm_mismatch": "Le nom saisi ne correspond pas à celui de l'organisation.",
+    "org_deleting": "Cette organisation est déjà en cours de suppression.",
+    "insufficient_role": "Seul un propriétaire peut supprimer l'organisation."
   }
 }

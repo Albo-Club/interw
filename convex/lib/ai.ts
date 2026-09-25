@@ -102,6 +102,10 @@ export class AiError extends Error {
   constructor(
     message: string,
     readonly cause_?: unknown,
+    /** The provider's HTTP status, when the failure is a response — so a
+     *  caller never has to read it back out of the message, which quotes
+     *  the provider's body. */
+    readonly status?: number,
   ) {
     super(message)
     this.name = 'AiError'
@@ -253,6 +257,9 @@ const completionResponseSchema = z.object({
     .object({
       prompt_tokens: z.number().optional(),
       completion_tokens: z.number().optional(),
+      completion_tokens_details: z
+        .object({ reasoning_tokens: z.number().optional() })
+        .nullish(),
     })
     .optional(),
 })
@@ -290,7 +297,12 @@ export type CompleteResult<T> = {
   model: string
   /** Tokens the provider billed, when it reports them. Written to `jobLog`
    *  so the cost of a report is a query rather than a guess. */
-  usage: { promptTokens: number; completionTokens: number } | null
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    /** The reasoning share of `completionTokens`, when reported. */
+    reasoningTokens?: number
+  } | null
 }
 
 /**
@@ -365,6 +377,8 @@ export async function complete<T>(
       ? {
           promptTokens: envelope.data.usage.prompt_tokens ?? 0,
           completionTokens: envelope.data.usage.completion_tokens ?? 0,
+          reasoningTokens:
+            envelope.data.usage.completion_tokens_details?.reasoning_tokens,
         }
       : null,
   }
@@ -427,13 +441,16 @@ async function postWithRetry(
       const detail = (await response.text()).slice(0, 500)
       const error = new AiError(
         `${label} failed with HTTP ${response.status}: ${detail}`,
+        undefined,
+        response.status,
       )
       if (!isRetryableStatus(response.status)) throw error
       lastError = error
     } catch (error) {
-      if (error instanceof AiError && !/HTTP 429|HTTP 5/.test(error.message)) {
-        throw error
-      }
+      // Only a response already judged final by its status reaches here as
+      // an AiError. Never re-read the message: it quotes the provider's body,
+      // and a 400 whose body says "HTTP 503" is still a 400.
+      if (error instanceof AiError) throw error
       lastError = error
     }
     if (attempt < MAX_ATTEMPTS) await sleep(RETRY_BASE_MS * 2 ** (attempt - 1))

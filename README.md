@@ -128,7 +128,7 @@ It mirrors your dev secrets onto that project's production deployment,
 generates a fresh `BETTER_AUTH_SECRET` and `PURGE_HASH_SALT`, sets
 `APP_ENV=production` — staging included, it is served over HTTPS — and sets
 `SITE_URL` to the domain you give it. Use the domain you will actually serve:
-Better Auth builds magic-link URLs from it and accepts no other origin. For
+Better Auth builds email links from it and accepts no other origin. For
 production, give it the **prod** bucket and a key pair scoped to that bucket
 only; staging keeps the dev bucket.
 
@@ -169,9 +169,9 @@ Add the domain under **Settings → Domains**, add it to the bucket's CORS
 
 **5. Verify**
 
-Run the Level 6 rows in [TESTING.md](TESTING.md), then send yourself a magic
-link from the live domain — it must point at
-`https://<your-domain>/api/auth/magic-link/verify`, not `localhost`. If you
+Run the Level 6 rows in [TESTING.md](TESTING.md), then send yourself a
+sign-in code from the live domain — the email's button must point at
+`https://<your-domain>/login/code#…`, not `localhost`. If you
 use Google sign-in, register `https://<your-domain>/api/auth/callback/google`
 for each environment on the OAuth client.
 

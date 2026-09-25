@@ -127,12 +127,14 @@ export const highlightKindValidator = v.union(
 /** One pipeline step. Mirrors the chain in convex/pipeline.ts.
  *  `relaunch` is not a step but an operator's decision to re-run one, kept in
  *  the same log so the reason a session moved again is where the rest of its
- *  history is. */
+ *  history is. `purge` is the retention job (convex/retention.ts), logged
+ *  when it fails for one session so that failure is not silent. */
 export const jobStepValidator = v.union(
   v.literal('transcribe'),
   v.literal('report'),
   v.literal('notify'),
   v.literal('relaunch'),
+  v.literal('purge'),
 )
 
 export const jobOutcomeValidator = v.union(
@@ -257,6 +259,21 @@ export default defineSchema({
   userPrefs: defineTable({
     userId: v.id('users'),
     lastOrgSlug: v.optional(v.string()),
+    // Where the last email change stands. Better Auth keeps nothing
+    // queryable between its steps: `approve` (link mailed to the current
+    // address), `verify` (link mailed to the new one), `done`. `at` is when
+    // the step began — its link expires an hour later.
+    emailChange: v.optional(
+      v.object({
+        newEmail: v.string(),
+        step: v.union(
+          v.literal('approve'),
+          v.literal('verify'),
+          v.literal('done'),
+        ),
+        at: v.number(),
+      }),
+    ),
   }).index('by_user', ['userId']),
 
   organizations: defineTable({
@@ -266,6 +283,10 @@ export default defineSchema({
     logoStorageId: v.optional(v.id('_storage')),
     createdBy: v.id('users'),
     createdAt: v.number(),
+    /** Set when an owner asks for the organisation to be deleted. From then
+     *  on it is frozen — no member, candidate or share link gets in — while
+     *  convex/orgErasure.ts erases it and finally deletes this row. */
+    deletingAt: v.optional(v.number()),
   })
     .index('by_slug', ['slug'])
     .index('by_logoStorageId', ['logoStorageId']),
@@ -577,6 +598,8 @@ export default defineSchema({
     providerId: v.optional(v.string()),
     error: v.optional(v.string()),
     sessionId: v.optional(v.id('sessions')),
+    // Set on team invitations, so the pending row can show a bounce.
+    invitationId: v.optional(v.id('invitations')),
     createdAt: v.number(),
   })
     .index('by_org_and_created', ['orgId', 'createdAt'])
@@ -585,7 +608,8 @@ export default defineSchema({
     // Erasure has to be able to find every row that names a candidate, and
     // the report notification has to be able to ask "did I already send this
     // one?" exactly rather than by scanning the last 200 emails of the org.
-    .index('by_session', ['sessionId']),
+    .index('by_session', ['sessionId'])
+    .index('by_invitation', ['invitationId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,
    *  not the address: a deletion register must be able to answer "did you
@@ -600,6 +624,7 @@ export default defineSchema({
       v.literal('retention'),
       v.literal('candidate_request'),
       v.literal('recruiter_delete'),
+      v.literal('org_delete'),
     ),
     objectsDeleted: v.number(),
     purgedAt: v.number(),
@@ -627,7 +652,14 @@ export default defineSchema({
     sessionId: v.id('sessions'),
     step: jobStepValidator,
     outcome: jobOutcomeValidator,
+    /** The answer a `transcribe` row is about; one job runs per answer. */
+    segmentId: v.optional(v.id('segments')),
+    /** Which real attempt at this step (for this answer) the row belongs to,
+     *  counted from the log itself — relaunches included. */
     attempt: v.number(),
+    /** The operator behind a `relaunch`. An id, never an address: this log
+     *  is read back on the recruiter's candidate page. */
+    actorId: v.optional(v.id('users')),
     durationMs: v.optional(v.number()),
     error: v.optional(v.string()),
     /** What the step cost, when the provider says. Without these, "what does
@@ -635,10 +667,16 @@ export default defineSchema({
      *  under every other question about pricing this product. */
     promptTokens: v.optional(v.number()),
     completionTokens: v.optional(v.number()),
+    /** The part of `completionTokens` a reasoning model spent thinking —
+     *  billed, never seen. Only when the provider reports it. */
+    reasoningTokens: v.optional(v.number()),
     audioSeconds: v.optional(v.number()),
     at: v.number(),
   })
     .index('by_session', ['sessionId'])
+    // Per answer, so counting one transcription's attempts does not read —
+    // and conflict with — the rows its sibling answers are writing.
+    .index('by_attempt', ['sessionId', 'step', 'segmentId', 'outcome'])
     .index('by_step_and_outcome', ['step', 'outcome', 'at'])
     .index('by_org_and_at', ['orgId', 'at']),
 

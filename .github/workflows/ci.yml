@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -38,8 +39,15 @@ jobs:
   # replaces what `main` put on staging until the next deploy. Only code that
   # passed `check` gets that far, one run at a time, never cancelled halfway
   # through a deploy.
+  #
+  # Not on pull requests while the product is being built: staging is a single
+  # deployment, so per-PR runs queue one behind another and each one overwrites
+  # staging with unmerged code. It runs after every merge to `main` and on
+  # demand (Actions → CI → Run workflow, on any branch). Once real candidates
+  # depend on it, drop the `if:` to gate every PR again.
   e2e:
     needs: check
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     concurrency:
       group: e2e-staging

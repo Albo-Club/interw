@@ -1944,6 +1944,31 @@ Do not spend the afternoon on it: run the candidate e2e in CI, where the
 runner reaches the deployment directly. Locally, `pnpm test` covers the
 reducer, the recorder and the server; the browser path needs CI or a phone.
 
+## Playwright's Linux WebKit cannot record: the e2e runs on macOS
+
+Playwright's WebKit for Linux (WebKit 26.6, Playwright webkit v2359 on
+`ubuntu-latest`) has **no `MediaRecorder` at all**: `page.evaluate` throws
+`ReferenceError: Can't find variable: MediaRecorder` (measured on CI,
+2026-09-25). The candidate page then detects no recording format and shows
+"This browser can't record video interviews", so no `<video>` is ever
+rendered and `e2e/interview.spec.ts` fails at its first preview check with
+"element(s) not found". No fake device, `getUserMedia` stub or audio-only
+path can help: nothing can be recorded. Safari has had `MediaRecorder` since
+14.1, so this is the Linux build, not the product.
+
+The CI `e2e` job therefore runs on `macos-latest`, where Playwright's WebKit
+records, and both browsers run in that one job: split into a Linux and a macOS
+job, the two took two places in the `e2e-staging` concurrency group and a run
+queued on `main` cancelled the waiting one. Running `--project=webkit` on a
+Linux machine reproduces the failure; it does not prove a regression.
+
+Only two branches of the device check render no `<video>`: a browser that
+encodes no format (above), and a camera that failed as busy or missing while
+the microphone worked ("Audio only — your camera isn't available"). A refused
+permission keeps the `<video>` on screen, so "not found" never means "no
+permission". To tell them apart, read the page snapshot in the report's
+`error-context.md`.
+
 ## The candidate surface switches the shared i18n instance
 
 `useCandidateLanguage` calls `i18n.changeLanguage(project.language)` on the

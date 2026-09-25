@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "candidate-leave-guard": {
+      "title": "Le candidat est prévenu avant de perdre une réponse",
+      "body": "Un candidat qui fait Retour ou ferme l'onglet pendant qu'une réponse s'enregistre, s'envoie ou attend un nouvel essai doit désormais confirmer ; s'il part quand même, le journal de l'entretien le note, et une réponse manquante ne passe plus pour une question sautée. Un lien ouvert sans https le dit, au lieu d'accuser le navigateur, chaque écran de l'entretien a son propre titre, et nos rapports d'erreur ne conservent plus rien des liens de partage de rapport."
+    },
     "data-correctness": {
       "title": "Des chiffres justes, et des invitations qui se ferment à temps",
       "body": "Le tableau de bord ne réduit plus ses chiffres à mesure que votre organisation grandit : un nombre qui atteint notre limite de comptage s’affiche désormais « 400+ ». Les invitations d’un poste dont la date limite est passée depuis plus d’un jour sont marquées expirées. Un renvoi vers une adresse qui a rejeté l’e-mail est refusé au lieu d’être renvoyé, et un rejet ne peut plus redevenir « envoyé ». Deux postes au même intitulé ont toujours des liens distincts."

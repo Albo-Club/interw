@@ -1753,6 +1753,22 @@ and handing a transcription model a WebM **video** container is the difference
 between a timestamped transcript and a provider error. The extra upload is a
 few hundred kilobytes against a recording of tens of megabytes.
 
+**The risk is Safari, iOS above all.** WebKit has a history of misbehaving
+with two `MediaRecorder`s live on the same tracks: one of them returns an
+empty blob, `stop()` never fires its final `dataavailable`, or `start()`
+throws `InvalidStateError`. Nothing in CI catches it — the e2e WebKit project
+runs desktop WebKit on a fake device, not iOS Safari on a real camera — so the
+only guard is TESTING.md IB10 played **on an iPhone** after every change to
+`src/lib/media/recorder.ts` or any iOS major. The symptom to look for: an
+answer with an audio object and no video (or the reverse) while the screen
+said it saved normally, or a "Saving…" that never ends.
+
+If it breaks, the fallback is one recorder: record video-with-sound only, and
+extract the audio track server-side at transcription time (the transcription
+job would take the video key and demux before calling the provider). That
+costs a larger download per transcription and a demux step, which is why it is
+not the default.
+
 ## An answer is saved when its audio lands; the video is extra
 
 The candidate runner uploads the audio, calls `markSegmentUploaded`, and only
@@ -1768,6 +1784,25 @@ sits behind it. A player given a signed URL for it gets a 404 that looks like
 a signing bug. There is no `videoUploaded` column yet — adding one is a schema
 change, outside the candidate surface — so until then, treat a failed video
 load on a segment as "this answer is audio only", not as an error.
+
+## E2E fixtures are opt-in per deployment
+
+`convex/e2e.ts` holds the browser test's seed (`seedE2eSession`) and its
+database check (`e2eSessionState`). They are internal functions, so only a
+deploy key reaches them — but a deploy key is exactly what a production
+deploy has too, and `npx convex run e2e:seedE2eSession` against production
+would create a fake org and a real outgoing email.
+
+So each fixture refuses unless the deployment's Convex env has
+`E2E_FIXTURES=enabled`. Set it on dev and on staging, never on production.
+The gate is an explicit opt-in rather than an `APP_ENV` check because staging
+— where CI runs the browser test — runs with `APP_ENV=production` (see
+README § deployment); an `APP_ENV === 'development'` gate would have turned
+the e2e job red on staging and left nothing to tell prod from staging.
+
+The refusal is a plain `Error` with an English message, not a `ConvexError`
+code: nobody but a developer ever sees it, and a code would need user-facing
+copy in `errors:codes`.
 
 ## Headless Chromium in the cloud sandbox cannot reach a Convex deployment
 

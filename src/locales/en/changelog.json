@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "candidate-leave-guard": {
+      "title": "Candidates are warned before losing an answer",
+      "body": "A candidate who presses Back or closes the tab while an answer is recording, sending, or waiting to be retried is now asked first, and if they leave anyway the interview's log says so, so a missing answer no longer looks like a skipped one. A link opened without https now says so instead of blaming the browser, each interview screen has its own page title, and we tightened what our error reports keep from report share links."
+    },
     "data-correctness": {
       "title": "Honest counts, and invitations that close on time",
       "body": "The dashboard no longer shrinks its figures as your organisation grows: a number that reached our counting limit now shows as “400+”. Invitations to a role whose deadline passed more than a day ago are marked expired. A resend to an address that bounced is refused instead of sent again, and a bounce can no longer flip back to “sent”. Two roles with the same title always get distinct links."

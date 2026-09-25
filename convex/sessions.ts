@@ -250,25 +250,38 @@ export const invite = mutation({
   },
 })
 
+async function interviewMinutes(
+  ctx: GenericMutationCtx<DataModel>,
+  projectId: Id<'projects'>,
+): Promise<number> {
+  const questions = await ctx.db
+    .query('questions')
+    .withIndex('by_project', (q) => q.eq('projectId', projectId))
+    .collect()
+  return maxInterviewMinutes(questions)
+}
+
 async function sendInvitation(
   ctx: GenericMutationCtx<DataModel>,
   {
     session,
     project,
     orgName,
-  }: { session: Doc<'sessions'>; project: Doc<'projects'>; orgName: string },
+    durationMinutes,
+  }: {
+    session: Doc<'sessions'>
+    project: Doc<'projects'>
+    orgName: string
+    durationMinutes: number
+  },
 ): Promise<void> {
-  const questions = await ctx.db
-    .query('questions')
-    .withIndex('by_project', (q) => q.eq('projectId', project._id))
-    .collect()
   const { subject, html, text } = candidateInvitationEmail({
     locale: project.language,
     candidateName: session.candidateName,
     jobTitle: project.jobTitle ?? null,
     orgName,
     startUrl: invitationUrl(session.accessToken),
-    durationMinutes: maxInterviewMinutes(questions),
+    durationMinutes,
   })
   const providerId = await resend.sendEmail(ctx, {
     from: RESEND_FROM,
@@ -334,7 +347,12 @@ export const resendInvitation = mutation({
     await consumeLimit(ctx, 'candidateInvite', user._id)
     const org = await ctx.db.get('organizations', session.orgId)
     if (!org) throw new ConvexError('not_found')
-    await sendInvitation(ctx, { session, project, orgName: org.name })
+    await sendInvitation(ctx, {
+      session,
+      project,
+      orgName: org.name,
+      durationMinutes: await interviewMinutes(ctx, project._id),
+    })
     return null
   },
 })
@@ -365,13 +383,26 @@ export const cancel = mutation({
 export const sendInvitationBatch = internalMutation({
   args: { sessionIds: v.array(v.id('sessions')) },
   handler: async (ctx, { sessionIds }) => {
+    // A batch comes from one `invite` call, so from one role: read its
+    // questions once, not once per candidate.
+    const minutesByProject = new Map<Id<'projects'>, number>()
     for (const sessionId of sessionIds) {
       const session = await ctx.db.get('sessions', sessionId)
       if (!session) continue
       const project = await ctx.db.get('projects', session.projectId)
       const org = await ctx.db.get('organizations', session.orgId)
       if (!project || !org) continue
-      await sendInvitation(ctx, { session, project, orgName: org.name })
+      let durationMinutes = minutesByProject.get(project._id)
+      if (durationMinutes === undefined) {
+        durationMinutes = await interviewMinutes(ctx, project._id)
+        minutesByProject.set(project._id, durationMinutes)
+      }
+      await sendInvitation(ctx, {
+        session,
+        project,
+        orgName: org.name,
+        durationMinutes,
+      })
     }
     return null
   },

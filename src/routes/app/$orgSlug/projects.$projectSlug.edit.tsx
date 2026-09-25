@@ -8,7 +8,6 @@ import { z } from 'zod'
 
 import { api } from '../../../../convex/_generated/api'
 import { publishBlockers } from '../../../../convex/lib/publishReadiness'
-import type { PublishBlocker } from '../../../../convex/lib/publishReadiness'
 import type { WizardStep } from '~/components/projects/wizard/steps'
 import { getI18n } from '~/lib/i18n'
 import { getLocale } from '~/lib/locale'
@@ -22,7 +21,7 @@ import { StepQuestions } from '~/components/projects/wizard/StepQuestions'
 import { StepPublish } from '~/components/projects/wizard/StepPublish'
 import {
   WIZARD_STEPS,
-  stepOfBlocker,
+  stepStatus,
 } from '~/components/projects/wizard/steps'
 import { AppNotFound, AppRouteError } from '~/components/app-shell/RouteFallbacks'
 
@@ -62,7 +61,7 @@ function ProjectWizardPage() {
   )
   const publish = useConvexMutation(api.projects.publish)
 
-  if (data === undefined) {
+  if (data === undefined || !org) {
     return (
       <main className="flex-1 space-y-6 p-6">
         <Skeleton className="h-9 w-64" />
@@ -75,6 +74,7 @@ function ProjectWizardPage() {
   const { project, questions, criteria } = data
   const index = WIZARD_STEPS.indexOf(step)
   const blockers = publishBlockers(questions, criteria)
+  const prevStep = WIZARD_STEPS[index - 1] as WizardStep | undefined
   const nextStep = WIZARD_STEPS[index + 1] as WizardStep | undefined
   const goTo = (target: WizardStep) =>
     void navigate({ search: { step: target } })
@@ -191,7 +191,7 @@ function ProjectWizardPage() {
             <StepCriteria project={project} criteria={criteria} />
           )}
           {step === 'candidate' && <StepCandidate project={project} />}
-          {step === 'publish' && org && (
+          {step === 'publish' && (
             <StepPublish
               orgId={org._id}
               orgSlug={orgSlug}
@@ -212,8 +212,8 @@ function ProjectWizardPage() {
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-4">
           <Button
             variant="outline"
-            disabled={index === 0}
-            onClick={() => goTo(WIZARD_STEPS[Math.max(0, index - 1)])}
+            disabled={!prevStep}
+            onClick={() => prevStep && goTo(prevStep)}
           >
             {t('projects:wizard.back')}
           </Button>
@@ -243,16 +243,4 @@ function ProjectWizardPage() {
       </div>
     </main>
   )
-}
-
-/** Done or still blocking, for the steps publishing depends on; null for the
- *  ones whose every field is optional. */
-function stepStatus(
-  step: WizardStep,
-  blockers: Array<PublishBlocker>,
-): 'done' | 'todo' | null {
-  if (step !== 'questions' && step !== 'criteria') return null
-  return blockers.some((blocker) => stepOfBlocker(blocker) === step)
-    ? 'todo'
-    : 'done'
 }

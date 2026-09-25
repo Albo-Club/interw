@@ -66,8 +66,6 @@
     "stats": {
       "questions": "Questions",
       "criteria": "Criteria",
-      "duration": "Max duration",
-      "durationValue": "{{count}} min",
       "expiry": "Link expires",
       "noExpiry": "No expiry"
     },
@@ -98,7 +96,6 @@
     "stepTodo": "to complete"
   },
   "experience": {
-    "title": "Candidate experience",
     "subtitle": "Everything the candidate sees: the job title, who welcomes them, and what you ask of them."
   },
   "basics": {

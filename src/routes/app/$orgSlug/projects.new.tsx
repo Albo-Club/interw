@@ -70,13 +70,10 @@ function NewProjectPage() {
       if (!org) return
       setSubmitting(true)
       try {
-        const jobTitle = value.jobTitle.trim()
         const { slug } = await create({
           orgId: org._id,
-          // One title unless the team asked for its own label: the internal
-          // name then only ever shows inside the app.
-          title: value.internalTitle.trim() || jobTitle,
-          jobTitle,
+          jobTitle: value.jobTitle,
+          internalTitle: value.internalTitle || undefined,
           // The team's language: it writes the reports and the emails. The
           // candidate can switch their own screens, and transcription detects
           // the language of each answer.

@@ -36,7 +36,7 @@ export function CandidateShell({
   privacyToken?: string
   width?: 'narrow' | 'wide'
 }) {
-  const { t, i18n } = useTranslation('interview')
+  const { t, i18n } = useTranslation(['interview', 'common'])
   const other = i18n.language === 'fr' ? 'en' : 'fr'
   return (
     <div
@@ -61,13 +61,10 @@ export function CandidateShell({
             variant="ghost"
             size="sm"
             lang={other}
-            title={t('shell.language')}
-            onClick={() => {
-              chooseCandidateLanguage(other)
-              void i18n.changeLanguage(other)
-            }}
+            title={t('interview:shell.language')}
+            onClick={() => chooseCandidateLanguage(i18n, other)}
           >
-            {other === 'fr' ? 'Français' : 'English'}
+            {t(`common:language.${other}`)}
           </Button>
         </div>
       </header>
@@ -94,7 +91,7 @@ export function CandidateShell({
               params={{ token: privacyToken }}
               className="underline underline-offset-4"
             >
-              {t('shell.privacy')}
+              {t('interview:shell.privacy')}
             </Link>
           </div>
         </footer>

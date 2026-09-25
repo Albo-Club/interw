@@ -32,8 +32,8 @@ const INTRO_MODES = ['none', 'video'] as const
  * and what they are asked to hand over.
  *
  * One title, the public one. The internal name is only a disclosure away,
- * for the team that needs to tell two identical titles apart; while it is
- * closed, `title` follows `jobTitle` so the two cannot drift. A role that
+ * for the team that needs to tell two identical titles apart; until one is
+ * given, `projects.update` keeps `title` following `jobTitle`. A role that
  * already carries a distinct internal name opens with it shown.
  */
 export function StepCandidate({ project }: { project: WizardProject }) {
@@ -42,9 +42,8 @@ export function StepCandidate({ project }: { project: WizardProject }) {
 
   const [title, setTitle] = useState(project.title)
   const [jobTitle, setJobTitle] = useState(project.jobTitle ?? '')
-  const [showInternal, setShowInternal] = useState(
-    project.jobTitle !== project.title,
-  )
+  const hasInternalName = project.jobTitle !== project.title
+  const [showInternal, setShowInternal] = useState(hasInternalName)
   const [personaName, setPersonaName] = useState(project.personaName ?? '')
   const [introMode, setIntroMode] = useState(project.introMode)
   const { playback, refresh: refreshPlayback } = useProjectPlayback(
@@ -73,7 +72,7 @@ export function StepCandidate({ project }: { project: WizardProject }) {
     <div className="space-y-8">
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">
-          {t('projects:experience.title')}
+          {t('projects:wizard.steps.candidate')}
         </h2>
         <p className="text-muted-foreground max-w-prose text-sm">
           {t('projects:experience.subtitle')}
@@ -89,13 +88,7 @@ export function StepCandidate({ project }: { project: WizardProject }) {
             id="project-job-title"
             value={jobTitle}
             onChange={(event) => setJobTitle(event.target.value)}
-            onBlur={() =>
-              void save(
-                showInternal
-                  ? { projectId: project._id, jobTitle }
-                  : { projectId: project._id, jobTitle, title: jobTitle },
-              )
-            }
+            onBlur={() => void save({ projectId: project._id, jobTitle })}
           />
           <FieldDescription>
             {t('projects:new.fields.jobTitleHint')}
@@ -120,7 +113,8 @@ export function StepCandidate({ project }: { project: WizardProject }) {
             <Input
               id="project-title"
               value={title}
-              autoFocus={project.jobTitle === project.title}
+              // Opened by a click, not by a name already there.
+              autoFocus={!hasInternalName}
               onChange={(event) => setTitle(event.target.value)}
               onBlur={() =>
                 void save({

@@ -209,8 +209,8 @@ function ProjectDetailPage() {
           value={String(criteria.length)}
         />
         <StatCard
-          label={t('projects:detail.stats.duration')}
-          value={t('projects:detail.stats.durationValue', {
+          label={t('projects:questions.duration.label')}
+          value={t('projects:questions.duration.value', {
             count: maxInterviewMinutes(questions),
           })}
         />

@@ -182,15 +182,23 @@ export const getBySlug = query({
 export const create = mutation({
   args: {
     orgId: v.id('organizations'),
-    title: v.string(),
-    jobTitle: v.optional(v.string()),
+    /** What the candidate sees, and what the role is called unless… */
+    jobTitle: v.string(),
+    /** …the team gives it a label of its own, which only it ever sees. */
+    internalTitle: v.optional(v.string()),
     language: languageValidator,
     /** Colleagues who follow the role, on top of the creator. */
     team: v.optional(v.array(v.id('users'))),
   },
-  handler: async (ctx, { orgId, title, jobTitle, language, team }) => {
+  handler: async (
+    ctx,
+    { orgId, jobTitle, internalTitle, language, team },
+  ) => {
     const { user } = await requireOrgMember(ctx, orgId)
-    const cleanTitle = requireText(title, TITLE_MAX, 'invalid_title')
+    const cleanJobTitle = requireText(jobTitle, JOB_TITLE_MAX, 'invalid_title')
+    const cleanTitle = internalTitle?.trim()
+      ? requireText(internalTitle, TITLE_MAX, 'invalid_title')
+      : cleanJobTitle
 
     const slug = await uniqueSlug(
       cleanTitle,
@@ -208,7 +216,7 @@ export const create = mutation({
       orgId,
       slug,
       title: cleanTitle,
-      jobTitle: optionalText(jobTitle, JOB_TITLE_MAX, 'invalid_job_title'),
+      jobTitle: cleanJobTitle,
       status: 'draft',
       language,
       introMode: 'none',
@@ -246,7 +254,6 @@ export const update = mutation({
     projectId: v.id('projects'),
     title: v.optional(v.string()),
     jobTitle: v.optional(v.string()),
-    language: v.optional(languageValidator),
     personaName: v.optional(v.string()),
     introMode: v.optional(introModeValidator),
     candidateFields: v.optional(candidateFieldsValidator),
@@ -266,8 +273,12 @@ export const update = mutation({
         JOB_TITLE_MAX,
         'invalid_job_title',
       )
+      // A role with no internal name of its own is named by its job title,
+      // and keeps being so as the job title changes.
+      if (args.title === undefined && project.title === project.jobTitle) {
+        patch.title = requireText(args.jobTitle, TITLE_MAX, 'invalid_title')
+      }
     }
-    if (args.language !== undefined) patch.language = args.language
     if (args.personaName !== undefined) {
       patch.personaName = optionalText(
         args.personaName,

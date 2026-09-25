@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { i18n as I18n } from 'i18next'
 import type { Locale } from '~/lib/locale'
 import { isLocale } from '~/lib/locale'
 
@@ -22,15 +23,14 @@ export function useCandidateLanguage(language: Locale | undefined): boolean {
   const chosen = useSyncExternalStore(subscribe, readChoice, () => null)
   const effective = language === undefined ? undefined : (chosen ?? language)
   useEffect(() => {
-    if (!effective) return
-    document.documentElement.lang = effective
-    if (i18n.language !== effective) void i18n.changeLanguage(effective)
+    if (effective) applyLanguage(i18n, effective)
   }, [i18n, effective])
   return effective === undefined || i18n.language === effective
 }
 
-/** The switcher's side: remember the choice for this tab and apply it. */
-export function chooseCandidateLanguage(language: Locale): void {
+/** The switcher's side: remember the choice for this tab and apply it —
+ *  here too, since a notice screen renders no `useCandidateLanguage`. */
+export function chooseCandidateLanguage(i18n: I18n, language: Locale): void {
   try {
     sessionStorage.setItem(STORAGE_KEY, language)
   } catch {
@@ -39,6 +39,12 @@ export function chooseCandidateLanguage(language: Locale): void {
   }
   choice = language
   for (const listener of listeners) listener()
+  applyLanguage(i18n, language)
+}
+
+function applyLanguage(i18n: I18n, language: Locale): void {
+  document.documentElement.lang = language
+  if (i18n.language !== language) void i18n.changeLanguage(language)
 }
 
 const STORAGE_KEY = 'interw.candidate.language'

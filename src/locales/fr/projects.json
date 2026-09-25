@@ -66,8 +66,6 @@
     "stats": {
       "questions": "Questions",
       "criteria": "Critères",
-      "duration": "Durée maximale",
-      "durationValue": "{{count}} min",
       "expiry": "Expiration du lien",
       "noExpiry": "Pas d'expiration"
     },
@@ -98,7 +96,6 @@
     "stepTodo": "à compléter"
   },
   "experience": {
-    "title": "Expérience candidat",
     "subtitle": "Tout ce que voit le candidat : l'intitulé du poste, qui l'accueille, et ce que vous lui demandez."
   },
   "basics": {

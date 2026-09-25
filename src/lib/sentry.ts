@@ -35,6 +35,9 @@ export function initSentry() {
     environment: (import.meta as { env: Record<string, string | undefined> })
       .env.MODE,
     beforeSend: scrubAccessTokens,
+    // Inert while tracing is off, kept on purpose: turning tracing on later
+    // must not be the change that ships tokens in transaction names.
+    beforeSendTransaction: scrubAccessTokens,
     // Errors only: no tracing, no replay, no source maps — see KNOWN_ISSUES.md
     // § "Sentry collects errors only". Recording the DOM of an interview
     // screen would ship it to a third party, so adding `replayIntegration()`

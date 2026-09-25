@@ -5,6 +5,10 @@
   "subtitle": "Les dernières améliorations de l'application.",
   "seeAll": "Voir toutes les nouveautés",
   "entries": {
+    "transcription-restored": {
+      "title": "Les entretiens sont de nouveau transcrits et évalués",
+      "body": "Les réponses enregistrées par les candidats sont de nouveau transcrites, avec le minutage de chaque passage, et le rapport suit dès la fin de l’entretien. Les entretiens restés sans rapport peuvent être relancés."
+    },
     "invitations-hardening": {
       "title": "Invitations d’équipe resserrées",
       "body": "Une invitation ne reste valable que tant que la personne qui l’a envoyée peut encore inviter : si elle quitte l’organisation ou n’est plus admin, l’invitation cesse de fonctionner et s’affiche « Plus valable », et vous pouvez inviter l’adresse de nouveau. S’inscrire depuis une invitation conserve l’adresse invitée, et nous avons renforcé l’affichage des noms dans l’application et dans les e-mails."

@@ -2883,3 +2883,20 @@ Lazy `import()` chunks are not counted.
 - **A TanStack Start bump can rename or reshape the manifest.** The script
   then fails loudly ("no start manifest", "route … is missing") rather than
   measuring nothing — read the new manifest, don't delete the step.
+
+## Mistral's transcription response is not OpenAI's
+
+Every transcription failed validation, and so every report after it found no
+answer to assess (`no_transcribed_answers`). The parser in `convex/lib/ai.ts`
+required `usage.total_seconds`; Mistral sends `usage.prompt_audio_seconds`
+and token counts, never `total_seconds`. Nothing caught it because
+`transcribe()` had no unit test and the pipeline tests stub it out.
+
+- **Parse the documented shape, not a remembered one.** Segment `start`/`end`
+  are typed `number | null`; a timeless segment is dropped rather than failing
+  the answer. The tests in `convex/lib/ai.test.ts` use a payload copied from
+  Mistral's docs — refresh it from there, not from another provider's.
+- **`language` with `timestamp_granularities`.** One Mistral doc page says the
+  two are incompatible; a newer example sends both. We send both. If a
+  transcription ever fails with HTTP 400 naming `language`, drop `language` —
+  the timestamps are what quote anchoring needs.

@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "transcription-restored": {
+      "title": "Interviews are transcribed and assessed again",
+      "body": "Answers recorded by candidates are transcribed again, with the timing of each passage, and the report follows as soon as the interview ends. Interviews that stayed without a report can be relaunched."
+    },
     "invitations-hardening": {
       "title": "Team invitations tightened",
       "body": "An invitation now stays valid only while the person who sent it can still invite: if they leave the organization or are no longer an admin, it stops working and shows as \"No longer valid\", and you can invite the address again. Signing up from an invitation keeps the invited address, and we hardened how names are shown in the app and in emails."

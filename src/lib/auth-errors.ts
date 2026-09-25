@@ -19,6 +19,9 @@ export type AuthErrorCode =
   | 'TOKEN_INVALID'
   | 'TOKEN_EXPIRED'
   | 'SESSION_EXPIRED'
+  | 'CODE_INVALID'
+  | 'CODE_EXPIRED'
+  | 'CODE_ATTEMPTS'
   | 'RATE_LIMITED'
   | 'NETWORK'
   | 'UNKNOWN'
@@ -49,6 +52,13 @@ const CODE_MAP: Partial<Record<string, AuthErrorCode>> = {
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
   SESSION_EXPIRED: 'SESSION_EXPIRED',
   SESSION_NOT_FRESH: 'SESSION_EXPIRED',
+  // Email sign-in code (email-otp plugin). A wrong code and a code for
+  // another address are the same INVALID_OTP, so nothing leaks here.
+  INVALID_OTP: 'CODE_INVALID',
+  OTP_EXPIRED: 'CODE_EXPIRED',
+  TOO_MANY_ATTEMPTS: 'CODE_ATTEMPTS',
+  // Per-address email quota (`perEmailQuota` in convex/auth.ts), sent as a 429.
+  RATE_LIMITED: 'RATE_LIMITED',
 }
 
 export function classifyAuthError(
@@ -66,7 +76,8 @@ export function classifyAuthError(
   return 'UNKNOWN'
 }
 
-export type AuthErrorContext = 'signin' | 'signup' | 'reset' | 'verify' | 'change'
+// `send`: a request that emails someone (code, reset link, verification link).
+export type AuthErrorContext = 'signin' | 'reset' | 'change' | 'send'
 
 type Translate = (key: string) => string
 
@@ -74,16 +85,16 @@ type Translate = (key: string) => string
  * Format a classified error into user-facing copy via the `errors` i18n
  * namespace. Pass a `t` bound to that namespace (e.g.
  * `useTranslation('errors')`). Some codes render differently depending on the
- * surrounding flow (e.g. duplicate-email on signup must look identical to
- * success to defeat enumeration).
+ * surrounding flow.
  */
 export function formatAuthError(
   code: AuthErrorCode,
   ctx: AuthErrorContext,
   t: Translate,
 ): string {
-  if (code === 'EMAIL_ALREADY_REGISTERED' && ctx === 'signup') {
-    return t('auth.EMAIL_ALREADY_REGISTERED_signup')
+  // The per-address email quota refills in minutes, not "a moment".
+  if (code === 'RATE_LIMITED' && ctx === 'send') {
+    return t('auth.RATE_LIMITED_send')
   }
   return t(`auth.${code}`)
 }

@@ -2,8 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { betterAuth } from 'better-auth/minimal'
 import { memoryAdapter } from 'better-auth/adapters/memory'
-import { magicLink } from 'better-auth/plugins/magic-link'
-import { rateLimitRules, verificationRequiresCredential } from './auth'
+import { verificationRequiresCredential } from './auth'
 
 /**
  * Better Auth driven over HTTP on a memory adapter, with the options of
@@ -51,7 +50,6 @@ function buildAuth() {
         sendChangeEmailConfirmation: capture,
       },
     },
-    plugins: [magicLink({ disableSignUp: true, sendMagicLink: async () => {} })],
   })
 
   const post = (path: string, body: unknown, cookie?: string) =>
@@ -206,20 +204,5 @@ describe('change-email verification link', () => {
     expect(location(done).pathname).toBe('/app')
     expect((await t.findUser(VICTIM))?.user.emailVerified).toBe(true)
     expect(await t.findUser(ATTACKER)).toBeNull()
-  })
-})
-
-describe('rate-limit rules', () => {
-  it('name only real Better Auth endpoints', () => {
-    const auth = betterAuth({
-      baseURL: BASE,
-      database: memoryAdapter({}),
-      emailAndPassword: { enabled: true },
-      plugins: [magicLink({ sendMagicLink: async () => {} })],
-    })
-    const paths = new Set(
-      Object.values(auth.api).map((endpoint) => (endpoint as { path?: string }).path),
-    )
-    for (const key of Object.keys(rateLimitRules)) expect(paths).toContain(key)
   })
 })

@@ -20,11 +20,15 @@ import {
   FieldLabel,
 } from '~/components/ui/field'
 import { CardContent, CardFooter } from '~/components/ui/card'
-import { AuthShell } from '~/components/auth/auth-shell'
+import { AUTH_CONTROL, AuthShell } from '~/components/auth/auth-shell'
 import { VerificationSentCard } from '~/components/auth/verification-sent'
 
 export const Route = createFileRoute('/forgot-password')({
   component: ForgotPasswordPage,
+  // The address typed on /login, carried over by "Forgot your password?".
+  validateSearch: z.object({
+    email: z.string().max(254).optional().catch(undefined),
+  }),
   head: () => ({
     meta: [
       {
@@ -41,13 +45,14 @@ function ForgotPasswordPage() {
     () => z.object({ email: z.email(t('validation:email.invalid')) }),
     [t],
   )
+  const { email: typedEmail } = Route.useSearch()
   const [loading, setLoading] = useState(false)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [resendLoading, setResendLoading] = useState(false)
 
   const form = useForm({
-    defaultValues: { email: '' },
+    defaultValues: { email: typedEmail ?? '' },
     validators: { onChange: schema, onSubmit: schema },
     onSubmit: async ({ value }) => {
       setSubmitError(null)
@@ -67,7 +72,7 @@ function ForgotPasswordPage() {
         // NETWORK / RATE_LIMITED: surface inline so the user can retry rather
         // than think a link was sent when it wasn't.
         if (code === 'NETWORK' || code === 'RATE_LIMITED') {
-          setSubmitError(formatAuthError(code, 'reset', te))
+          setSubmitError(formatAuthError(code, 'send', te))
           return
         }
         // Other errors stay anti-enum: fall through to the confirmation screen.
@@ -92,7 +97,7 @@ function ForgotPasswordPage() {
         error.message,
       )
       if (code === 'NETWORK' || code === 'RATE_LIMITED') {
-        toast.error(formatAuthError(code, 'reset', te))
+        toast.error(formatAuthError(code, 'send', te))
         return
       }
     }
@@ -154,7 +159,12 @@ function ForgotPasswordPage() {
                       id={field.name}
                       name={field.name}
                       type="email"
-                      autoComplete="email"
+                      inputMode="email"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      autoFocus
+                      className={AUTH_CONTROL}
                       value={field.state.value}
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
@@ -168,7 +178,11 @@ function ForgotPasswordPage() {
           </FieldGroup>
         </CardContent>
         <CardFooter className="flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            className={`w-full ${AUTH_CONTROL}`}
+            disabled={loading}
+          >
             {loading && <Spinner />}
             {t('auth:forgot.submit')}
           </Button>

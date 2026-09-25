@@ -5,6 +5,9 @@ let initialized = false
 /** A candidate's link, `/s/<token>`: the token opens their interview. */
 const CANDIDATE_PATH = /\/s\/[A-Za-z0-9_-]+/g
 
+/** The sign-in code in a `/login/code#…&code=` link: it opens the account. */
+const SIGN_IN_CODE = /([#&]code=)\d+/g
+
 /**
  * Mask every candidate token in an event before it leaves the browser.
  *
@@ -16,7 +19,11 @@ const CANDIDATE_PATH = /\/s\/[A-Za-z0-9_-]+/g
  */
 export function scrubCandidateTokens<T>(event: T): T {
   return JSON.parse(
-    JSON.stringify(event).replace(CANDIDATE_PATH, '/s/[token]'),
+    JSON.stringify(event)
+      .replace(CANDIDATE_PATH, '/s/[token]')
+      // The page strips the fragment on load, but the navigation breadcrumb
+      // recorded before that still carries it.
+      .replace(SIGN_IN_CODE, '$1[code]'),
   ) as T
 }
 

@@ -453,40 +453,52 @@ export function passwordChangedEmail({
   return { subject: c.subject, html, text: plainText(c.text) }
 }
 
-export function magicLinkEmail({
+/**
+ * Sign-in code. The code is the credential; the button only opens our page
+ * with it prefilled (in the URL fragment), where the person still has to press
+ * Confirm — so a mail scanner that follows links cannot spend the code.
+ */
+export function signInCodeEmail({
   locale,
+  code,
   url,
 }: {
   locale: EmailLocale
+  code: string
   url: string
 }) {
+  const codeHtml = `<span style="display:inline-block; font-size:28px; font-weight:700; letter-spacing:0.3em; font-variant-numeric:tabular-nums; padding:12px 16px; border:1px solid ${BORDER}; border-radius:8px;">${esc(code)}</span>`
   const c = pick(locale, {
     en: {
-      subject: `Your ${APP_NAME} sign-in link`,
-      heading: `Sign in to ${APP_NAME}`,
-      intro: `Click the button below to sign in. This link expires in 5 minutes.`,
-      footer: `If you didn't request this, you can safely ignore this email.`,
-      preheader: `Sign in to ${APP_NAME}.`,
-      cta: 'Sign in',
+      subject: `${code} is your ${APP_NAME} sign-in code`,
+      heading: `Your sign-in code`,
+      intro: `Enter this code on the ${APP_NAME} sign-in page:`,
+      expiry: `It expires in 10 minutes and works only once. Or open the sign-in page with the code already filled in:`,
+      footer: `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
+      preheader: `Your ${APP_NAME} sign-in code, valid for 10 minutes.`,
+      cta: 'Continue signing in',
       text: [
-        `Sign in to ${APP_NAME}.`,
-        `Open this link to sign in (expires in 5 minutes):`,
+        `Your ${APP_NAME} sign-in code: ${code}`,
+        `It expires in 10 minutes and works only once.`,
+        `Or open the sign-in page with the code already filled in:`,
         url,
-        `If you didn't request this, you can safely ignore this email.`,
+        `If you didn't try to sign in, ignore this email: no one can sign in without this code.`,
       ],
     },
     fr: {
-      subject: `Votre lien de connexion ${APP_NAME}`,
-      heading: `Connexion à ${APP_NAME}`,
-      intro: `Cliquez sur le bouton ci-dessous pour vous connecter. Ce lien expire dans 5 minutes.`,
-      footer: `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
-      preheader: `Connexion à ${APP_NAME}.`,
-      cta: 'Se connecter',
+      subject: `${code} est votre code de connexion ${APP_NAME}`,
+      heading: `Votre code de connexion`,
+      intro: `Saisissez ce code sur la page de connexion ${APP_NAME} :`,
+      expiry: `Il expire dans 10 minutes et ne sert qu’une fois. Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
+      footer: `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
+      preheader: `Votre code de connexion ${APP_NAME}, valable 10 minutes.`,
+      cta: 'Continuer la connexion',
       text: [
-        `Connexion à ${APP_NAME}.`,
-        `Ouvrez ce lien pour vous connecter (expire dans 5 minutes) :`,
+        `Votre code de connexion ${APP_NAME} : ${code}`,
+        `Il expire dans 10 minutes et ne sert qu’une fois.`,
+        `Vous pouvez aussi ouvrir la page de connexion avec le code déjà rempli :`,
         url,
-        `Si vous n'avez pas demandé cela, vous pouvez ignorer cet e-mail.`,
+        `Si vous n’avez pas essayé de vous connecter, ignorez cet e-mail : personne ne peut se connecter sans ce code.`,
       ],
     },
   })
@@ -495,9 +507,9 @@ export function magicLinkEmail({
     locale,
     preheader: c.preheader,
     heading: c.heading,
-    paragraphs: [c.intro, urlFallback(locale, url)],
+    paragraphs: [c.intro, codeHtml, c.expiry],
     cta: { label: c.cta, url },
-    footer: c.footer,
+    footer: `${urlFallback(locale, url)}<br><br>${c.footer}`,
   })
 
   return { subject: c.subject, html, text: plainText(c.text) }

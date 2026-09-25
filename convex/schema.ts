@@ -579,6 +579,8 @@ export default defineSchema({
     providerId: v.optional(v.string()),
     error: v.optional(v.string()),
     sessionId: v.optional(v.id('sessions')),
+    // Set on team invitations, so the pending row can show a bounce.
+    invitationId: v.optional(v.id('invitations')),
     createdAt: v.number(),
   })
     .index('by_org_and_created', ['orgId', 'createdAt'])
@@ -587,7 +589,8 @@ export default defineSchema({
     // Erasure has to be able to find every row that names a candidate, and
     // the report notification has to be able to ask "did I already send this
     // one?" exactly rather than by scanning the last 200 emails of the org.
-    .index('by_session', ['sessionId']),
+    .index('by_session', ['sessionId'])
+    .index('by_invitation', ['invitationId']),
 
   /** Proof of erasure. Deliberately holds a HASH of the candidate's address,
    *  not the address: a deletion register must be able to answer "did you

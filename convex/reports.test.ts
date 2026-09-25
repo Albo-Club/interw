@@ -175,6 +175,93 @@ describe('the pipeline trail shown to the recruiter', () => {
 })
 
 /**
+ * Removing a colleague takes away their access, not their credit: the
+ * decision they made still names them, marked as no longer a member — on the
+ * current decision line and in the history alike.
+ */
+describe('who made the decision', () => {
+  const decidedBy = async (t: ReturnType<typeof convexTest>, s: Seed) => {
+    const view = await t
+      .withIdentity({ subject: 'ba_recruiter' })
+      .query(api.reports.forSession, { sessionId: s.sessionId })
+    const credits = [
+      view.session.recruiterDecisionBy,
+      ...view.decisionHistory.map((event) => event.by),
+    ]
+    expect(credits).toHaveLength(2)
+    expect(credits[1]).toEqual(credits[0])
+    return credits[0]
+  }
+
+  async function decideAsColleague(
+    t: ReturnType<typeof convexTest>,
+    s: Seed,
+  ) {
+    return await t.run(async (ctx) => {
+      const session = await ctx.db.get('sessions', s.sessionId)
+      const colleague = await ctx.db.insert('users', {
+        betterAuthId: 'ba_colleague',
+        email: 'colleague@acme.test',
+        name: 'Cora Colleague',
+        superAdmin: false,
+        createdAt: 0,
+      })
+      const membership = await ctx.db.insert('organizationMembers', {
+        orgId: session!.orgId,
+        userId: colleague,
+        role: 'member',
+        joinedAt: 0,
+      })
+      await ctx.db.patch('sessions', s.sessionId, {
+        recruiterDecision: 'shortlisted',
+        recruiterDecisionBy: colleague,
+        recruiterDecisionAt: 1,
+      })
+      await ctx.db.insert('decisionEvents', {
+        orgId: session!.orgId,
+        sessionId: s.sessionId,
+        decision: 'shortlisted',
+        actorId: colleague,
+        at: 1,
+      })
+      return { colleague, membership }
+    })
+  }
+
+  it('names a current colleague, and nothing more', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    await decideAsColleague(t, s)
+    expect(await decidedBy(t, s)).toEqual({
+      name: 'Cora Colleague',
+      removed: false,
+    })
+  })
+
+  it('still names a colleague removed since', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    const { membership } = await decideAsColleague(t, s)
+    await t.run((ctx) => ctx.db.delete('organizationMembers', membership))
+    expect(await decidedBy(t, s)).toEqual({
+      name: 'Cora Colleague',
+      removed: true,
+    })
+  })
+
+  it('falls back to no name once the account is gone', async () => {
+    const t = convexTest(schema, modules)
+    const s = await seed(t)
+    const { colleague, membership } = await decideAsColleague(t, s)
+    await t.run(async (ctx) => {
+      await ctx.db.delete('organizationMembers', membership)
+      await ctx.db.delete('users', colleague)
+    })
+    expect(await decidedBy(t, s)).toEqual({ name: null, removed: true })
+  })
+})
+
+/**
  * Audit 2026-09-15, Pipe M9, and product decision n° 2 of 2026-09-24. A
  * report written before the removal still holds its para-verbal figures; the
  * recruiter's page must not show them.

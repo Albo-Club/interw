@@ -18,6 +18,8 @@ import type { BetterAuthPlugin } from 'better-auth'
 export type AccountLifecycleEffects = {
   /** Names of the organisations this Better Auth user is the only owner of. */
   soleOwnedOrgs: (userId: string) => Promise<Array<string>>
+  /** Whether this Better Auth user is the platform's only super admin. */
+  lastSuperAdmin: (userId: string) => Promise<boolean>
   /** Tell the account holder their password changed. Must not throw. */
   passwordChanged: (userId: string) => Promise<void>
   /** Record that an email change was requested, for the profile page. */
@@ -35,8 +37,8 @@ export function accountLifecycle(effects: AccountLifecycleEffects) {
     hooks: {
       before: [
         {
-          // Refused before any email goes out: a sole owner would otherwise
-          // get a link that can only fail.
+          // Refused before any email goes out: a sole owner or the last
+          // super admin would otherwise get a link that can only fail.
           matcher: (ctx) => ctx.path === '/delete-user',
           handler: createAuthMiddleware(async (ctx) => {
             const session = await getSessionFromCtx(ctx)
@@ -46,6 +48,12 @@ export function accountLifecycle(effects: AccountLifecycleEffects) {
               throw APIError.from('BAD_REQUEST', {
                 code: 'SOLE_OWNER',
                 message: 'Transfer ownership of your organizations first',
+              })
+            }
+            if (await effects.lastSuperAdmin(session.user.id)) {
+              throw APIError.from('BAD_REQUEST', {
+                code: 'LAST_SUPER_ADMIN',
+                message: 'Make someone else a super admin first',
               })
             }
           }),
@@ -79,7 +87,10 @@ export function accountLifecycle(effects: AccountLifecycleEffects) {
               const back = `${new URL(ctx.context.baseURL).pathname}/delete-user/callback?${new URLSearchParams(query)}`
               throw land('signin', back)
             }
-            if ((await effects.soleOwnedOrgs(stored.value)).length > 0) {
+            if (
+              (await effects.soleOwnedOrgs(stored.value)).length > 0 ||
+              (await effects.lastSuperAdmin(stored.value))
+            ) {
               throw land('blocked')
             }
           }),

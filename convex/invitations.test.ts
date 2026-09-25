@@ -199,7 +199,7 @@ describe('creating an invitation', () => {
       orgId: w.acmeOrgId,
     })
     expect(pending.deliveryStatus).toBe('sent')
-    expect(pending.invitedByName).toBe('Olivia Owner')
+    expect(pending.invitedBy).toEqual({ name: 'Olivia Owner', removed: false })
 
     // Resend's webhook, as the component delivers it.
     const now = new Date().toISOString()
@@ -226,6 +226,39 @@ describe('creating an invitation', () => {
       orgId: w.acmeOrgId,
     })
     expect(after.deliveryStatus).toBe('bounced')
+  })
+
+  it('still credits an inviter removed from the organisation since', async () => {
+    await t.run(async (ctx) => {
+      const member = await ctx.db
+        .query('users')
+        .withIndex('by_betterAuthId', (q) => q.eq('betterAuthId', 'ba_member'))
+        .unique()
+      await ctx.db.insert('invitations', {
+        orgId: w.acmeOrgId,
+        email: 'newcomer@example.test',
+        role: 'member',
+        token: 'invite-from-a-former-member',
+        invitedBy: member!._id,
+        expiresAt: Date.now() + 60_000,
+      })
+      const membership = await ctx.db
+        .query('organizationMembers')
+        .withIndex('by_org_and_user', (q) =>
+          q.eq('orgId', w.acmeOrgId).eq('userId', member!._id),
+        )
+        .unique()
+      await ctx.db.delete('organizationMembers', membership!._id)
+    })
+
+    const [pending] = await as(t, 'owner').query(api.invitations.listForOrg, {
+      orgId: w.acmeOrgId,
+    })
+    // The address stands in for a name, exactly as it did before removal.
+    expect(pending.invitedBy).toEqual({
+      name: 'member@example.test',
+      removed: true,
+    })
   })
 })
 

@@ -468,6 +468,20 @@ describe('removing a member revokes what was granted through them', () => {
     expect(recipients).toContain('acmeOwner@example.test')
   })
 
+  it('still credits them as the creator of their roles', async () => {
+    const userId = await removeShared()
+    await t.run(async (ctx) =>
+      ctx.db.patch('projects', w.backendProjectId, { createdBy: userId }),
+    )
+    const team = await as(t, 'acmeOwner').query(api.projects.team, {
+      projectId: w.backendProjectId,
+    })
+    expect(team.creator).toEqual({
+      name: 'acmeShared@example.test',
+      removed: true,
+    })
+  })
+
   it('stops mailing reports of a role they created', async () => {
     const userId = await removeShared()
     await t.run(async (ctx) =>
@@ -536,6 +550,10 @@ describe("the role's team", () => {
       projectId: w.chiefProjectId,
     })
     expect(team.members).toEqual([await userId(t, 'acmeShared')])
+    expect(team.creator).toEqual({
+      name: 'acmeOwner@example.test',
+      removed: false,
+    })
 
     await as(t, 'acmeOwner').mutation(api.projects.setTeam, {
       projectId: w.chiefProjectId,

@@ -224,6 +224,7 @@
     "title": "Équipe du poste",
     "subtitle": "L'équipe voit ce poste et reçoit un e-mail quand le rapport d'un candidat est prêt. Les administrateurs et propriétaires voient tous les postes, mais ne reçoivent d'e-mail que pour ceux dont ils font partie.",
     "creator": "Créateur du poste, toujours dans l'équipe",
+    "createdBy": "Créé par <name></name>",
     "label": "Équipe",
     "hint": "Qui suit ce poste avec vous. Modifiable ensuite.",
     "save": "Enregistrer l'équipe",

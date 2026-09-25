@@ -1270,6 +1270,28 @@ adapter in `convex/accountLifecycle.test.ts`) and `convex/users.ts`.
   the organisations. The way out for a solo owner is to delete the
   organisation first (§ "Deleting an organisation"): one being deleted no
   longer counts as sole-owned.
+- **Deleting the last super admin orphaned the platform.** Same three layers
+  as `sole_owner`: `cascadeDelete` throws `last_super_admin` (the code
+  `admin.setSuperAdmin` already uses for a self-demotion), `/delete-user`
+  refuses with `LAST_SUPER_ADMIN` before mailing, the link's callback lands
+  on `blocked` for someone who became the last one meanwhile, and
+  `accountDeletionBlockers.lastSuperAdmin` disables the button on `/app/me`.
+
+## A removed member keeps their credit — and their creator rights on return
+
+Removing someone from an organisation deletes their membership, their team
+rows and their report share links (`revokeMemberGrants`), never the ids that
+credit their work (`projects.createdBy`, `sessions.recruiterDecisionBy`,
+`decisionEvents.actorId`, `invitations.invitedBy`, …). Screens resolve those
+ids through `memberName` (`convex/lib/memberName.ts`), which keeps the name
+and flags `removed`, and render them with `src/components/MemberName.tsx`;
+a deleted account has no name left and reads "Former member". A new screen
+that credits someone goes through the same pair rather than reading `users`
+itself. Authorisation does not read that flag: a removed creator is
+locked out by `requireOrgMember` like anyone else. If they are re-invited,
+`createdBy` still names them, so they regain creator rights on their own roles
+(`canSeeProject`, `requireProjectOwnerOrAdmin`). That is accepted — it is
+their work — but it is the one thing removal does not reset.
 
 ## Hydration & session timing — never re-instantiate `ConvexQueryClient`
 

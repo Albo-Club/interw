@@ -5,6 +5,10 @@
   "subtitle": "The latest improvements to the app.",
   "seeAll": "See all updates",
   "entries": {
+    "removed-members-credit": {
+      "title": "Removed teammates keep their credit",
+      "body": "When you remove someone from your organization, the decisions they made, their entries in a candidate's decision history, the invitations they sent and the roles they created still show their name, greyed out and marked \"(removed)\", instead of disappearing. A teammate whose account was deleted shows as \"Former member\". The platform's last super admin can no longer delete their account by mistake."
+    },
     "calmer-interface": {
       "title": "A calmer, more consistent interface",
       "body": "Interw now uses its own typeface everywhere, respects your system's reduce-motion setting, and shows the shape of the page while it loads instead of a line of text. Candidate search (⌘K) opens as a list you can move through with the arrow keys, and is reachable from a phone. Dates follow the language of the app, the roles list marks the ones whose team you are on, and importing a job ad adds all of it or none of it."

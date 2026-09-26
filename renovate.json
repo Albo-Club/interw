@@ -64,6 +64,14 @@
       "matchStrings": ["\"convex@(?<currentValue>[^\"]+)\""],
       "depNameTemplate": "convex",
       "datasourceTemplate": "npm"
+    },
+    {
+      "description": "The Spectrum UI MCP server in .mcp.json is pinned exactly; this opens a reviewable bump PR (no automerge: not a devDependency).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.mcp\\.json$/"],
+      "matchStrings": ["\"@spectrumui/mcp@(?<currentValue>[^\"]+)\""],
+      "depNameTemplate": "@spectrumui/mcp",
+      "datasourceTemplate": "npm"
     }
   ]
 }

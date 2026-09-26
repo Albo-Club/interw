@@ -1078,6 +1078,21 @@ skills (plugin cache *and* `.agents/skills/`)
 and double the update machinery — so we deliberately don't. Let the
 marketplace own Resend.
 
+## Spectrum UI MCP
+
+`.mcp.json` pins `@spectrumui/mcp` exactly: `@latest` would run whatever was
+last published, on every session start. Renovate opens the bump PR; read the
+package diff before merging it.
+
+- **Telemetry is off** (`SPECTRUM_NO_TELEMETRY=1`). By default the server
+  POSTs every search query and component name to `spectrumhq.in`.
+- **`install_component` is the only tool that writes, and it is not
+  pinned.** It runs `shadcn@latest add @spectrumui/<name>`, so the review in
+  § "The shadcn CLI rewrites files you did not ask it to" applies. Upstream
+  also targets Next.js: strip `"use client"` and `next/*` imports.
+- **It needs `spectrumhq.in`.** A cloud session whose network policy does
+  not allow that host gets tool errors, not an empty registry.
+
 ## Resend is a US processor, and moving it to the EU is undecided
 
 Every other candidate-data processor is European (Mistral, the Scaleway

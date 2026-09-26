@@ -290,6 +290,9 @@ Upstream links that climb out of a skill (`../../../<pkg>/skills/<skill>/…`)
 `src/styles/brand.css`). To generate/update a component, use the CLI
 `pnpm dlx shadcn@latest add <component>` or the shadcn MCP if configured.
 NEVER modify `src/components/ui/*` by hand to restyle — go through CSS tokens.
+The `spectrum-ui` MCP (`.mcp.json`) browses the Spectrum UI registry; a
+component it installs is third-party code to review like any dependency — see
+`KNOWN_ISSUES.md` § "Spectrum UI MCP".
 
 **Better Auth UI** (`better-auth-ui.com`, `daveyplate/better-auth-ui`,
 shadcn registry, v1.6.x, active): unofficial drop-in kit for Better Auth that

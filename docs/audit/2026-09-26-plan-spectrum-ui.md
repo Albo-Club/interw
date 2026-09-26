@@ -315,8 +315,10 @@ TanStack Form, Zod et le namespace `validation`.
 | `package.json`, `eslint.config.mjs`, `design-pass.test.ts` | S0 d'abord ; ensuite, un ajout d'une ligne dans le lot qui en a besoin, puis rebase |
 | `src/styles/spectrum.css` | Chaque lot ajoute un bloc commenté à son nom |
 | `src/locales/{en,fr}/*.json` | Sous-clé par lot (recette point 10) |
-| `$orgSlug/index.tsx` | S1 : la liste « Récent » ; S3b : la carte « Décisions » et les KPI |
-| `CandidatesTable.tsx`, `candidates.$sessionId.tsx` | S1 (import, états vides) → S3b PR 2 → S4 phase 2 |
+| `$orgSlug/index.tsx` | S1 : la liste « Récent » ; S3b : la carte « Décisions » et les KPI ; K2 : le lien du KPI `awaitingReview` |
+| `CandidatesTable.tsx`, `candidates.$sessionId.tsx` | S1 (import, états vides) → S3b PR 2 → S4 phase 2 ; K1 : le lien retour de la page candidat |
+| `projects.$projectSlug.index.tsx` | S1 : états vides ; K1 : onglets et vue dans l'URL |
+| `candidate-rows.ts`, `nav.ts` | K1 : colonnes du board ; K2 : l'entrée « Candidats » |
 | `KNOWN_ISSUES.md` § « Spectrum UI MCP » | S0 l'écrit ; les autres n'ajoutent qu'un piège nouveau |
 
 ## 5. Chantier kanban ATS

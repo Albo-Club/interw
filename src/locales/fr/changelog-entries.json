@@ -1,4 +1,8 @@
 {
+  "camera-check-stage": {
+    "title": "La vérification caméra ressemble à l'entretien",
+    "body": "Avant l'entretien, le candidat vérifie désormais sa caméra et son micro sur la même vidéo plein écran que les questions, avec le niveau du micro affiché dessus. Son enregistrement de test se rejoue sur ce même écran, et le choix des appareils se trouve dessous, dans Réglages. Le tout tient sur un téléphone sans faire défiler."
+  },
   "welcome-intro": {
     "title": "Votre vidéo d'introduction accueille d'abord le candidat",
     "body": "Votre introduction enregistrée ouvre désormais la page d'accueil du candidat, avant qu'on lui demande quoi que ce soit, et l'entretien commence directement par la première question. Les pages d'accueil et de remerciement sont aussi plus légères à lire."

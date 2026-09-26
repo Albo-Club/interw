@@ -1,4 +1,8 @@
 {
+  "camera-check-stage": {
+    "title": "The camera check looks like the interview",
+    "body": "Before the interview, candidates now check their camera and microphone on the same full-screen video as the questions, with the microphone level shown on it. A practice take plays back on that screen too, and the device choices sit under it in Settings. It fits on a phone without scrolling."
+  },
   "welcome-intro": {
     "title": "Your intro video greets candidates first",
     "body": "Your recorded introduction now opens the candidate's welcome page, before anything else is asked of them, and the interview goes straight to the first question. The welcome and thank-you pages are also lighter to read."

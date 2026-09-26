@@ -4,12 +4,20 @@ import type { MicVerdict } from '~/lib/media/devices'
 import { cn } from '~/lib/utils'
 
 /** How loud the microphone is, coloured by what that level means. */
-export function MicMeter({ level, verdict }: { level: number; verdict: MicVerdict }) {
+export function MicMeter({
+  level,
+  verdict,
+  className,
+}: {
+  level: number
+  verdict: MicVerdict
+  className?: string
+}) {
   const { t } = useTranslation('interview')
   const percent = Math.min(100, Math.round(level * 320))
   return (
     <div
-      className="bg-muted h-3 w-full overflow-hidden rounded-full"
+      className={cn('bg-muted h-3 w-full overflow-hidden rounded-full', className)}
       role="meter"
       aria-label={t('device.micLabel')}
       aria-valuenow={percent}

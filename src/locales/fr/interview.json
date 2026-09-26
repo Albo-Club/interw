@@ -134,11 +134,12 @@
     "retry": "Vérifier à nouveau",
     "continue": "Tout fonctionne — commencer l'entretien",
     "continueAnyway": "Commencer quand même",
+    "settings": "Réglages",
     "practice": {
-      "title": "Écoutez-vous avant de commencer",
       "start": "Enregistrer un test de {{seconds}} secondes",
       "stop": "Arrêter ({{seconds}} s)",
       "again": "Refaire un test",
+      "take": "Votre enregistrement test",
       "failed": "L'enregistrement de test n'a pas fonctionné. Vous pouvez quand même commencer l'entretien — ou essayer un autre navigateur si cela se reproduit."
     }
   },

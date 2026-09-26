@@ -272,8 +272,13 @@ son drapeau.
 - La visibilité passe par un helper dans `convex/lib/projectAccess.ts`, « les
   entretiens terminés que l'appelant peut voir » :
   - owners et admins (`seesEverything`) : `by_org_and_status` ;
-  - membres : `sharedProjectIds`, en une lecture, puis `by_project_and_status`
+  - membres : leurs `projectShares` (une lecture), puis `by_project_and_status`
     par rôle, fusionnés sous le même plafond.
+  - **Piège** : `sharedProjectIds` lit `by_user` seul et renvoie les rôles de
+    **toutes** les orgs de l'utilisateur. Le helper ne garde que les lignes où
+    `share.orgId === orgId` (le champ existe, `schema.ts:598-607`). Sinon, un
+    membre de deux orgs verrait les cartes de B sur le board de A.
+  - L'`orgId` interrogé est celui que `requireOrgMember` vient de vérifier.
 - On ne lit ni ne vérifie ligne par ligne. Un membre qui n'a qu'un rôle sur 30 ne
   lit que ce rôle, et `capped` compte ses cartes à lui, pas le volume de l'org.
 - `dashboard.overview` filtre aujourd'hui après son `take` et sous-compte donc
@@ -328,7 +333,8 @@ son drapeau.
   - Front : la fonction pure sessions → colonnes, dans `candidate-rows.test.ts`.
 - **Tests K2** :
   - le helper de visibilité avec un membre qui voit 1 rôle sur 3, puis un admin ;
-  - l'isolation entre orgs.
+  - l'isolation entre orgs, y compris pour un membre qui a des rôles dans deux
+    orgs : le board de A ne montre aucune carte de B.
 - **TESTING.md** : K1 ajoute des lignes pour :
   - un déplacement à la souris et par le menu ;
   - le lecteur d'écran ;

@@ -315,8 +315,10 @@ TanStack Form, Zod et le namespace `validation`.
 | `package.json`, `eslint.config.mjs`, `design-pass.test.ts` | S0 d'abord ; ensuite, un ajout d'une ligne dans le lot qui en a besoin, puis rebase |
 | `src/styles/spectrum.css` | Chaque lot ajoute un bloc commenté à son nom |
 | `src/locales/{en,fr}/*.json` | Sous-clé par lot (recette point 10) |
-| `$orgSlug/index.tsx` | S1 : la liste « Récent » ; S3b : la carte « Décisions » et les KPI |
-| `CandidatesTable.tsx`, `candidates.$sessionId.tsx` | S1 (import, états vides) → S3b PR 2 → S4 phase 2 |
+| `$orgSlug/index.tsx` | S1 : la liste « Récent » ; S3b : la carte « Décisions » et les KPI ; K2 : le lien du KPI `awaitingReview` |
+| `CandidatesTable.tsx`, `candidates.$sessionId.tsx` | S1 (import, états vides) → S3b PR 2 → S4 phase 2 ; K1 : le lien retour de la page candidat |
+| `projects.$projectSlug.index.tsx` | S1 : états vides ; K1 : onglets et vue dans l'URL |
+| `candidate-rows.ts`, `nav.ts` | K1 : colonnes du board ; K2 : l'entrée « Candidats » |
 | `KNOWN_ISSUES.md` § « Spectrum UI MCP » | S0 l'écrit ; les autres n'ajoutent qu'un piège nouveau |
 
 ## 5. Chantier kanban ATS
@@ -337,13 +339,13 @@ pas son code.
 - **Contenu de la carte.**
 - **Règles** :
   - un déplacement est une décision humaine, jamais une action de l'IA ;
-  - le rôle `viewer` ne déplace rien.
+  - qui voit le rôle peut déplacer : il n'existe pas de rôle `viewer` (spec K0 §0).
 - **Interface** : `@dnd-kit` (capteur clavier, annonces `aria-live`) et `motion` ;
   vue liste sur mobile.
 - **Temps réel** à plusieurs recruteurs, avec mise à jour optimiste.
 - **Questions produit** encore ouvertes.
 
-**K1 / K2** : découpés par la spec K0.
+**K1 / K2** : découpés par la spec K0, [`2026-09-26-kanban-ats-spec.md`](2026-09-26-kanban-ats-spec.md) §8.
 
 ## 6. Lancer une session
 
@@ -372,5 +374,6 @@ pas son code.
 ## 7. Décisions ouvertes
 
 - **D1 — Indicateurs de S3a** : table du lot S3a, à valider avant de lancer S3a.
-- **D2 — Kanban v1 sur les décisions existantes, sans migration** : à confirmer en K0.
+- **D2 — Kanban v1 sur les décisions existantes, sans migration** : confirmée en
+  K0 (spec §1) ; les questions produit restantes sont au §9 de la spec.
 - **D3 — Emplacement du 3D et des effets de texte** : choisi sur le spike S5.

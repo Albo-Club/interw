@@ -7,7 +7,7 @@ import { Button } from '~/components/ui/button'
 
 const PRACTICE_SECONDS = 10
 
-/** A finished take is `url`, not a phase. */
+/** A finished take is the parent's `take`, not a phase. */
 type Phase = 'idle' | 'recording' | 'failed'
 
 /**
@@ -16,36 +16,28 @@ type Phase = 'idle' | 'recording' | 'failed'
  * A meter says the microphone hears something; only hearing yourself says
  * the answer will be understood — the echo, the fan, the headset that
  * records from the laptop instead. Nothing leaves the browser: the take is a
- * blob URL, revoked as soon as it is replaced or the screen is left.
+ * blob URL, which the screen that holds it revokes.
  *
- * The take is handed up rather than played here: the check screen plays it on
- * its stage, where there is room for it without scrolling.
+ * The take belongs to the check screen, which plays it on its stage where
+ * there is room for it without scrolling; this is the button that records it.
  */
 export function PracticeTake({
   stream,
   mimeType,
+  hasTake,
   onTake,
 }: {
   stream: MediaStream
   mimeType: string
-  /** The finished take's URL, or null once it is replaced or revoked. */
+  hasTake: boolean
+  /** A new take's blob URL, or null when a new recording starts. */
   onTake: (url: string | null) => void
 }) {
   const { t } = useTranslation('interview')
   const [phase, setPhase] = useState<Phase>('idle')
   const [elapsed, setElapsed] = useState(0)
-  const [url, setUrl] = useState<string | null>(null)
   const recorderRef = useRef<SingleRecorder | null>(null)
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    onTake(url)
-    if (!url) return
-    return () => {
-      onTake(null)
-      URL.revokeObjectURL(url)
-    }
-  }, [url, onTake])
 
   useEffect(
     () => () => {
@@ -62,7 +54,7 @@ export function PracticeTake({
     if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
     try {
       const { blob } = await recorder.stop()
-      setUrl(URL.createObjectURL(blob))
+      onTake(URL.createObjectURL(blob))
       setPhase('idle')
     } catch {
       setPhase('failed')
@@ -70,7 +62,7 @@ export function PracticeTake({
   }
 
   const start = () => {
-    setUrl(null)
+    onTake(null)
     setElapsed(0)
     try {
       const recorder = new SingleRecorder(stream, mimeType, ({ elapsedSeconds }) =>
@@ -99,14 +91,17 @@ export function PracticeTake({
         </Button>
       ) : (
         <Button variant="outline" onClick={start}>
-          {url ? (
-            <RotateCcw className="size-4" />
+          {hasTake ? (
+            <>
+              <RotateCcw className="size-4" />
+              {t('device.practice.again')}
+            </>
           ) : (
-            <Circle className="size-4" />
+            <>
+              <Circle className="size-4" />
+              {t('device.practice.start', { seconds: PRACTICE_SECONDS })}
+            </>
           )}
-          {url
-            ? t('device.practice.again')
-            : t('device.practice.start', { seconds: PRACTICE_SECONDS })}
         </Button>
       )}
       {phase === 'failed' && (

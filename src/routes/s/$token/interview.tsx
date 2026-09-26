@@ -630,7 +630,6 @@ function InterviewRunner() {
         self={
           <CameraPreview
             ref={setPreview}
-            fill
             audioOnly={audioOnly}
             recording={recording}
           />

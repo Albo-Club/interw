@@ -16,7 +16,7 @@ import {
 import { detectRecorderSupport } from '~/lib/media/recorder'
 import { useAudioLevel } from '~/lib/media/useAudioLevel'
 import { useCameraDark } from '~/lib/media/useCameraDark'
-import { Button } from '~/components/ui/button'
+import { Button, buttonVariants } from '~/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '~/components/ui/alert'
 import { Skeleton } from '~/components/ui/skeleton'
 import {
@@ -32,6 +32,7 @@ import { CandidateShell } from '~/components/candidate/CandidateShell'
 import { CameraPreview } from '~/components/candidate/CameraPreview'
 import { MicMeter } from '~/components/candidate/MicMeter'
 import { PracticeTake } from '~/components/candidate/PracticeTake'
+import { QuestionVideo } from '~/components/candidate/QuestionPrompt'
 import { Stage } from '~/components/candidate/Stage'
 import { candidateErrorKey } from '~/components/candidate/errorState'
 import { useCandidateLanguage } from '~/components/candidate/useCandidateLanguage'
@@ -67,6 +68,8 @@ function DeviceCheck() {
   const [preview, setPreview] = useState<HTMLVideoElement | null>(null)
   /** The practice take's blob URL, played on the stage while it exists. */
   const [take, setTake] = useState<string | null>(null)
+  // Revoked when replaced, and when the screen is left.
+  useEffect(() => (take ? () => URL.revokeObjectURL(take) : undefined), [take])
 
   const streamRef = useRef<MediaStream | null>(null)
   const [verdict, setVerdict] = useState<MicVerdict>('silent')
@@ -91,6 +94,7 @@ function DeviceCheck() {
 
   const startPreview = useCallback(async () => {
     teardown()
+    setTake(null)
     setPhase('starting')
     try {
       // The very call the interview makes, so what is checked here is what
@@ -166,6 +170,7 @@ function DeviceCheck() {
 
   // Nothing to preview: the stage stays dark and says why.
   const blocked = phase === 'unsupported' || !recorderSupport.usable
+  const live = phase === 'live'
 
   return (
     <CandidateShell
@@ -207,22 +212,16 @@ function DeviceCheck() {
         // in the interview: the live camera steps into the corner.
         prompt={
           take ? (
-            <video
+            <QuestionVideo
               src={take}
-              controls
-              playsInline
-              className="size-full object-contain"
+              label={t('interview:device.practice.take')}
             />
           ) : null
         }
         self={
           blocked ? null : (
-            <CameraPreview
-              ref={setPreview}
-              fill
-              audioOnly={phase === 'live' && audioOnly}
-            >
-              {phase !== 'live' && (
+            <CameraPreview ref={setPreview} audioOnly={live && audioOnly}>
+              {!live && (
                 <div className="text-stage-foreground/80 absolute inset-0 flex items-center justify-center text-sm">
                   {phase === 'starting'
                     ? t('common:loadingEllipsis')
@@ -232,9 +231,9 @@ function DeviceCheck() {
             </CameraPreview>
           )
         }
-        // Left out under a take, whose own controls sit along that edge.
+        // Left out under a take, which is what to listen to instead.
         caption={
-          phase === 'live' &&
+          live &&
           !take && (
             <p className="text-center text-sm text-balance">
               {t('interview:device.speakPrompt')}
@@ -242,23 +241,16 @@ function DeviceCheck() {
           )
         }
         status={
-          phase === 'live' && (
-            // Clear of the camera thumbnail a take puts in the other corner.
-            <div
-              className={cn(
-                'absolute top-3 left-3',
-                take ? 'right-36 sm:right-56' : 'right-3',
-              )}
-            >
+          live && (
+            <div className="absolute inset-x-3 top-3">
               <MicCheck stream={stream} onVerdict={setVerdict} />
             </div>
           )
         }
-        // The titles are whole sentences saying what to do: never clamped.
         overlay={
           blocked ? (
             <Alert variant="destructive">
-              <AlertTitle className="line-clamp-none">
+              <AlertTitle>
                 {support.insecureContext
                   ? t('interview:device.insecureContext')
                   : t('interview:device.unsupported')}
@@ -266,7 +258,7 @@ function DeviceCheck() {
             </Alert>
           ) : phase === 'failed' && failure ? (
             <Alert variant="destructive">
-              <AlertTitle className="line-clamp-none">
+              <AlertTitle>
                 {t(failure, { defaultValue: t('interview:errors.unexpected') })}
               </AlertTitle>
               {failure === 'interview:device.permissionDenied' && (
@@ -280,23 +272,29 @@ function DeviceCheck() {
       />
 
       <div className="flex flex-wrap items-center justify-center gap-2 pt-3">
-        {phase === 'live' && stream && recorderSupport.audio && (
+        {live && stream && recorderSupport.audio && (
           <PracticeTake
             stream={stream}
             mimeType={
               (!audioOnly && recorderSupport.video) || recorderSupport.audio
             }
+            hasTake={take !== null}
             onTake={setTake}
           />
         )}
         <Button variant="ghost" onClick={() => void startPreview()}>
           {t('interview:device.retry')}
         </Button>
-        {phase === 'live' && (cameras.length > 1 || microphones.length > 1) && (
+        {live && (cameras.length > 1 || microphones.length > 1) && (
           // Native disclosure: keyboard and screen readers get it for free.
           // Open, it takes a line of its own and the stage gives up the room.
           <details className="group open:basis-full">
-            <summary className="hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring/50 mx-auto flex min-h-11 w-fit cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm font-medium outline-none focus-visible:ring-[3px] [&::-webkit-details-marker]:hidden">
+            <summary
+              className={cn(
+                buttonVariants({ variant: 'ghost' }),
+                'mx-auto flex min-h-11 w-fit cursor-pointer list-none [&::-webkit-details-marker]:hidden',
+              )}
+            >
               <Settings2 className="size-4" />
               {t('interview:device.settings')}
               <ChevronDown className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />

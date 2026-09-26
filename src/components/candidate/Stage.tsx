@@ -51,13 +51,24 @@ export function Stage({
         </div>
       )}
       {status && (
-        <div className="pointer-events-none absolute inset-0 z-20">
+        // Beside a thumbnail, stops where it starts: the same width as its
+        // classes above, so nothing on the status layer runs under it.
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-y-0 left-0 z-20',
+            asking ? 'right-[max(min(25%,12rem),6rem)]' : 'right-0',
+          )}
+        >
           {status}
         </div>
       )}
       {overlay && (
         <div className="bg-stage/70 absolute inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md">{overlay}</div>
+          {/* What takes over the stage says what to do in a sentence: an
+              alert title here is never clipped to one line. */}
+          <div className="w-full max-w-md [&_[data-slot=alert-title]]:line-clamp-none">
+            {overlay}
+          </div>
         </div>
       )}
     </div>

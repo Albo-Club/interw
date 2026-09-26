@@ -2,27 +2,19 @@ import { useTranslation } from 'react-i18next'
 import { Mic } from 'lucide-react'
 import type { ReactNode, Ref } from 'react'
 
-import { cn } from '~/lib/utils'
-
 /**
  * The candidate's view of themselves, on the check screen and while they
- * answer — the only feedback they have on their framing.
- *
- * Portrait on a phone, landscape from `sm` up: a phone held upright gives a
- * portrait stream, and a 16:9 box cropped the candidate to a strip of face.
- * With `fill`, the box is whatever the interview stage makes it instead.
+ * answer — the only feedback they have on their framing. It fills whatever
+ * box the stage gives it: the whole stage, or the corner thumbnail.
  */
 export function CameraPreview({
   ref,
   audioOnly,
-  fill = false,
   recording = false,
   children,
 }: {
   ref: Ref<HTMLVideoElement>
   audioOnly: boolean
-  /** Fill the parent instead of keeping its own aspect ratio. */
-  fill?: boolean
   recording?: boolean
   /** Overlaid on the preview, for a status line. */
   children?: ReactNode
@@ -30,20 +22,10 @@ export function CameraPreview({
   const { t } = useTranslation('interview')
   return (
     <div
-      className={cn(
-        '@container relative overflow-hidden',
-        fill
-          ? 'bg-stage size-full'
-          : 'bg-muted aspect-[3/4] w-full rounded-lg sm:aspect-video',
-      )}
+      className="@container bg-stage relative size-full overflow-hidden"
     >
       {audioOnly ? (
-        <div
-          className={cn(
-            'flex size-full flex-col items-center justify-center gap-3 p-6 text-center text-sm',
-            fill ? 'text-stage-foreground/80' : 'text-muted-foreground',
-          )}
-        >
+        <div className="text-stage-foreground/80 flex size-full flex-col items-center justify-center gap-3 p-6 text-center text-sm">
           <Mic className="size-8" />
           {/* In the stage's thumbnail there is room for the icon only. */}
           <p className="hidden max-w-sm leading-relaxed @xs:block">

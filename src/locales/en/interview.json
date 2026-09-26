@@ -139,6 +139,7 @@
       "start": "Record a {{seconds}}-second test",
       "stop": "Stop ({{seconds}}s)",
       "again": "Record another test",
+      "take": "Your test recording",
       "failed": "The test recording didn't work. You can still start the interview — or try another browser if it keeps failing."
     }
   },

@@ -35,21 +35,19 @@ function InterviewDone() {
       organisationName={data.organisationName}
       logoUrl={data.organisationLogoUrl}
     >
-      <div className="space-y-8">
-        <div className="space-y-3">
-          <CheckCircle2 className="text-success size-10" />
+      <div className="space-y-8 py-6">
+        <div className="flex flex-col items-center space-y-3 text-center">
+          <CheckCircle2 className="text-success size-12" />
           <h1 className="text-3xl font-semibold tracking-tight">
             {t('interview:done.title')}
           </h1>
-          <p className="text-muted-foreground text-lg leading-relaxed">
+          <p className="text-muted-foreground max-w-md text-lg leading-relaxed text-balance">
             {t('interview:done.body', { org: data.organisationName })}
           </p>
         </div>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">
-            {t('interview:done.whatNext')}
-          </h2>
+        <section className="space-y-3 rounded-lg border p-5">
+          <h2 className="font-semibold">{t('interview:done.whatNext')}</h2>
           <ul className="text-muted-foreground list-disc space-y-2 pl-5 leading-relaxed">
             <li>
               {t('interview:done.nextSteps.review', {
@@ -64,7 +62,7 @@ function InterviewDone() {
           </ul>
         </section>
 
-        <div className="border-t pt-6">
+        <div className="text-center">
           <Link
             to="/s/$token/privacy"
             params={{ token }}

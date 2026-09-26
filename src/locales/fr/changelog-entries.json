@@ -1,4 +1,8 @@
 {
+  "welcome-intro": {
+    "title": "Votre vidéo d'introduction accueille d'abord le candidat",
+    "body": "Votre introduction enregistrée ouvre désormais la page d'accueil du candidat, avant qu'on lui demande quoi que ce soit, et l'entretien commence directement par la première question. Les pages d'accueil et de remerciement sont aussi plus légères à lire."
+  },
   "interview-stage": {
     "title": "Un entretien plus calme, centré sur la vidéo",
     "body": "Chaque question tient désormais sur un seul écran, comme un appel vidéo : votre question enregistrée se lance d'elle-même, avec la caméra du candidat en vignette pour vérifier son cadrage, puis sa caméra occupe tout l'écran quand il répond, la question restant affichée en sous-titre. Le temps restant est toujours visible, et votre logo apparaît en haut de chaque page candidat."

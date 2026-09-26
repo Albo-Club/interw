@@ -141,17 +141,18 @@ describe('candidate projections', () => {
   })
 
   // Decision n° 1 (T05): an intro is the recruiter's video or nothing. A row
-  // still holding a retired mode must not send the candidate to an intro
-  // screen with nothing on it, nor hand them the retired text.
+  // still holding a retired mode must not show the candidate an empty
+  // player, nor hand them the retired text.
   it('reads a retired text or audio intro as no intro', () => {
+    const recorded = { ...project, introMediaKey: 'orgs/o/projects/p/intro.webm' }
     for (const introMode of ['text', 'audio'] as const) {
-      const view = toCandidateProjectView({ ...project, introMode }, fourQuestions)
-      expect(view.introMode).toBe('none')
+      const view = toCandidateProjectView({ ...recorded, introMode }, fourQuestions)
+      expect(view.hasIntro).toBe(false)
       expect(JSON.stringify(view)).not.toContain('Bienvenue')
     }
     expect(
-      toCandidateProjectView({ ...project, introMode: 'video' }, fourQuestions).introMode,
-    ).toBe('video')
+      toCandidateProjectView({ ...recorded, introMode: 'video' }, fourQuestions).hasIntro,
+    ).toBe(true)
   })
 
   // A key is an internal address; the candidate gets a signed URL instead,

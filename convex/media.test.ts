@@ -240,27 +240,59 @@ describe('the intro is a video or nothing', () => {
   })
 
   it('signs no intro for a candidate once the intro is switched off', async () => {
-    const shown = await t.query(internal.interview.resolvePromptMedia, {
+    const shown = await t.query(internal.interview.resolveIntroMedia, {
       token: w.token,
       now: Date.now(),
     })
-    expect(shown.introKey).toBe(
-      projectMediaKey(w.orgId, w.projectId, 'intro', 'webm'),
-    )
+    expect(shown).toBe(projectMediaKey(w.orgId, w.projectId, 'intro', 'webm'))
 
     for (const introMode of ['none', 'audio'] as const) {
       await t.run((ctx) => ctx.db.patch('projects', w.projectId, { introMode }))
-      const hidden = await t.query(internal.interview.resolvePromptMedia, {
+      const hidden = await t.query(internal.interview.resolveIntroMedia, {
         token: w.token,
         now: Date.now(),
       })
-      expect(hidden.introKey).toBeNull()
-      const view = await t.query(api.interview.questions, {
+      expect(hidden).toBeNull()
+      const view = await t.query(api.candidate.landing, {
         token: w.token,
         now: Date.now(),
       })
-      expect(view.introMode).toBe('none')
+      expect(view.project.hasIntro).toBe(false)
     }
+  })
+
+  // The intro plays on the welcome screen, before consent — which covers
+  // recording the candidate. The questions' own media stay behind it.
+  it('signs the intro before consent, and nothing else', async () => {
+    await t.run(async (ctx) => {
+      const [session] = await ctx.db.query('sessions').collect()
+      await ctx.db.patch('sessions', session._id, {
+        consentAcceptedAt: undefined,
+      })
+    })
+    const intro = await t.query(internal.interview.resolveIntroMedia, {
+      token: w.token,
+      now: Date.now(),
+    })
+    expect(intro).toBe(projectMediaKey(w.orgId, w.projectId, 'intro', 'webm'))
+    await expect(
+      t.query(internal.interview.resolvePromptMedia, {
+        token: w.token,
+        now: Date.now(),
+      }),
+    ).rejects.toThrow('consent_required')
+  })
+
+  it('does not play the intro again once the interview has started', async () => {
+    await t.run(async (ctx) => {
+      const [session] = await ctx.db.query('sessions').collect()
+      await ctx.db.patch('sessions', session._id, { status: 'in_progress' })
+    })
+    const intro = await t.query(internal.interview.resolveIntroMedia, {
+      token: w.token,
+      now: Date.now(),
+    })
+    expect(intro).toBeNull()
   })
 })
 

@@ -2337,10 +2337,18 @@ Traps:
 Decision n° 1 of 24/09: the intro modes are `none` and `video`. The written
 and audio intros are gone from the selector and from `projects.update`, and
 `requestIntroUpload` only issues a slot for a video type — without a camera
-the take is refused, never saved as audio. A role with no intro, or in video
-mode with nothing recorded, sends the candidate from the device check straight
-to question 1 (`opensOnIntro` in `src/lib/interview-machine.ts`): an intro
-screen with nothing on it was a dead end.
+the take is refused, never saved as audio.
+
+The intro plays on the **welcome screen**, above the greeting, on a first
+visit — the interview itself opens on question 1. That puts it before consent,
+so it is signed by its own action, `interview.introMediaUrl`, whose gate is
+`requireOpenSession(…, { consent: false })`: consent covers recording the
+candidate, and the intro is the recruiter's own recording. Every other media
+URL (`promptMediaUrls`) still requires consent. The same action decides the
+first-visit rule: once the session is `in_progress` it signs nothing, so a
+candidate coming back to finish is not shown it again. With no intro, or a video mode
+with nothing recorded, the welcome screen simply has no video — an empty player
+was a dead end.
 
 **The trap: `text` and `audio` are still in the `projects` table's validator.**
 Narrowing a stored union before the rows are rewritten fails the schema check

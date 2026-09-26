@@ -5,7 +5,6 @@ import {
   initialInterviewState,
   interviewReducer,
   nextOpenQuestion,
-  opensOnIntro,
 } from './interview-machine'
 import type { InterviewEvent, InterviewState } from './interview-machine'
 
@@ -16,8 +15,8 @@ function run(
   return events.reduce(interviewReducer, from)
 }
 
-const boot = (resumeAt: number, total = 4, showIntro = false) =>
-  ({ type: 'booted', resumeAt, total, showIntro }) as const
+const boot = (resumeAt: number, total = 4) =>
+  ({ type: 'booted', resumeAt, total }) as const
 
 /** Start recording the current question and stop it with `reason`. */
 const record = (reason: 'finished' | 'timeUp' | 'interrupted' = 'finished') =>
@@ -42,34 +41,6 @@ describe('booting', () => {
 
   it('clamps a cursor past the end of the list', () => {
     expect(run([boot(9)])).toMatchObject({ phase: 'review', index: 4 })
-  })
-
-  it('shows the intro only when there is a question to go to', () => {
-    expect(run([boot(0, 4, true)]).phase).toBe('intro')
-    expect(run([boot(4, 4, true)]).phase).toBe('review')
-    expect(run([boot(0, 4, true), { type: 'introDone' }]).phase).toBe('prompt')
-  })
-
-  // Decision n° 1 (T05): a role with no intro opens on its first question,
-  // and the candidate never sees an intro screen. Cand F2: nor one with
-  // nothing on it, when the video could not be signed.
-  it('opens on the intro only for a video that can be played, on a first visit', () => {
-    const fresh = [false, false]
-    const video = { mode: 'video', url: 'https://media.test/intro.mp4' } as const
-    expect(opensOnIntro(video, fresh)).toBe(true)
-    expect(opensOnIntro({ mode: 'none', url: null }, fresh)).toBe(false)
-    expect(opensOnIntro({ mode: 'video', url: null }, fresh)).toBe(false)
-    // A URL signed for an intro the recruiter has since switched off.
-    expect(opensOnIntro({ mode: 'none', url: video.url }, fresh)).toBe(false)
-    expect(opensOnIntro(video, [true, false])).toBe(false)
-  })
-
-  it('goes straight to the first question when there is no intro', () => {
-    const showIntro = opensOnIntro({ mode: 'none', url: null }, [false, false])
-    expect(run([boot(0, 2, showIntro)])).toMatchObject({
-      phase: 'prompt',
-      index: 0,
-    })
   })
 
   it('boots once', () => {
@@ -122,10 +93,6 @@ describe('an answer recovered after a reload', () => {
       sending,
     )
     expect(saved).toMatchObject({ phase: 'prompt', index: 2, stopReason: 'recovered' })
-  })
-
-  it('is sent even from the intro', () => {
-    expect(run([boot(0, 4, true), { type: 'recovered' }]).phase).toBe('saving')
   })
 
   it('offers the usual retry when it does not get through', () => {
@@ -190,15 +157,6 @@ describe('recording', () => {
     expect(interviewReducer(state, { type: 'recordingStarted' }).phase).toBe(
       'recording',
     )
-  })
-
-  it('carries a camera failure found during the intro onto the question', () => {
-    const state = run([
-      boot(0, 4, true),
-      { type: 'deviceFailed', error: 'interview:device.permissionDenied' },
-      { type: 'introDone' },
-    ])
-    expect(state.error).toBe('interview:device.permissionDenied')
   })
 
   it('reports upload progress only while saving', () => {
@@ -361,7 +319,6 @@ describe('answerAtRisk', () => {
   it('guards every phase where an answer is on the page and not on the server', () => {
     const phases = [
       'loading',
-      'intro',
       'prompt',
       'recording',
       'saving',

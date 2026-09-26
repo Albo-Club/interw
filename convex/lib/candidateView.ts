@@ -48,8 +48,8 @@ export type CandidateProjectView = {
   jobTitle: string | null
   language: Doc<'projects'>['language']
   personaName: string | null
-  introMode: 'none' | 'video'
-  hasIntroMedia: boolean
+  /** A recorded intro to play on the welcome screen. */
+  hasIntro: boolean
   maxInterviewMinutes: number
   candidateFields: Doc<'projects'>['candidateFields']
   questionCount: number
@@ -57,8 +57,8 @@ export type CandidateProjectView = {
 
 /**
  * A retired `text` or `audio` intro reads as none, for the recruiter and the
- * candidate alike: the candidate goes straight to the questions rather than
- * to an intro screen with nothing on it.
+ * candidate alike: the welcome screen shows no intro rather than an empty
+ * player.
  */
 export function effectiveIntroMode(
   project: Pick<Doc<'projects'>, 'introMode'>,
@@ -74,8 +74,9 @@ export function toCandidateProjectView(
     jobTitle: project.jobTitle ?? null,
     language: project.language,
     personaName: project.personaName ?? null,
-    introMode: effectiveIntroMode(project),
-    hasIntroMedia: project.introMediaKey !== undefined,
+    hasIntro:
+      effectiveIntroMode(project) === 'video' &&
+      project.introMediaKey !== undefined,
     maxInterviewMinutes: maxInterviewMinutes(questions),
     candidateFields: project.candidateFields,
     questionCount: questions.length,
